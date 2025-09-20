@@ -1,6 +1,8 @@
 memo.txt
 *.hwpx
 
+.env
+
 *.exe
 /venv
 

@@ -5,6 +5,9 @@ os
 flask
 requests
 
+dotenv
+load_dotenv
+
 hashlib
 flask-bcrypt
 datetime

@@ -1,6 +1,7 @@
 from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
+from dotenv import load_dotenv
 from functools import wraps
 import datetime
 import requests
@@ -11,8 +12,10 @@ import os
 
 from route import *
 
+load_dotenv()
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.urandom(24)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
 bcrypt = Bcrypt(app)
 
@@ -326,6 +329,14 @@ def logout():
     resp.set_cookie('remember_token', '', max_age=0)
     
     return resp
+
+@app.route('/mypage')
+def mypage():
+    if 'user_id' in session:
+        return render_template('my_page.html')
+    else:
+        return redirect('/login')
+
 # Server Drive Unit
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
