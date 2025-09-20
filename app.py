@@ -1,16 +1,18 @@
 from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
-import hashlib
+from functools import wraps
 import datetime
+import requests
 import sqlite3
 import os
-import requests
 
 from route import *
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
+
+bcrypt = Bcrypt(app)
 
 DATABASE = 'data.db'
 
@@ -33,6 +35,16 @@ def close_connection(exception):
 def main_page():
     return render_template('main.html')
 
+# For Login Required Page
+# @login_required under @app.route
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return Response('<script> alert("로그인 사용자만 접근할 수 있습니다."); history.back(); </script>')
+        return f(*args, **kwargs)
+    return decorated_function
+
 # Riro Auth
 @app.route('/riro-auth', methods=['GET', 'POST'])
 def riro_auth():
@@ -50,7 +62,7 @@ def riro_auth():
         }
 
         try:
-            response = requests.get(f"{base_url}{endpoint}", params=payload)
+            response = requests.post(f"{base_url}{endpoint}", json=payload)
 
             response.raise_for_status()
 
@@ -230,18 +242,43 @@ def register():
         if pw_check != pw:
             return Response('<script> alert("비밀번호가 일치하지 않습니다."); history.back(); </script>')
         
-        hashed_pw = hashlib.sha256(pw.encode()).hexdigest()
+        hashed_pw = bcrypt.generate_password_hash(pw).decode('utf-8')
         join_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         default_profile = 'images/default_profile.jpg'
         
         # DATA INSERT to DB
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (hakbun, gen, name, pw, login_id, nickname, birth, profile_image, join_date, role, is_autologin, autologin_token, level, exp, post_count, comment_count, point) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'student', 0, '', 1, 0, 0, 0, 0)", (hakbun, gen, name, hashed_pw, id, nick, birth, join_date, default_profile))
+        cursor.execute("INSERT INTO users (hakbun, gen, name, pw, login_id, nickname, birth, profile_image, join_date, role, is_autologin, autologin_token, level, exp, post_count, comment_count, point) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'student', 0, '', 1, 0, 0, 0, 0)", (hakbun, gen, name, hashed_pw, id, nick, birth, default_profile, join_date))
         conn.commit()
         
         return Response('<script> alert("회원가입이 완료되었습니다."); window.location.href = "/"; </script>') # After Register
     
     return render_template('register_form.html', hakbun=hakbun, name=name, gen=gen) # GET
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        login_id = request.form['login_id']
+        password = request.form['password']
+        conn = get_db()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT login_id, pw FROM users WHERE login_id = ?', (login_id,))
+        user = cursor.fetchone() # (id, pw_hash) or None
+
+        if user and bcrypt.check_password_hash(user[1], password):
+            session.clear()
+            session['user_id'] = user[0]
+            return redirect("/")
+        else:
+            return Response('<script> alert("아이디 또는 비밀번호가 올바르지 않습니다."); history.back(); </script>')
+
+    return render_template('login_form.html') # GET
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect("/")
 
 # Server Drive Unit
 if __name__ == '__main__':

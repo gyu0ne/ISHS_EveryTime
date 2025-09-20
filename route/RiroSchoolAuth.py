@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import requests, time
 from bs4 import BeautifulSoup
+from pydantic import BaseModel
 
 app = FastAPI()
 app.add_middleware(
@@ -10,8 +11,15 @@ app.add_middleware(
     allow_methods=["*"], allow_headers=["*"],
 )
 
-@app.get("/api/riro_login")
-def riro_login(id: str, password: str):
+class RiroCreds(BaseModel):
+    id: str
+    password: str
+
+@app.post("/api/riro_login")
+def riro_login(creds: RiroCreds):
+    id = creds.id
+    password = creds.password
+
     s = requests.Session()
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",

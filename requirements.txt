@@ -5,7 +5,7 @@ os
 flask
 requests
 
-hashlib
+flask-bcrypt
 datetime
 
 bs4

@@ -1,0 +1,125 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+/* 기본 스타일 초기화 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Pretendard', sans-serif;
+    background-color: #212121;
+    color: #f1f1f1;
+    letter-spacing: -0.2px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+a {
+    text-decoration: none;
+    color: #888;
+}
+
+.register-container {
+    width: 400px;
+    text-align: center;
+}
+
+/* 로고 헤더 */
+.logo-header {
+    margin-bottom: 30px;
+}
+
+.logo-header p {
+    font-size: 14px;
+    color: #ccc;
+}
+
+.logo-header h1 {
+    font-size: 32px;
+    font-weight: 700; /* 기존 800에서 700으로 변경 */
+    margin-top: 5px;
+}
+
+.check-msg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 25px;
+}
+
+/* 회원가입 폼 */
+.register-form input {
+    width: 100%;
+    background-color: #3e3e3e;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 15px;
+    color: #f1f1f1;
+    font-size: 16px;
+}
+
+.user-info-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.user-info-row .like-input {
+    flex: 1;
+    background-color: #3e3e3e;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 15px;
+    color: #f1f1f1;
+    font-size: 16px;
+    text-align: center;
+}
+
+.like-input-invisible {
+    opacity: 0;
+}
+
+.register-form input::placeholder {
+    color: #aaa;
+}
+
+.register-form input:focus {
+    outline: none;
+    border-color: #d9534f;
+}
+
+.register-btn {
+    width: 100%;
+    padding: 15px;
+    background-color: #d9534f; /* 로그인 버튼과 동일한 색상 */
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.register-btn:hover {
+    background-color: #c9302c;
+}
+
+/* 푸터 */
+footer {
+    margin-top: 30px;
+    font-size: 12px;
+}
+
+footer a {
+    margin: 0 8px;
+}
+
+footer span {
+    margin-left: 8px;
+    color: #888;
+}
