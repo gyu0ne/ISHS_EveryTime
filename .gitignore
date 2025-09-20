@@ -1,4 +1,5 @@
 memo.txt
+*.hwpx
 
 *.exe
 /venv
@@ -12,8 +13,6 @@ data/oauthsettings.json
 data/version.json
 
 route/tool/set_mark/custom.py
-
-Images
 
 .vscode
 .vs

@@ -1,0 +1,205 @@
+/* 기본 스타일 초기화 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;
+    background-color: #f9f9f9;
+    color: #333;
+    font-size: 14px;
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+ul {
+    list-style: none;
+}
+
+.container {
+    width: 1200px;
+    margin: 0 auto;
+}
+
+/* 헤더 스타일 */
+header {
+    padding: 10px 0;
+    border-bottom: 1px solid #ddd;
+}
+
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: bold;
+    color: #c00;
+}
+
+.main-nav ul {
+    display: flex;
+}
+
+.main-nav li {
+    margin: 0 20px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.user-menu a {
+    margin-left: 15px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+/* 메인 콘텐츠 레이아웃 */
+main {
+    display: flex;
+    padding: 20px 0;
+    gap: 20px; /* 컬럼 사이의 간격 */
+}
+
+.sidebar {
+    flex-basis: 200px; /* 사이드바 너비 */
+    flex-shrink: 0;
+}
+
+.main-content {
+    flex-grow: 1; /* 중앙 콘텐츠가 남은 공간을 모두 차지하도록 */
+}
+
+/* 위젯 공통 스타일 */
+.widget {
+    background-color: #fff;
+    border: 1px solid #e3e3e3;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.widget h3 {
+    font-size: 16px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.widget ul li {
+    padding: 5px 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.widget ul li span {
+    float: right;
+    color: #999;
+    font-size: 12px;
+}
+
+/* 왼쪽 사이드바 로그인 위젯 */
+.login-widget-side p {
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #555;
+}
+
+.login-widget-side button {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    margin-top: 5px;
+    cursor: pointer;
+}
+
+.login-btn {
+    background-color: #c00;
+    color: white;
+}
+.register-btn {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+
+/* 중앙 콘텐츠 스타일 */
+.banner {
+    background-color: #ffc;
+    border: 1px solid #e3e3e3;
+    padding: 30px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+.banner h2 {
+    font-size: 22px;
+}
+.banner p {
+    font-size: 15px;
+    color: #555;
+    margin-top: 5px;
+}
+
+.board-preview {
+    display: flex;
+    gap: 20px;
+}
+
+.board-column {
+    flex: 1;
+    background-color: #fff;
+    border: 1px solid #e3e3e3;
+    padding: 15px;
+}
+
+.board-column h3 {
+    font-size: 16px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.board-column ul li {
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+}
+
+.board-column ul li span {
+    color: #999;
+    font-size: 12px;
+}
+
+/* 오른쪽 사이드바 검색 위젯 */
+.search-widget input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* 푸터 스타일 */
+footer {
+    border-top: 1px solid #ddd;
+    padding: 20px;
+    text-align: center;
+    color: #777;
+    font-size: 12px;
+}
+
+footer nav {
+    margin-top: 10px;
+}
+
+footer nav a {
+    margin: 0 10px;
+    color: #555;
+}
