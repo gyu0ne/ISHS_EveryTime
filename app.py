@@ -1,5 +1,6 @@
 from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response
 from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
 import hashlib
 import datetime
 import sqlite3
