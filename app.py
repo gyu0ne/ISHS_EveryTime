@@ -196,16 +196,49 @@ def register():
         id = request.form['login_id']
         nick = request.form['nickname']
         birth = request.form['birth']
+
+        year = birth[0:4]
+        month = birth[4:6]
+        day = birth[6:8]
+
+        try:
+            datetime.date(int(year), int(month), int(day))
+        except:
+            return Response('<script> alert("생년월일 형식을 다시 확인하세요."); history.back(); </script>')
+
+        if len(birth) != 8:
+            return Response('<script> alert("생년월일 형식을 다시 확인하세요."); history.back(); </script>')
+
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT COUNT(*) FROM users WHERE login_id = ?', (id,))
+        count_id = cursor.fetchone()[0]
+
+        cursor.execute('SELECT COUNT(*) FROM users WHERE nickname = ?', (nick,))
+        count_nickname = cursor.fetchone()[0]
+
+        if count_id > 0:
+            return Response('<script> alert("이미 존재하는 아이디입니다."); history.back(); </script>')
+
+        if count_nickname > 0:
+            return Response('<script> alert("이미 존재하는 닉네임입니다."); history.back(); </script>')
+
+        if len(pw) < 6:
+            return Response('<script> alert("비밀번호는 최소 6자 이상이어야 합니다."); history.back(); </script>')
+        
+        if pw_check != pw:
+            return Response('<script> alert("비밀번호가 일치하지 않습니다."); history.back(); </script>')
         
         hashed_pw = hashlib.sha256(pw.encode()).hexdigest()
         join_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        default_profile = 'images/default_profile.jpg'
         
         # DATA INSERT to DB
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (hakbun, name, pw, login_id, nickname, join_date, is_admin, is_autologin, autologin_token, level, exp, post_count, comment_count) VALUES (?, ?, ?, ?, ?, ?, 0, 0, '', 1, 0, 0, 0)", (hakbun, name, id, nick, hashed_pw, join_date))
+        cursor.execute("INSERT INTO users (hakbun, gen, name, pw, login_id, nickname, birth, profile_image, join_date, role, is_autologin, autologin_token, level, exp, post_count, comment_count, point) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'student', 0, '', 1, 0, 0, 0, 0)", (hakbun, gen, name, hashed_pw, id, nick, birth, join_date, default_profile))
         conn.commit()
         
-        return redirect("") # After Register
+        return Response('<script> alert("회원가입이 완료되었습니다."); window.location.href = "/"; </script>') # After Register
     
     return render_template('register_form.html', hakbun=hakbun, name=name, gen=gen) # GET
 
