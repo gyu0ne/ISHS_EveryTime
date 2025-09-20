@@ -1,9 +1,11 @@
-from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response
+from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from functools import wraps
 import datetime
 import requests
+import hashlib
+import secrets
 import sqlite3
 import os
 
@@ -30,6 +32,24 @@ def close_connection(exception):
     if db is not None:
         db.close()
 
+# Check Auto Login
+@app.before_request
+def check_auto_login():
+    if 'user_id' not in session and 'remember_token' in request.cookies:
+        token = request.cookies.get('remember_token')
+        hashed_token = hashlib.sha256(token.encode()).hexdigest()
+
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT login_id FROM users WHERE autologin_token = ?', (hashed_token,))
+        user = cursor.fetchone()
+
+        if user:
+            session.clear()
+            session['user_id'] = user[0]
+            session.permanent = True
+
 # Main Page
 @app.route('/')
 def main_page():
@@ -48,6 +68,9 @@ def login_required(f):
 # Riro Auth
 @app.route('/riro-auth', methods=['GET', 'POST'])
 def riro_auth():
+    if 'user_id' in session:
+        return redirect("/")
+
     conn = get_db()
     if request.method == 'POST': # POST : return Form
         id = request.form['user_id']
@@ -195,6 +218,9 @@ def check_pw_register():
 # Register
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    if 'user_id' in session:
+        return redirect("/")
+    
     conn = get_db()
     if 'hakbun' in session and 'name' in session and 'gen' in session:
         hakbun = session['hakbun']
@@ -257,9 +283,14 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if 'user_id' in session:
+        return redirect("/")
+
     if request.method == 'POST':
         login_id = request.form['login_id']
         password = request.form['password']
+        remember = request.form.get('remember')
+
         conn = get_db()
         cursor = conn.cursor()
 
@@ -269,6 +300,18 @@ def login():
         if user and bcrypt.check_password_hash(user[1], password):
             session.clear()
             session['user_id'] = user[0]
+
+            if remember:
+                token = secrets.token_hex(32)
+                hashed_token = hashlib.sha256(token.encode()).hexdigest()
+
+                cursor.execute('UPDATE users SET autologin_token = ? WHERE login_id = ?', (hashed_token, user[0]))
+                conn.commit()
+
+                resp = make_response(redirect("/"))
+                resp.set_cookie('remember_token', token, max_age=datetime.timedelta(days=90), httponly=True)
+                return resp
+
             return redirect("/")
         else:
             return Response('<script> alert("아이디 또는 비밀번호가 올바르지 않습니다."); history.back(); </script>')
@@ -278,8 +321,11 @@ def login():
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect("/")
 
+    resp = make_response(redirect("/"))
+    resp.set_cookie('remember_token', '', max_age=0)
+    
+    return resp
 # Server Drive Unit
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
