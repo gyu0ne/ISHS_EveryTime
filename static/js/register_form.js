@@ -1,3 +1,6 @@
+// CSRF 토큰 설정
+const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
 // 아이디 입력 필드와 메시지 표시 영역을 가져옴
 const loginIdInput = document.getElementById('login_id');
 const nicknameInput = document.getElementById('nickname');
@@ -23,7 +26,8 @@ loginIdInput.addEventListener('blur', async function() {
         const response = await fetch('/check-register', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({ 'id': id, 'nick': nickname, 'birth': birth })
         });
@@ -62,7 +66,8 @@ nicknameInput.addEventListener('blur', async function() {
         const response = await fetch('/check-register', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({ 'id': id, 'nick': nickname, 'birth': birth })
         });
@@ -100,7 +105,8 @@ birthInput.addEventListener('blur', async function() {
         const response = await fetch('/check-register', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({ 'id': id, 'nick': nickname, 'birth': birth })
         });
@@ -143,7 +149,8 @@ pwInput.addEventListener('blur', async function() {
         const response = await fetch('/check-pw-register', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({ 'pw': pw, 'pw_check': pw_check })
         });
@@ -189,7 +196,8 @@ pwConfirmInput.addEventListener('input', async function() {
         const response = await fetch('/check-pw-register', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({ 'pw': pw, 'pw_check': pw_check })
         });

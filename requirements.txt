@@ -3,6 +3,7 @@ pip
 os
 
 flask
+flask_wtf
 requests
 
 dotenv

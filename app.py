@@ -1,9 +1,10 @@
 from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response, make_response
+from datetime import datetime, timedelta
 from flask_sqlalchemy import SQLAlchemy
+from flask_wtf.csrf import CSRFProtect
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from functools import wraps
-from datetime import datetime, timedelta
 import requests
 import hashlib
 import secrets
@@ -18,6 +19,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
 bcrypt = Bcrypt(app)
+csrf = CSRFProtect(app)
 
 DATABASE = 'data.db'
 
