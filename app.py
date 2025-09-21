@@ -3,7 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 import hashlib
 import secrets
@@ -93,9 +93,6 @@ def riro_auth():
             response.raise_for_status()
 
             api_result = response.json()
-
-            print("API 호출 성공:") # for debuging
-            print(api_result) # for debuging
 
             if api_result['status'] != 'success':
                 return Response(f'''
@@ -284,6 +281,7 @@ def register():
     
     return render_template('register_form.html', hakbun=hakbun, name=name, gen=gen) # GET
 
+# login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if 'user_id' in session:
@@ -312,7 +310,7 @@ def login():
                 conn.commit()
 
                 resp = make_response(redirect("/"))
-                resp.set_cookie('remember_token', token, max_age=datetime.timedelta(days=90), httponly=True)
+                resp.set_cookie('remember_token', token, max_age=timedelta(days=90), httponly=True)
                 return resp
 
             return redirect("/")
@@ -321,6 +319,7 @@ def login():
 
     return render_template('login_form.html') # GET
 
+# logout
 @app.route('/logout')
 def logout():
     session.clear()
@@ -330,6 +329,7 @@ def logout():
     
     return resp
 
+# My Page
 @app.route('/mypage')
 def mypage():
     if 'user_id' not in session:
@@ -361,11 +361,9 @@ def mypage():
     post_count = data['post_count']
     comment_count = data['comment_count']
     cash = data['point']
+    profile_image = data['profile_image']
 
-    # ▼▼▼▼▼ 핵심 수정 부분 ▼▼▼▼▼
-    # 사용자의 닉네임(nick)이 아닌, 세션의 로그인 아이디(session['user_id'])로 게시글을 조회합니다.
     cursor.execute("SELECT * FROM posts WHERE author = ? ORDER BY created_at DESC", (session['user_id'],))
-    # ▲▲▲▲▲ 핵심 수정 부분 ▲▲▲▲▲
     post_data = cursor.fetchall()
 
     user_posts = []
@@ -385,12 +383,31 @@ def mypage():
             'created_at': created_at_formatted
         })
 
+    cursor.execute("SELECT * FROM comments WHERE author = ? ORDER BY created_at DESC", (session['user_id'],))
+    comment_data = cursor.fetchall()
+
+    user_comments = []
+    for comment in comment_data:
+        cursor.execute("SELECT title FROM posts WHERE id = ?", (comment['post_id'],))
+        post_info = cursor.fetchone()
+        post_title = post_info['title'] if post_info else "삭제된 게시글"
+
+        created_at_dt = datetime.strptime(comment['created_at'], '%Y-%m-%d %H:%M:%S')
+        created_at_formatted = created_at_dt.strftime('%Y.%m.%d')
+
+        user_comments.append({
+            'content': comment['content'],
+            'post_title': post_title,
+            'post_id': comment['post_id'],
+            'created_at': created_at_formatted
+        })
+
     return render_template('my_page.html', 
                            hakbun=hakbun, name=name, gen=gen, nickname=nick, 
-                           birth=f'{birth_year}.{birth_month}.{birth_day}', 
+                           birth=f'{birth_year}.{birth_month}.{birth_day}', profile_image=profile_image,
                            join_date=output_join_date, level=level, exp=exp, 
                            post_count=post_count, comment_count=comment_count, 
-                           point=cash, user_posts=user_posts)
+                           point=cash, user_posts=user_posts, user_comments=user_comments)
 
 # Server Drive Unit
 if __name__ == '__main__':

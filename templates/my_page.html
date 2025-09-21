@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 <html lang="kr">
     <head>
-        <script src=""></script>
+        <script src="{{ url_for('static', filename='js/my_page.js') }}"></script>
         <meta charset="utf-8">
         <title>log인곽</title>
-        <link rel="stylesheet" href="{{ url_for('static', filename='my_page.css') }}">
-        <link rel="stylesheet" href='C:\Users\User\Downloads\1307 김규원\VSC\ISHS EveryTime\static\my_page.css'>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/my_page.css') }}">
         <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
         <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
         <meta property="og:title" content="log인곽">
@@ -25,7 +24,7 @@
             <aside class="profile-sidebar">
                 <div class="card profile-card">
                     <div class="profile-picture">
-                        <img src="https://via.placeholder.com/100" alt="프로필 사진">
+                        <img src="{{ url_for('static', filename=profile_image) }}" alt="프로필 사진">
                         <button class="change-pic-btn">변경</button>
                     </div>
                     <h2 class="nickname">{{ nickname }}</h2>
@@ -72,11 +71,12 @@
             <section class="activity-content">
                 <nav class="activity-tabs">
                     <ul>
-                        <li><a href="#" class="active">작성 게시글</a></li>
-                        <li><a href="#">작성 댓글</a></li>
+                        <li><a href="#" id="posts-tab" class="active">작성 게시글</a></li>
+                        <li><a href="#" id="comments-tab">작성 댓글</a></li>
                     </ul>
                 </nav>
-                <div class="activity-list">
+
+                <div id="posts-list" class="activity-list">
                     <ul>
                         {% if user_posts %}
                             {% for post in user_posts %}
@@ -92,6 +92,24 @@
                             {% endfor %}
                         {% else %}
                             <li class="no-posts-message">작성한 게시글이 없습니다.</li>
+                        {% endif %}
+                    </ul>
+                </div>
+
+                <div id="comments-list" class="activity-list" style="display: none;"> <ul>
+                        {% if user_comments %}
+                            {% for comment in user_comments %}
+                            <li>
+                                <div class="post-info">
+                                    <p class="comment-content">{{ comment.content }}</p>
+                                    <a href="#" class="post-meta">
+                                        원본 글: {{ comment.post_title }} ・ {{ comment.created_at }}
+                                    </a>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        {% else %}
+                            <li class="no-posts-message">작성한 댓글이 없습니다.</li>
                         {% endif %}
                     </ul>
                 </div>

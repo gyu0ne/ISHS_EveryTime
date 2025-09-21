@@ -226,3 +226,14 @@ ul {
     border-bottom: none; /* 밑줄 제거 */
     display: block; /* li 요소를 블록으로 만들어 중앙 정렬 적용 */
 }
+
+.comment-content {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 8px; /* 원본 글 링크와의 간격 */
+}
+
+/* post-meta 링크에 호버 효과 추가 */
+.post-meta:hover {
+    text-decoration: underline;
+}

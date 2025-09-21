@@ -127,6 +127,7 @@ const pwCheckMsg = document.getElementById('password-check-msg');
 const pwConfirmInput = document.getElementById('password_confirm');
 const pwConfirmMsg = document.getElementById('password-same-check-msg');
 
+// 비밀번호 글자 수 확인
 pwInput.addEventListener('blur', async function() {
     const pw = pwInput.value;
     const pw_check = pwConfirmInput.value;
@@ -172,7 +173,8 @@ pwInput.addEventListener('blur', async function() {
     }
 })
 
-pwConfirmInput.addEventListener('blur', async function() {
+// 비밀번호 일치 여부 확인
+pwConfirmInput.addEventListener('input', async function() {
     const pw = pwInput.value;
     const pw_check = pwConfirmInput.value;
 
