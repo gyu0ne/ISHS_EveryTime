@@ -18,7 +18,7 @@
 <body>
     <div class="mypage-container">
         <header class="mypage-header">
-            <h1>MyPage</h1>
+            <h1><a href="/">Log인곽</a></h1>
         </header>
         
         <main class="content-wrapper">
@@ -78,25 +78,22 @@
                 </nav>
                 <div class="activity-list">
                     <ul>
-                        <li>
-                            <div class="post-info">
-                                <a href="#" class="post-title">새로운 아이폰 17 모델에 대한 생각</a>
-                                <p class="post-meta">자유 게시판 ・ 2025.09.20</p>
-                            </div>
-                            <div class="post-stats">
-                                <span>댓글 25</span>
-                            </div>
-                        </li>
-                        <li>
-                            <div class="post-info">
-                                <a href="#" class="post-title">기숙사 생활 꿀팁 공유합니다.</a>
-                                <p class="post-meta">생활 정보 게시판 ・ 2025.09.18</p>
-                            </div>
-                            <div class="post-stats">
-                                <span>댓글 12</span>
-                            </div>
-                        </li>
-                        </ul>
+                        {% if user_posts %}
+                            {% for post in user_posts %}
+                            <li>
+                                <div class="post-info">
+                                    <a href="#" class="post-title">{{ post.title }}</a>
+                                    <p class="post-meta">{{ post.board_name }} ・ {{ post.created_at }}</p>
+                                </div>
+                                <div class="post-stats">
+                                    <span>댓글 {{ post.comment_count }}</span>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        {% else %}
+                            <li class="no-posts-message">작성한 게시글이 없습니다.</li>
+                        {% endif %}
+                    </ul>
                 </div>
             </section>
         </main>

@@ -332,61 +332,65 @@ def logout():
 
 @app.route('/mypage')
 def mypage():
+    if 'user_id' not in session:
+        return redirect('/login')
+
     conn = get_db()
     conn.row_factory = sqlite3.Row 
     cursor = conn.cursor()
 
-    if 'user_id' in session:
-        cursor.execute("SELECT * FROM users WHERE login_id = ?", (session['user_id'],))
-        data = cursor.fetchone()
+    cursor.execute("SELECT * FROM users WHERE login_id = ?", (session['user_id'],))
+    data = cursor.fetchone()
 
-        hakbun = data['hakbun']
-        name = data['name']
-        gen = data['gen']
-        nick = data['nickname']
-        birth = data['birth']
-        birth_year = birth[0:4]
-        birth_month = birth[4:6]
-        birth_day = birth[6:8]
-        join_date = data['join_date']
-        datetime_obj = datetime.strptime(join_date, '%Y-%m-%d %H:%M:%S')
-        output_join_date = datetime_obj.strftime('%Y.%m.%d')
-        level = data['level']
-        exp = data['exp']
-        post_count = data['post_count']
-        comment_count = data['comment_count']
-        cash = data['point']
-
-        cursor.execute("SELECT * FROM posts WHERE author = ?", (session['user_id'],))
-        post_data = cursor.fetchall()
-
-        posts = []
-        comments = []
-        board_name = []
-
-        for i in post_data:
-            posts.append(i['title'])
-            comments.append(i['comment_count'])
-            
-            post_board_id = i['board_id']
-
-            cursor.execute("SELECT board_name FROM board WHERE board_id = ?", (post_board_id,))
-            board_name.append(cursor.fetchone()['board_name'])
-
-        print(f'게시글 목록 : {posts}') # for debuging
-        print(f'댓글 수 목록 : {comments}') # for debuging
-        print(f'보드 이름 목록 : {board_name}') # for debuging
-        print(f'게시글 수 : {post_count}, 댓글 수 : {comment_count}') # for debuging
-        print(f'포인트 : {cash}') # for debuging
-        print(f'가입일 : {output_join_date}') # for debuging
-        print(f'생년월일 : {birth_year}년 {birth_month}월 {birth_day}일') # for debuging
-        print(f'학번 : {hakbun}, 이름 : {name}, 닉네임 : {nick}, 기수 : {gen}') # for debuging
-        print(f'레벨 : {level}, 경험치 : {exp}') # for debuging
-        print(f'아이디 : {session["user_id"]}') # for debuging
-
-        return render_template('my_page.html', hakbun=hakbun, name=name, gen=gen, nickname=nick, birth=f'{birth_year}.{birth_month}.{birth_day}', join_date=output_join_date, level=level, exp=exp, post_count=post_count, comment_count=comment_count, point=cash)
-    else:
+    if not data:
         return redirect('/login')
+
+    hakbun = data['hakbun']
+    name = data['name']
+    gen = data['gen']
+    nick = data['nickname']
+    birth = data['birth']
+    birth_year = birth[0:4]
+    birth_month = birth[4:6]
+    birth_day = birth[6:8]
+    join_date = data['join_date']
+    datetime_obj = datetime.strptime(join_date, '%Y-%m-%d %H:%M:%S')
+    output_join_date = datetime_obj.strftime('%Y.%m.%d')
+    level = data['level']
+    exp = data['exp']
+    post_count = data['post_count']
+    comment_count = data['comment_count']
+    cash = data['point']
+
+    # ▼▼▼▼▼ 핵심 수정 부분 ▼▼▼▼▼
+    # 사용자의 닉네임(nick)이 아닌, 세션의 로그인 아이디(session['user_id'])로 게시글을 조회합니다.
+    cursor.execute("SELECT * FROM posts WHERE author = ? ORDER BY created_at DESC", (session['user_id'],))
+    # ▲▲▲▲▲ 핵심 수정 부분 ▲▲▲▲▲
+    post_data = cursor.fetchall()
+
+    user_posts = []
+    for post in post_data:
+        post_board_id = post['board_id']
+        cursor.execute("SELECT board_name FROM board WHERE board_id = ?", (post_board_id,))
+        board_info = cursor.fetchone()
+        board_name_str = board_info['board_name'] if board_info else "알 수 없음"
+        
+        created_at_dt = datetime.strptime(post['created_at'], '%Y-%m-%d')
+        created_at_formatted = created_at_dt.strftime('%Y.%m.%d')
+
+        user_posts.append({
+            'title': post['title'],
+            'comment_count': post['comment_count'],
+            'board_name': board_name_str,
+            'created_at': created_at_formatted
+        })
+
+    return render_template('my_page.html', 
+                           hakbun=hakbun, name=name, gen=gen, nickname=nick, 
+                           birth=f'{birth_year}.{birth_month}.{birth_day}', 
+                           join_date=output_join_date, level=level, exp=exp, 
+                           post_count=post_count, comment_count=comment_count, 
+                           point=cash, user_posts=user_posts)
 
 # Server Drive Unit
 if __name__ == '__main__':

@@ -218,3 +218,11 @@ ul {
     font-size: 14px;
     color: #aaa;
 }
+
+.activity-list ul .no-posts-message {
+    text-align: center;
+    padding: 50px 0;
+    color: #aaa;
+    border-bottom: none; /* 밑줄 제거 */
+    display: block; /* li 요소를 블록으로 만들어 중앙 정렬 적용 */
+}
