@@ -29,6 +29,8 @@
         </header>
         
         <form class="register-form" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
             <input type="text" name="user_id" placeholder="리로스쿨 아이디 (ex. 25-10307)" required>
             <span id="hakbun-check-msg" class="like-input-invisible">nice try diddy</span>
             <input type="password" name="user_pw" placeholder="비밀번호" required>

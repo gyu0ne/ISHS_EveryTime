@@ -124,7 +124,7 @@ def riro_auth():
             session['name'] = api_result['name']
             session['gen'] = api_result['generation']
 
-            return redirect('register')
+            return redirect('yakgwan')
 
         except requests.exceptions.HTTPError as http_err:
             print(f"HTTP 에러 발생: {http_err}")
@@ -217,19 +217,49 @@ def check_pw_register():
     print ({'pw': pw_result, 'pw_check': pw_check_result})
     return {'pw': pw_result, 'pw_check': pw_check_result}
 
+# YakGwan
+@app.route('/yakgwan', methods=['GET', 'POST'])
+def yakgwan():
+    if 'user_id' in session:
+        return redirect("/")
+    
+    if 'hakbun' not in session or 'name' not in session or 'gen' not in session:
+        return redirect("riro-auth")
+
+    if request.method == 'POST': # POST
+        agree_terms = request.form.get('agree-terms')
+        agree_privacy = request.form.get('agree-privacy')
+
+        if agree_terms == 'on' and agree_privacy == 'on':
+            session['agree'] = True
+            return redirect('register')
+        else:
+            return Response('''
+        <script>
+            alert("약관에 동의하셔야 회원가입이 가능합니다.");
+            history.back();
+        </script>
+    ''')
+        
+    return render_template('yakgwan.html') # GET
+
 # Register
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if 'user_id' in session:
         return redirect("/")
     
-    conn = get_db()
     if 'hakbun' in session and 'name' in session and 'gen' in session:
         hakbun = session['hakbun']
         name = session['name']
         gen = session['gen']
     else:
-        return redirect('riro-auth')
+        return redirect('riro-auth')    
+    
+    if 'agree' not in session or not session['agree']:
+        return redirect('yakgwan')
+    
+    conn = get_db()
 
     if request.method == 'POST': # POST : return Form
         pw = request.form['password']
@@ -278,7 +308,12 @@ def register():
         cursor = conn.cursor()
         cursor.execute("INSERT INTO users (hakbun, gen, name, pw, login_id, nickname, birth, profile_image, join_date, role, is_autologin, autologin_token, level, exp, post_count, comment_count, point) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'student', 0, '', 1, 0, 0, 0, 0)", (hakbun, gen, name, hashed_pw, id, nick, birth, default_profile, join_date))
         conn.commit()
-        
+
+        session.pop('hakbun', None)
+        session.pop('name', None)
+        session.pop('gen', None)
+        session.pop('agree', None)
+
         return Response('<script> alert("회원가입이 완료되었습니다."); window.location.href = "/"; </script>') # After Register
     
     return render_template('register_form.html', hakbun=hakbun, name=name, gen=gen) # GET

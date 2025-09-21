@@ -1,0 +1,148 @@
+/* Pretendard 폰트 불러오기 */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+/* 기본 스타일 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Pretendard', sans-serif;
+    background-color: #212121;
+    color: #f1f1f1;
+    letter-spacing: -0.2px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px; /* 수정 */
+}
+
+/* 전체 컨테이너 */
+.terms-container {
+    width: 640px; /* 수정 */
+    background-color: #2e2e2e;
+    border: 1px solid #444;
+    border-radius: 12px;
+    padding: 30px; /* 수정 */
+    text-align: center;
+}
+
+.terms-container h1 {
+    font-size: 26px; /* 수정 */
+    font-weight: 700;
+}
+
+.terms-container .subtitle {
+    font-size: 14px; /* 수정 */
+    color: #aaa;
+    margin-top: 8px;
+    margin-bottom: 25px; /* 수정 */
+}
+
+/* 약관 섹션 */
+.terms-section {
+    margin-bottom: 20px; /* 수정 */
+}
+
+/* 스크롤 가능한 약관 박스 */
+.terms-box {
+    height: 160px; /* 수정: 높이 축소 */
+    overflow-y: scroll;
+    background-color: #252525;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: left;
+    color: #ccc;
+    font-size: 13px; /* 수정 */
+    line-height: 1.6;
+}
+
+.terms-box h4 {
+    color: #f1f1f1;
+    margin-bottom: 8px;
+}
+
+.terms-box p {
+    margin-bottom: 20px;
+}
+
+/* 스크롤바 디자인 (웹킷 브라우저용) */
+.terms-box::-webkit-scrollbar {
+    width: 8px;
+}
+.terms-box::-webkit-scrollbar-track {
+    background-color: #252525;
+}
+.terms-box::-webkit-scrollbar-thumb {
+    background-color: #555;
+    border-radius: 4px;
+}
+.terms-box::-webkit-scrollbar-thumb:hover {
+    background-color: #777;
+}
+
+/* 체크박스 */
+.checkbox-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    margin-top: 12px; /* 수정 */
+    text-align: left;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    background-color: #444;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-right: 10px;
+    position: relative;
+}
+
+.checkbox-wrapper input[type="checkbox"]:checked {
+    background-color: #d9534f;
+    border: none;
+}
+
+.checkbox-wrapper input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 6px;
+    width: 5px;
+    height: 10px;
+    border: solid #fff;
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg);
+}
+
+.checkbox-wrapper label {
+    color: #f1f1f1;
+    cursor: pointer;
+    font-size: 15px; /* 수정 */
+}
+
+/* 확인 버튼 */
+.btn-confirm {
+    width: 100%;
+    padding: 14px; /* 수정 */
+    background-color: #d9534f;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 16px; /* 수정 */
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 15px; /* 수정 */
+}
+
+.btn-confirm:hover {
+    background-color: #c9302c;
+}

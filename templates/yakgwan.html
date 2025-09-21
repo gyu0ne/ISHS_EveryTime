@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="kr">
+    <head>
+        <script src=""></script>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/yakgwan.css') }}">
+        <link rel="stylesheet" href="C:\Users\User\Downloads\1307 김규원\VSC\ISHS EveryTime\static\css\yakgwan.css">
+        <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
+        <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
+        <meta property="og:title" content="log인곽">
+        <link rel="shortcut icon" href=""> <!-- 파비콘 설정 -->
+        <meta name="title" content="log인곽">
+        <meta name="keywords" content="log인곽">
+        <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+<body>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>log인곽 - 회원가입</title>
+</head>
+<body>
+    <div class="terms-container">
+        <h1>서비스 이용 약관</h1>
+        <p class="subtitle">서비스 이용을 위해 약관에 동의해주세요.</p>
+
+        <form action="#" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+            <div class="terms-section">
+                <div class="terms-box">
+                    <h4>제1조 (목적)</h4>
+                    <p>이 약관은 [회사명] (이하 "회사")가 제공하는 [서비스명] 관련 제반 서비스의 이용과 관련하여 회사와 회원과의 권리, 의무 및 책임사항, 기타 필요한 사항을 규정함을 목적으로 합니다. 이 내용은 스크롤 기능 테스트를 위한 예시 텍스트입니다. 내용이 길어지면 박스 내에서 스크롤이 생성됩니다.</p>
+                    <h4>제2조 (정의)</h4>
+                    <p>"서비스"라 함은 구현되는 단말기(PC, TV, 휴대형단말기 등의 각종 유무선 장치를 포함)와 상관없이 "회원"이 이용할 수 있는 [서비스명] 관련 제반 서비스를 의미합니다. "회원"이라 함은 회사의 "서비스"에 접속하여 이 약관에 따라 "회사"와 이용계약을 체결하고 "회사"가 제공하는 "서비스"를 이용하는 고객을 말합니다.</p>
+                    <h4>제3조 (약관의 게시와 개정)</h4>
+                    <p>"회사"는 이 약관의 내용을 "회원"이 쉽게 알 수 있도록 서비스 초기 화면에 게시합니다. "회사"는 "약관의규제에관한법률", "정보통신망이용촉진및정보보호등에관한법률(이하 "정보통신망법")" 등 관련법을 위배하지 않는 범위에서 이 약관을 개정할 수 있습니다.</p>
+                </div>
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="agree-terms" name="agree-terms">
+                    <label for="agree-terms">이용약관에 동의합니다. (필수)</label>
+                </div>
+            </div>
+
+            <div class="terms-section">
+                <div class="terms-box">
+                    <h4>1. 수집하는 개인정보의 항목</h4>
+                    <p>회사는 회원가입, 원활한 고객상담, 각종 서비스의 제공을 위해 최초 회원가입 당시 아래와 같은 최소한의 개인정보를 필수항목으로 수집하고 있습니다. 선택항목은 입력하지 않아도 서비스 이용에 제한이 없습니다. 이 내용은 스크롤 기능 테스트를 위한 예시 텍스트입니다. 내용이 길어지면 박스 내에서 스크롤이 생성됩니다.</p>
+                    <h4>2. 개인정보의 수집 및 이용 목적</h4>
+                    <p>회사는 수집한 개인정보를 다음의 목적을 위해 활용합니다. 이용자가 제공한 모든 정보는 하기 목적에 필요한 용도 이외로는 사용되지 않으며 이용 목적이 변경될 시에는 사전 동의를 구할 것입니다.</p>
+                    <h4>3. 개인정보의 보유 및 이용기간</h4>
+                    <p>회사는 회원가입일로부터 서비스를 제공하는 기간 동안에 한하여 이용자의 개인정보를 보유 및 이용하게 됩니다. 회원 탈퇴를 요청하거나 개인정보의 수집 및 이용에 대한 동의를 철회하는 경우, 수집 및 이용목적이 달성되거나 보유 및 이용기간이 종료한 경우 해당 개인정보를 지체 없이 파기합니다.</p>
+                </div>
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="agree-privacy" name="agree-privacy">
+                    <label for="agree-privacy">개인정보 수집 및 이용에 동의합니다. (필수)</label>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn-confirm">동의하고 계속하기</button>
+        </form>
+    </div>
+</body>
+</html>
