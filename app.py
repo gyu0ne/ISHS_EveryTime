@@ -3,7 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from functools import wraps
-import datetime
+from datetime import datetime
 import requests
 import hashlib
 import secrets
@@ -332,8 +332,59 @@ def logout():
 
 @app.route('/mypage')
 def mypage():
+    conn = get_db()
+    conn.row_factory = sqlite3.Row 
+    cursor = conn.cursor()
+
     if 'user_id' in session:
-        return render_template('my_page.html')
+        cursor.execute("SELECT * FROM users WHERE login_id = ?", (session['user_id'],))
+        data = cursor.fetchone()
+
+        hakbun = data['hakbun']
+        name = data['name']
+        gen = data['gen']
+        nick = data['nickname']
+        birth = data['birth']
+        birth_year = birth[0:4]
+        birth_month = birth[4:6]
+        birth_day = birth[6:8]
+        join_date = data['join_date']
+        datetime_obj = datetime.strptime(join_date, '%Y-%m-%d %H:%M:%S')
+        output_join_date = datetime_obj.strftime('%Y.%m.%d')
+        level = data['level']
+        exp = data['exp']
+        post_count = data['post_count']
+        comment_count = data['comment_count']
+        cash = data['point']
+
+        cursor.execute("SELECT * FROM posts WHERE author = ?", (session['user_id'],))
+        post_data = cursor.fetchall()
+
+        posts = []
+        comments = []
+        board_name = []
+
+        for i in post_data:
+            posts.append(i['title'])
+            comments.append(i['comment_count'])
+            
+            post_board_id = i['board_id']
+
+            cursor.execute("SELECT board_name FROM board WHERE board_id = ?", (post_board_id,))
+            board_name.append(cursor.fetchone()['board_name'])
+
+        print(f'게시글 목록 : {posts}') # for debuging
+        print(f'댓글 수 목록 : {comments}') # for debuging
+        print(f'보드 이름 목록 : {board_name}') # for debuging
+        print(f'게시글 수 : {post_count}, 댓글 수 : {comment_count}') # for debuging
+        print(f'포인트 : {cash}') # for debuging
+        print(f'가입일 : {output_join_date}') # for debuging
+        print(f'생년월일 : {birth_year}년 {birth_month}월 {birth_day}일') # for debuging
+        print(f'학번 : {hakbun}, 이름 : {name}, 닉네임 : {nick}, 기수 : {gen}') # for debuging
+        print(f'레벨 : {level}, 경험치 : {exp}') # for debuging
+        print(f'아이디 : {session["user_id"]}') # for debuging
+
+        return render_template('my_page.html', hakbun=hakbun, name=name, gen=gen, nickname=nick, birth=f'{birth_year}.{birth_month}.{birth_day}', join_date=output_join_date, level=level, exp=exp, post_count=post_count, comment_count=comment_count, point=cash)
     else:
         return redirect('/login')
 

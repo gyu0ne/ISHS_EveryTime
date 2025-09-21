@@ -28,25 +28,25 @@
                         <img src="https://via.placeholder.com/100" alt="프로필 사진">
                         <button class="change-pic-btn">변경</button>
                     </div>
-                    <h2 class="nickname">사용자 닉네임</h2>
+                    <h2 class="nickname">{{ nickname }}</h2>
                     <div class="level-info">
-                        <span>Lv. 15</span>
+                        <span>Lv. {{ level }}</span>
                         <div class="exp-bar">
                             <div class="exp-gauge" style="width: 75%;"></div>
                         </div>
-                        <span class="exp-text">750 / 1000 EXP</span>
+                        <span class="exp-text">{{ exp }} / 1000 EXP</span>
                     </div>
                     <div class="point-info">
-                        <p>💰 캐시: <span>1,200 P</span></p>
+                        <p>💰 캐시: <span>{{ point }} P</span></p>
                     </div>
                     <div class="stats-info">
                         <div>
                             <p class="stat-title">게시글</p>
-                            <p class="stat-count">128</p>
+                            <p class="stat-count">{{ post_count }}</p>
                         </div>
                         <div>
                             <p class="stat-title">댓글</p>
-                            <p class="stat-count">512</p>
+                            <p class="stat-count">{{ comment_count }}</p>
                         </div>
                     </div>
                 </div>
@@ -54,11 +54,11 @@
                 <div class="card user-details">
                     <h3>개인 정보</h3>
                     <ul>
-                        <li><span>이름</span><strong>김인곽</strong></li>
-                        <li><span>학번</span><strong>32001</strong></li>
-                        <li><span>기수</span><strong>32기</strong></li>
-                        <li><span>생년월일</span><strong>2000.01.01</strong></li>
-                        <li><span>가입일자</span><strong>2025.01.15</strong></li>
+                        <li><span>이름</span><strong>{{ name }}</strong></li>
+                        <li><span>학번</span><strong>{{ hakbun }}</strong></li>
+                        <li><span>기수</span><strong>{{ gen }}기</strong></li>
+                        <li><span>생년월일</span><strong>{{ birth }}</strong></li>
+                        <li><span>가입일자</span><strong>{{ join_date }}</strong></li>
                     </ul>
                 </div>
                 
