@@ -1,0 +1,152 @@
+/* Pretendard 폰트 불러오기 */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+/* 기본 스타일 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Pretendard', sans-serif;
+    background-color: #212121;
+    color: #f1f1f1;
+    letter-spacing: -0.2px;
+    padding: 40px 0;
+}
+
+.container {
+    width: 900px;
+    margin: 0 auto;
+}
+
+/* === my_page.css 스타일 참조 === */
+.page-header h1 {
+    font-size: 32px;
+    margin-bottom: 30px;
+}
+
+.write-card {
+    background-color: #2e2e2e;
+    border: 1px solid #444;
+    border-radius: 12px;
+    padding: 30px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+.form-group:last-child {
+    margin-bottom: 0;
+}
+
+/* === login_form.css 스타일 참조 === */
+.form-input {
+    width: 100%;
+    background-color: #3e3e3e;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 15px;
+    color: #f1f1f1;
+    font-family: inherit; /* body의 폰트를 상속받도록 설정 */
+}
+.form-input::placeholder {
+    color: #aaa;
+}
+.form-input:focus {
+    outline: none;
+    border-color: #d9534f;
+}
+
+.title-input {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.content-input {
+    min-height: 450px;
+    resize: vertical; /* 세로 크기만 조절 가능하도록 */
+    font-size: 16px;
+    line-height: 1.7;
+}
+
+/* 옵션 그룹 */
+.options-group {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 5px 0 5px; /* 위쪽에만 여백 */
+}
+.file-upload label {
+    padding: 8px 15px;
+    border: 1px solid #555;
+    background-color: #3e3e3e;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 14px;
+}
+.file-upload input[type="file"] { display: none; }
+.file-upload label:hover { background-color: #4f4f4f; }
+
+.checkbox-wrapper { display: flex; align-items: center; }
+.checkbox-wrapper input[type="checkbox"] { display: none; }
+.checkbox-wrapper label {
+    cursor: pointer;
+    padding-left: 28px;
+    position: relative;
+    user-select: none;
+    font-size: 15px;
+}
+.checkbox-wrapper label:before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 1px;
+    width: 20px;
+    height: 20px;
+    background-color: #444;
+    border-radius: 5px;
+}
+.checkbox-wrapper input[type="checkbox"]:checked + label:before {
+    background-color: #d9534f;
+}
+.checkbox-wrapper input[type="checkbox"]:checked + label:after {
+    content: '✔';
+    color: white;
+    position: absolute;
+    left: 4px;
+    top: 2px;
+    font-size: 14px;
+}
+
+/* === login_form.css 버튼 스타일 참조 === */
+.actions-group {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 20px;
+    border-top: 1px solid #444; /* 버튼 영역 구분선 */
+    margin-top: 30px;
+}
+.btn {
+    width: 120px;
+    padding: 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+}
+.btn-cancel {
+    background-color: #4f4f4f;
+    color: #e0e0e0;
+}
+.btn-cancel:hover { background-color: #5f5f5f; }
+.btn-submit {
+    background-color: #d9534f;
+    color: #fff;
+}
+.btn-submit:hover { background-color: #c9302c; }

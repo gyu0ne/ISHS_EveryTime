@@ -9,6 +9,7 @@ import requests
 import hashlib
 import secrets
 import sqlite3
+import socket
 import os
 
 from route import *
@@ -51,7 +52,11 @@ def check_auto_login():
         user = cursor.fetchone()
 
         if user:
-            session.clear()
+            session.pop('hakbun', None)
+            session.pop('name', None)
+            session.pop('gen', None)
+            session.pop('agree', None)
+
             session['user_id'] = user[0]
             session.permanent = True
 
@@ -60,12 +65,50 @@ def check_auto_login():
 def main_page():
     return render_template('main.html')
 
+def is_googlebot():
+    """요청이 실제 구글 봇으로부터 왔는지 DNS 조회를 통해 확인합니다."""
+    # 로컬 환경 테스트 등을 위해 User-Agent를 먼저 확인 (선택 사항)
+    user_agent = request.user_agent.string
+    if "Googlebot" not in user_agent:
+        return False
+
+    # 1. 요청 IP 확인
+    ip = request.remote_addr
+    # 로컬호스트에서 테스트하는 경우 예외 처리
+    if ip == '127.0.0.1':
+        return False # 혹은 테스트 목적에 맞게 True로 설정
+
+    try:
+        # 2. IP 주소로 역방향 DNS 조회 (IP -> Hostname)
+        hostname, _, _ = socket.gethostbyaddr(ip)
+
+        # 3. Hostname이 구글 소유인지 확인
+        if not (hostname.endswith('.googlebot.com') or hostname.endswith('.google.com')):
+            return False
+
+        # 4. Hostname으로 순방향 DNS 조회 (Hostname -> IP)
+        resolved_ip = socket.gethostbyname(hostname)
+
+        # 5. 원래 IP와 조회된 IP가 일치하는지 확인
+        if ip == resolved_ip:
+            return True
+
+    except socket.herror:
+        # DNS 조회 실패 시
+        return False
+    except Exception as e:
+        # 기타 예외 처리
+        print(f"Error during Googlebot verification: {e}")
+        return False
+
+    return False
+
 # For Login Required Page
 # @login_required under @app.route
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
+        if 'user_id' not in session and not is_googlebot():
             return Response('<script> alert("로그인 사용자만 접근할 수 있습니다."); history.back(); </script>')
         return f(*args, **kwargs)
     return decorated_function
@@ -336,7 +379,11 @@ def login():
         user = cursor.fetchone() # (id, pw_hash) or None
 
         if user and bcrypt.check_password_hash(user[1], password):
-            session.clear()
+            session.pop('hakbun', None)
+            session.pop('name', None)
+            session.pop('gen', None)
+            session.pop('agree', None)
+            
             session['user_id'] = user[0]
 
             if remember:

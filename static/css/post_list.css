@@ -1,0 +1,178 @@
+/* Pretendard 폰트 불러오기 */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+/* 기본 스타일 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Pretendard', sans-serif;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    padding: 40px 0;
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.container {
+    width: 1100px; /* 목록 페이지는 너비를 조금 넓게 설정 */
+    margin: 0 auto;
+}
+
+/* 게시판 헤더 (게시글 상세 페이지와 동일한 스타일 재사용) */
+.board-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #3a3a3a;
+}
+
+.board-nav h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #f1f1f1;
+}
+
+.board-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.board-search {
+    padding: 9px 12px;
+    border: 1px solid #555;
+    border-radius: 6px;
+    background-color: #3e3e3e;
+    color: #e0e0e0;
+    font-size: 14px;
+    width: 200px;
+}
+.board-search:focus {
+    outline: none;
+    border-color: #d9534f;
+}
+
+.btn-write {
+    padding: 9px 15px;
+    border: 1px solid #d9534f;
+    background-color: #d9534f;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.btn-write:hover {
+    background-color: #c9302c;
+}
+
+/* 게시글 목록 카드 */
+.board-card {
+    background-color: #2e2e2e;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 10px 30px 20px 30px;
+}
+
+/* 목록 헤더와 각 행의 공통 레이아웃 */
+.list-header, .post-list li {
+    display: flex;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 1px solid #444;
+}
+
+.list-header {
+    font-weight: bold;
+    color: #aaa;
+    font-size: 14px;
+}
+
+.post-list {
+    list-style: none;
+}
+.post-list li {
+    font-size: 14px;
+    color: #ccc;
+    transition: background-color 0.2s;
+}
+.post-list li:hover {
+    background-color: #383838;
+}
+.post-list li:last-child {
+    border-bottom: none;
+}
+
+/* 공지사항 스타일 */
+.notice {
+    background-color: #3c3c3c;
+    font-weight: bold;
+}
+.notice .col-id {
+    color: #d9534f;
+}
+
+/* 각 컬럼 너비 설정 */
+.col-id    { flex: 0 0 70px; text-align: center; }
+.col-title { flex: 1 1 0; min-width: 0; } /* 제목이 길어지면 줄어들도록 설정 */
+.col-author{ flex: 0 0 120px; text-align: center; }
+.col-date  { flex: 0 0 100px; text-align: center; color: #888; }
+.col-views { flex: 0 0 70px; text-align: center; color: #888; }
+.col-likes { flex: 0 0 70px; text-align: center; color: #888; }
+
+.col-title a:hover {
+    text-decoration: underline;
+}
+
+.comment-count {
+    color: #d9534f;
+    font-weight: bold;
+    margin-left: 8px;
+}
+
+/* 페이지네이션 */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 30px;
+    gap: 5px;
+}
+
+.pagination a {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid #444;
+    border-radius: 6px;
+    color: #aaa;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.pagination a:hover {
+    background-color: #3e3e3e;
+    color: #fff;
+}
+
+.pagination a.active {
+    background-color: #d9534f;
+    border-color: #d9534f;
+    color: #fff;
+    cursor: default;
+}
+
+.pagination .nav-arrow {
+    font-size: 18px;
+}
