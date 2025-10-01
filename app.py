@@ -65,6 +65,7 @@ def check_auto_login():
 def main_page():
     return render_template('main.html')
 
+# Googlebot Verification Logic
 def is_googlebot():
     """요청이 실제 구글 봇으로부터 왔는지 DNS 조회를 통해 확인합니다."""
     # 로컬 환경 테스트 등을 위해 User-Agent를 먼저 확인 (선택 사항)
