@@ -494,6 +494,11 @@ def mypage():
                            post_count=post_count, comment_count=comment_count, 
                            point=cash, user_posts=user_posts, user_comments=user_comments)
 
+@app.route('/post-write', methods=['GET', 'POST'])
+@login_required
+def post_write():
+    return render_template('post_write.html')
+
 # Server Drive Unit
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

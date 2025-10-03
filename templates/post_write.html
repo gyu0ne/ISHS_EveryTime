@@ -1,52 +1,53 @@
 <!DOCTYPE html>
 <html lang="kr">
-    <head>
-        <script src=""></script>
-        <meta charset="utf-8">
-        <title>log인곽</title>
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/post_write.css') }}">
-        <link rel="stylesheet" href="C:\Users\User\Downloads\1307 김규원\VSC\ISHS EveryTime\static\css\post_write.css">
-        <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
-        <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
-        <meta property="og:title" content="log인곽">
-        <link rel="shortcut icon" href=""> <meta name="title" content="log인곽">
-        <meta name="keywords" content="log인곽">
-        <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-    </head>
+<head>
+    <meta charset="utf-8">
+    <title>log인곽 - 글쓰기</title>
+    
+    <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYVVistPL4rVyv_OyU1WOADOM.webp">
+    <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">  
+    <meta property="og:title" content="log인곽">
+    <link rel="shortcut icon" href="">
+    <meta name="title" content="log인곽">
+    <meta name="keywords" content="log인곽">
+    <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"></script>
+
+    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-bs4.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-bs4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/lang/summernote-ko-KR.js"></script> <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/post_write.css') }}">
+</head>
 <body>
-    <div class="container">
-        <header class="page-header">
-            <h1>자유 게시판</h1>
+    <div class="editor-container">
+        <header class="editor-header">
+            <button class="back-button" onclick="history.back()">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <h1 class="board-title">자유게시판</h1>
         </header>
 
-        <div class="write-card">
-            <form action="#">
-                <div class="form-group">
-                     <input type="text" class="form-input title-input" placeholder="제목을 입력하세요">
-                </div>
+        <main class="editor-main">
+            <div id="summernote-editor"></div>
+        </main>
 
-                <div class="form-group">
-                    <textarea class="form-input content-input" placeholder="내용을 입력하세요"></textarea>
-                </div>
-
-                <div class="form-group options-group">
-                    <div class="file-upload">
-                        <label for="file-input">📂 파일 첨부</label>
-                        <input type="file" id="file-input" multiple>
-                    </div>
-                    <div class="checkbox-wrapper">
-                        <input type="checkbox" id="anonymous-check">
-                        <label for="anonymous-check">익명</label>
-                    </div>
-                </div>
-
-                <div class="actions-group">
-                    <a href="#" class="btn btn-cancel">취소</a>
-                    <button type="submit" class="btn btn-submit">등록</button>
-                </div>
-            </form>
-        </div>
+        <footer class="editor-footer">
+            <div class="char-counter">
+                <span id="current-chars">0</span> / <span id="max-chars">5000</span>
+            </div>
+            <div class="action-buttons">
+                <button class="btn-cancel">취소</button>
+                <button class="btn-register">등록</button>
+            </div>
+        </footer>
     </div>
+
+    <script src="{{ url_for('static', filename='js/post_write.js') }}"></script>
 </body>
 </html>
