@@ -21,3 +21,5 @@ uvicorn
 flask_sqlalchemy
 
 sqlite3
+
+bleach

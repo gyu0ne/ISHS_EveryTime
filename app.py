@@ -9,6 +9,7 @@ import requests
 import hashlib
 import secrets
 import sqlite3
+import bleach
 import socket
 import os
 
@@ -497,7 +498,66 @@ def mypage():
 @app.route('/post-write', methods=['GET', 'POST'])
 @login_required
 def post_write():
-    return render_template('post_write.html')
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if request.method == 'POST':
+        # 1. 폼 데이터 수신
+        title = request.form.get('title')
+        content = request.form.get('content')
+        board_id = request.form.get('board_id') # board_id 수신
+        author_id = session['user_id']
+
+        # 2. 서버 사이드 유효성 검사
+        if not title or not content or not board_id:
+            return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
+
+        plain_text_content = bleach.clean(content, tags=[], strip=True)
+        if len(plain_text_content) > 5000:
+            return Response('<script>alert("글자 수는 5,000자를 초과할 수 없습니다."); history.back();</script>')
+        if len(plain_text_content) == 0:
+            return Response('<script>alert("내용을 입력해주세요."); history.back();</script>')
+
+        # 3. XSS 공격 방어를 위한 HTML 정제 (Sanitization)
+        # Summernote의 Base64 이미지 저장을 위해 'img' 태그의 'src' 속성에 data URI 스킴을 허용합니다.
+        allowed_tags = [
+            'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3',
+            'img', 'a', 'video', 'source', 'iframe',
+            'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
+            'ol', 'ul', 'li', 'blockquote'
+        ]
+        allowed_attrs = {
+            '*': ['class', 'style'],
+            'a': ['href', 'target'],
+            'img': ['src', 'alt', 'width', 'height'], # src 속성을 허용
+            'video': ['src', 'width', 'height', 'controls'],
+            'source': ['src', 'type'],
+            'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen']
+        }
+        # data URI를 허용하도록 protocols에 'data' 추가
+        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'])
+
+        # 4. 데이터베이스에 저장
+        try:
+            created_at = datetime.now().strftime('%Y-%m-%d')
+
+            query = """
+                INSERT INTO posts
+                (board_id, title, content, author, created_at, updated_at, view_count, like_count, dislike_count, comment_count, is_notice)
+                VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0)
+            """
+            cursor.execute(query, (board_id, title, sanitized_content, author_id, created_at, created_at))
+            conn.commit()
+
+            return redirect("/")
+        except Exception as e:
+            print(f"Database error: {e}")
+            return Response('<script>alert("게시글 저장 중 오류가 발생했습니다."); history.back();</script>')
+
+    # GET 요청 시: DB에서 게시판 목록을 가져와 템플릿으로 전달
+    cursor.execute("SELECT board_id, board_name FROM board ORDER BY board_id")
+    boards = cursor.fetchall() # (board_id, board_name) 튜플의 리스트
+    return render_template('post_write.html', boards=boards)
 
 # Server Drive Unit
 if __name__ == '__main__':

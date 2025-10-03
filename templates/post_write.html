@@ -25,16 +25,31 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/post_write.css') }}">
 </head>
 <body>
-    <div class="editor-container">
+    <form class="editor-container" id="post-form" method="POST" action="{{ url_for('post_write') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
         <header class="editor-header">
-            <button class="back-button" onclick="history.back()">
+            <button type="button" class="back-button" onclick="history.back()">
                 <i class="fas fa-arrow-left"></i>
             </button>
-            <h1 class="board-title">자유게시판</h1>
+            <h1 class="board-title">글쓰기</h1>
         </header>
 
         <main class="editor-main">
+            <div class="board-select-wrapper">
+                <select name="board_id" id="board-select" class="form-control" required>
+                    <option value="" disabled selected>게시판을 선택하세요</option>
+                    {% for board in boards %}
+                    <option value="{{ board[0] }}">{{ board[1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="title-input-wrapper">
+                <input type="text" name="title" id="post-title" class="form-control" placeholder="제목을 입력하세요" required>
+            </div>
             <div id="summernote-editor"></div>
+            <textarea name="content" id="post-content" style="display:none;"></textarea>
         </main>
 
         <footer class="editor-footer">
@@ -42,11 +57,11 @@
                 <span id="current-chars">0</span> / <span id="max-chars">5000</span>
             </div>
             <div class="action-buttons">
-                <button class="btn-cancel">취소</button>
-                <button class="btn-register">등록</button>
+                <button type="button" class="btn-cancel" onclick="history.back()">취소</button>
+                <button type="button" class="btn-register">등록</button>
             </div>
         </footer>
-    </div>
+    </form>
 
     <script src="{{ url_for('static', filename='js/post_write.js') }}"></script>
 </body>
