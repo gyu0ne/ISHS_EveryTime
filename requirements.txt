@@ -23,3 +23,5 @@ flask_sqlalchemy
 sqlite3
 
 bleach
+
+math

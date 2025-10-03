@@ -26,7 +26,7 @@
 
         <div class="board-card">
             <div class="list-header">
-                <span class="col-id">번호</span>
+                <span class="col-id">id</span>
                 <span class="col-title">제목</span>
                 <span class="col-author">작성자</span>
                 <span class="col-date">작성일</span>
@@ -34,14 +34,19 @@
                 <span class="col-likes">추천</span>
             </div>
             <ul class="post-list">
-                <li class="notice">
-                    <span class="col-id">공지</span>
-                    <span class="col-title"><a href="#">커뮤니티 이용 규칙 안내</a></span>
-                    <span class="col-author">운영자</span>
-                    <span class="col-date">2025.01.01</span>
-                    <span class="col-views">999+</span>
-                    <span class="col-likes">999+</span>
-                </li>
+                {% if current_page == 1 and notices %}
+                    {% for notice in notices %}
+                    <li class="notice">
+                        <span class="col-id">공지</span>
+                        <span class="col-title">
+                            <a href="{{ url_for('post_detail', post_id=notice.id) }}">{{ notice.title }}</a>
+                        </span>
+                        <span class="col-author">{{ notice.nickname }}</span>
+                        <span class="col-date">{{ notice.created_at.split(' ')[0] }}</span> <span class="col-views">{{ notice.view_count }}</span>
+                        <span class="col-likes">{{ notice.like_count }}</span>
+                    </li>
+                    {% endfor %}
+                {% endif %}
 
                 {% if posts %}
                     {% for post in posts %}
@@ -68,13 +73,22 @@
         </div>
 
         <nav class="pagination">
-            <a href="#" class="nav-arrow">‹</a>
-            <a href="#" class="active">1</a>
-            <a href="#">2</a>
-            <a href="#">3</a>
-            <a href="#">4</a>
-            <a href="#">5</a>
-            <a href="#" class="nav-arrow">›</a>
+            {% if total_pages > 1 %}
+                {% if current_page > 1 %}
+                    <a href="{{ url_for('post_list', board_id=board_id, page=current_page-1) }}" class="nav-arrow">‹</a>
+                {% endif %}
+
+                {% for page_num in range(1, total_pages + 1) %}
+                    <a href="{{ url_for('post_list', board_id=board_id, page=page_num) }}"
+                       class="{{ 'active' if page_num == current_page else '' }}">
+                        {{ page_num }}
+                    </a>
+                {% endfor %}
+
+                {% if current_page < total_pages %}
+                    <a href="{{ url_for('post_list', board_id=board_id, page=current_page+1) }}" class="nav-arrow">›</a>
+                {% endif %}
+            {% endif %}
         </nav>
     </div>
 </body>

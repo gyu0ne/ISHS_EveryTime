@@ -11,6 +11,7 @@ import secrets
 import sqlite3
 import bleach
 import socket
+import math
 import os
 
 from route import *
@@ -550,7 +551,7 @@ def post_write():
             cursor.execute(query, (board_id, title, sanitized_content, author_id, created_at, created_at))
             conn.commit()
 
-            return redirect("/")
+            return redirect(url_for('post_list', board_id=board_id))
         except Exception as e:
             print(f"Database error: {e}")
             return Response('<script>alert("게시글 저장 중 오류가 발생했습니다."); history.back();</script>')
@@ -560,11 +561,15 @@ def post_write():
     boards = cursor.fetchall() # (board_id, board_name) 튜플의 리스트
     return render_template('post_write.html', boards=boards)
 
-@app.route('/board/<int:board_id>')
-def post_list(board_id):
+@app.route('/board/<int:board_id>', defaults={'page': 1})
+@app.route('/board/<int:board_id>/<int:page>')
+@login_required
+def post_list(board_id, page):
     conn = get_db()
-    conn.row_factory = sqlite3.Row  # 컬럼 이름으로 접근 가능하도록 설정
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+
+    posts_per_page = 20  # 페이지 당 게시글 수를 20으로 설정
 
     try:
         # 1. 게시판 정보 조회
@@ -574,28 +579,45 @@ def post_list(board_id):
         if not board:
             return Response('<script>alert("존재하지 않는 게시판입니다."); history.back();</script>')
 
-        # 2. 해당 게시판의 게시글 목록 조회 (posts 테이블과 users 테이블을 JOIN)
-        # author(login_id)를 이용해 users 테이블에서 nickname을 가져옵니다.
-        # 최신 글이 위로 오도록 id를 기준으로 내림차순 정렬합니다.
-        query = """
-            SELECT p.id, p.title, p.comment_count, p.created_at, p.view_count, p.like_count, u.nickname
-            FROM posts p
-            JOIN users u ON p.author = u.login_id
-            WHERE p.board_id = ?
+        # 2. 공지사항 목록 조회 (is_notice = 1)
+        notice_query = """
+            SELECT p.id, p.title, u.nickname, p.created_at, p.view_count, p.like_count
+            FROM posts p JOIN users u ON p.author = u.login_id
+            WHERE p.board_id = ? AND p.is_notice = 1
             ORDER BY p.id DESC
         """
-        cursor.execute(query, (board_id,))
+        cursor.execute(notice_query, (board_id,))
+        notices = cursor.fetchall()
+
+        # 3. 일반 게시글 총 개수 조회 (페이지네이션 계산용)
+        cursor.execute("SELECT COUNT(*) FROM posts WHERE board_id = ? AND is_notice = 0", (board_id,))
+        total_posts = cursor.fetchone()[0]
+        total_pages = math.ceil(total_posts / posts_per_page)
+
+        # 4. 현재 페이지에 해당하는 일반 게시글 목록 조회 (is_notice = 0)
+        offset = (page - 1) * posts_per_page
+        posts_query = """
+            SELECT p.id, p.title, p.comment_count, p.created_at, p.view_count, p.like_count, u.nickname
+            FROM posts p JOIN users u ON p.author = u.login_id
+            WHERE p.board_id = ? AND p.is_notice = 0
+            ORDER BY p.id DESC
+            LIMIT ? OFFSET ?
+        """
+        cursor.execute(posts_query, (board_id, posts_per_page, offset))
         posts = cursor.fetchall()
 
     except Exception as e:
         print(f"Error fetching post list: {e}")
         return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
 
-    return render_template('post_list.html', board=board, posts=posts)
+    return render_template('post_list.html',
+                           board=board,
+                           notices=notices,
+                           posts=posts,
+                           total_pages=total_pages,
+                           current_page=page,
+                           board_id=board_id)
 
-# app.py 파일의 post_list 라우트 함수 바로 아래에 다음 코드를 추가하세요.
-
-# --- 게시글 상세 페이지 라우트 ---
 @app.route('/post/<int:post_id>')
 def post_detail(post_id):
     conn = get_db()
