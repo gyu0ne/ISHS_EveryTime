@@ -524,7 +524,7 @@ def post_write():
             'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3',
             'img', 'a', 'video', 'source', 'iframe',
             'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
-            'ol', 'ul', 'li', 'blockquote'
+            'ol', 'ul', 'li', 'blockquote', 'span', 'font'
         ]
         allowed_attrs = {
             '*': ['class', 'style'],
@@ -532,7 +532,8 @@ def post_write():
             'img': ['src', 'alt', 'width', 'height'], # src 속성을 허용
             'video': ['src', 'width', 'height', 'controls'],
             'source': ['src', 'type'],
-            'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen']
+            'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+            'font': ['color', 'face']
         }
         # data URI를 허용하도록 protocols에 'data' 추가
         sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'])
@@ -558,6 +559,87 @@ def post_write():
     cursor.execute("SELECT board_id, board_name FROM board ORDER BY board_id")
     boards = cursor.fetchall() # (board_id, board_name) 튜플의 리스트
     return render_template('post_write.html', boards=boards)
+
+@app.route('/board/<int:board_id>')
+def post_list(board_id):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row  # 컬럼 이름으로 접근 가능하도록 설정
+    cursor = conn.cursor()
+
+    try:
+        # 1. 게시판 정보 조회
+        cursor.execute("SELECT board_name FROM board WHERE board_id = ?", (board_id,))
+        board = cursor.fetchone()
+
+        if not board:
+            return Response('<script>alert("존재하지 않는 게시판입니다."); history.back();</script>')
+
+        # 2. 해당 게시판의 게시글 목록 조회 (posts 테이블과 users 테이블을 JOIN)
+        # author(login_id)를 이용해 users 테이블에서 nickname을 가져옵니다.
+        # 최신 글이 위로 오도록 id를 기준으로 내림차순 정렬합니다.
+        query = """
+            SELECT p.id, p.title, p.comment_count, p.created_at, p.view_count, p.like_count, u.nickname
+            FROM posts p
+            JOIN users u ON p.author = u.login_id
+            WHERE p.board_id = ?
+            ORDER BY p.id DESC
+        """
+        cursor.execute(query, (board_id,))
+        posts = cursor.fetchall()
+
+    except Exception as e:
+        print(f"Error fetching post list: {e}")
+        return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
+
+    return render_template('post_list.html', board=board, posts=posts)
+
+# app.py 파일의 post_list 라우트 함수 바로 아래에 다음 코드를 추가하세요.
+
+# --- 게시글 상세 페이지 라우트 ---
+@app.route('/post/<int:post_id>')
+def post_detail(post_id):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    try:
+        # 1. 게시글 정보 조회 (posts, users, board 테이블 JOIN)
+        # 작성자 닉네임과 프로필 이미지, 게시판 이름을 함께 가져옵니다.
+        query = """
+            SELECT p.*, u.nickname, u.profile_image, b.board_name
+            FROM posts p
+            JOIN users u ON p.author = u.login_id
+            JOIN board b ON p.board_id = b.board_id
+            WHERE p.id = ?
+        """
+        cursor.execute(query, (post_id,))
+        post = cursor.fetchone()
+
+        if not post:
+            return Response('<script>alert("존재하지 않거나 삭제된 게시글입니다."); history.back();</script>')
+
+        # 2. 조회수 1 증가 (UPDATE)
+        # 동일 사용자의 반복적인 조회수 증가를 막기 위한 로직은 추후 세션을 이용해 구현할 수 있습니다.
+        cursor.execute("UPDATE posts SET view_count = view_count + 1 WHERE id = ?", (post_id,))
+        conn.commit()
+
+        # 3. 해당 게시글의 댓글 목록 조회 (comments, users 테이블 JOIN)
+        # 댓글 작성자의 닉네임과 프로필 이미지를 함께 가져옵니다.
+        comment_query = """
+            SELECT c.*, u.nickname, u.profile_image
+            FROM comments c
+            JOIN users u ON c.author = u.login_id
+            WHERE c.post_id = ?
+            ORDER BY c.created_at ASC
+        """
+        cursor.execute(comment_query, (post_id,))
+        comments = cursor.fetchall()
+
+    except Exception as e:
+        print(f"Error fetching post detail: {e}")
+        return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
+
+    return render_template('post_detail.html', post=post, comments=comments)
 
 # Server Drive Unit
 if __name__ == '__main__':

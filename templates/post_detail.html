@@ -1,25 +1,23 @@
 <!DOCTYPE html>
 <html lang="kr">
-    <head>
-        <script src=""></script>
-        <meta charset="utf-8">
-        <title>log인곽</title>
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/post_detail.css') }}">
-        <link rel="stylesheet" href="C:\Users\User\Downloads\1307 김규원\VSC\ISHS EveryTime\static\css\post_detail.css">
-        <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
-        <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
-        <meta property="og:title" content="log인곽">
-        <link rel="shortcut icon" href=""> <meta name="title" content="log인곽">
-        <meta name="keywords" content="log인곽">
-        <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-    </head>
+<head>
+    <meta charset="utf-8">
+    <title>log인곽 - {{ post.title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/post_detail.css') }}">
+    <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
+    <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
+    <meta property="og:title" content="log인곽">
+    <link rel="shortcut icon" href=""> <meta name="title" content="log인곽">
+    <meta name="keywords" content="log인곽">
+    <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
 <body>
     <div class="container">
         <header class="board-header">
             <div class="board-nav">
-                <a href="#" class="btn btn-back">‹</a>
-                <h2>자유 게시판</h2>
+                <a href="javascript:history.back()" class="btn btn-back">‹</a>
+                <h2>{{ post.board_name }}</h2>
             </div>
         </header>
     </div>
@@ -27,63 +25,55 @@
         <div class="post-view-card">
             <header class="post-header">
                 <div class="post-title-section">
-                    <h2>이것이 바로 다크 테마 게시판 UI입니다.</h2>
+                    <h2>{{ post.title }}</h2>
                     <div class="author-info">
-                        <img src="https://via.placeholder.com/32" alt="프로필 사진">
-                        <span class="author-name">운영자</span>
+                        <img src="{{ url_for('static', filename=post.profile_image) }}" alt="프로필 사진">
+                        <span class="author-name">{{ post.nickname }}</span>
                     </div>
                 </div>
                 <div class="post-meta">
-                    <span>작성일: 2025.09.22 15:52</span>
-                    <span>조회수: 128</span>
-                </div>
+                    <span>작성일: {{ post.created_at }}</span>
+                    <span>조회수: {{ post.view_count + 1 }}</span> </div>
             </header>
 
             <div class="post-content">
-                <p>안녕하세요, 커뮤니티 UI 디자인 예시입니다.</p>
-                <p>전체적인 다크 테마를 유지하면서 카드형 디자인을 적용하여 각 섹션을 명확하게 구분했습니다. 폰트와 색상은 가독성을 최우선으로 고려하여 선정했습니다.</p>
-                <img src="https://via.placeholder.com/800x400" alt="게시글 이미지 예시">
-                <p>위와 같이 이미지를 포함할 수도 있습니다. 댓글 기능과 추천 기능도 아래에 구현되어 있습니다.</p>
+                {{ post.content|safe }}
             </div>
 
             <footer class="post-actions">
-                <button class="btn btn-like">👍 추천 32</button>
+                <button class="btn btn-like">👍 추천 {{ post.like_count }}</button>
                 <button class="btn btn-bookmark">스크랩</button>
             </footer>
         </div>
 
         <div class="comments-card">
-            <h3>댓글 2개</h3>
+            <h3>댓글 {{ comments|length }}개</h3>
             <form class="comment-form">
                 <textarea placeholder="댓글을 입력하세요..."></textarea>
                 <button type="submit">등록</button>
             </form>
             <ul class="comment-list">
-                <li class="comment-item">
-                    <div class="comment-author">
-                        <img src="https://via.placeholder.com/32" alt="프로필 사진">
-                        <span class="author-name">첫번째 댓글러</span>
-                    </div>
-                    <div class="comment-body">
-                        <p class="comment-text">오 디자인이 아주 깔끔하네요!</p>
-                        <span class="comment-date">2025.09.22 15:53</span>
-                    </div>
-                </li>
-                <li class="comment-item">
-                    <div class="comment-author">
-                        <img src="https://via.placeholder.com/32" alt="프로필 사진">
-                        <span class="author-name">두번째 댓글러</span>
-                    </div>
-                    <div class="comment-body">
-                        <p class="comment-text">다크 테마 정말 좋아요.</p>
-                        <span class="comment-date">2025.09.22 15:54</span>
-                    </div>
-                </li>
+                {% if comments %}
+                    {% for comment in comments %}
+                    <li class="comment-item">
+                        <div class="comment-author">
+                            <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진">
+                            <span class="author-name">{{ comment.nickname }}</span>
+                        </div>
+                        <div class="comment-body">
+                            <p class="comment-text">{{ comment.content }}</p>
+                            <span class="comment-date">{{ comment.created_at }}</span>
+                        </div>
+                    </li>
+                    {% endfor %}
+                {% else %}
+                    <li style="text-align: center; padding: 30px 0; border: none;">작성된 댓글이 없습니다.</li>
+                {% endif %}
             </ul>
         </div>
         
         <div class="list-navigation">
-            <a href="#" class="btn btn-list">목록으로</a>
+            <a href="{{ url_for('post_list', board_id=post.board_id) }}" class="btn btn-list">목록으로</a>
         </div>
     </div>
 </body>

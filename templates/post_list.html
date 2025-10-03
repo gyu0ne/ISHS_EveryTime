@@ -1,28 +1,26 @@
 <!DOCTYPE html>
 <html lang="kr">
-    <head>
-        <script src=""></script>
-        <meta charset="utf-8">
-        <title>log인곽</title>
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/post_list.css') }}">
-        <link rel="stylesheet" href="C:\Users\User\Downloads\1307 김규원\VSC\ISHS EveryTime\static\css\post_list.css">
-        <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
-        <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
-        <meta property="og:title" content="log인곽">
-        <link rel="shortcut icon" href=""> <meta name="title" content="log인곽">
-        <meta name="keywords" content="log인곽">
-        <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-    </head>
+<head>
+    <meta charset="utf-8">
+    <title>log인곽 - {{ board.board_name if board else '게시판' }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/post_list.css') }}">
+    <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
+    <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
+    <meta property="og:title" content="log인곽">
+    <link rel="shortcut icon" href=""> <meta name="title" content="log인곽">
+    <meta name="keywords" content="log인곽">
+    <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
 <body>
     <div class="container">
         <header class="board-header">
             <div class="board-nav">
-                <h2>자유 게시판</h2>
+                <h2>{{ board.board_name }}</h2>
             </div>
             <div class="board-actions">
                 <input type="text" class="board-search" placeholder="게시판 내 검색...">
-                <a href="#" class="btn btn-write">글쓰기</a>
+                <a href="{{ url_for('post_write') }}" class="btn btn-write">글쓰기</a>
             </div>
         </header>
 
@@ -38,46 +36,34 @@
             <ul class="post-list">
                 <li class="notice">
                     <span class="col-id">공지</span>
-                    <span class="col-title">
-                        <a href="#">커뮤니티 이용 규칙 안내</a>
-                    </span>
+                    <span class="col-title"><a href="#">커뮤니티 이용 규칙 안내</a></span>
                     <span class="col-author">운영자</span>
                     <span class="col-date">2025.01.01</span>
                     <span class="col-views">999+</span>
                     <span class="col-likes">999+</span>
                 </li>
-                <li>
-                    <span class="col-id">102</span>
-                    <span class="col-title">
-                        <a href="#">다크 테마 정말 마음에 드네요</a>
-                        <strong class="comment-count">[2]</strong>
-                    </span>
-                    <span class="col-author">두번째 댓글러</span>
-                    <span class="col-date">22:15</span>
-                    <span class="col-views">58</span>
-                    <span class="col-likes">5</span>
-                </li>
-                <li>
-                    <span class="col-id">101</span>
-                    <span class="col-title">
-                        <a href="#">게시판 페이지 디자인 예시입니다</a>
-                        <strong class="comment-count">[5]</strong>
-                    </span>
-                    <span class="col-author">첫번째 댓글러</span>
-                    <span class="col-date">09.22</span>
-                    <span class="col-views">128</span>
-                    <span class="col-likes">32</span>
-                </li>
-                 <li>
-                    <span class="col-id">100</span>
-                    <span class="col-title">
-                        <a href="#">새로운 글을 작성해보세요</a>
-                    </span>
-                    <span class="col-author">운영자</span>
-                    <span class="col-date">09.21</span>
-                    <span class="col-views">256</span>
-                    <span class="col-likes">45</span>
-                </li>
+
+                {% if posts %}
+                    {% for post in posts %}
+                    <li>
+                        <span class="col-id">{{ post.id }}</span>
+                        <span class="col-title">
+                            <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
+                            {% if post.comment_count > 0 %}
+                                <strong class="comment-count">[{{ post.comment_count }}]</strong>
+                            {% endif %}
+                        </span>
+                        <span class="col-author">{{ post.nickname }}</span>
+                        <span class="col-date">{{ post.created_at }}</span>
+                        <span class="col-views">{{ post.view_count }}</span>
+                        <span class="col-likes">{{ post.like_count }}</span>
+                    </li>
+                    {% endfor %}
+                {% else %}
+                    <li style="text-align: center; display: block; padding: 50px 0; border: none;">
+                        작성된 게시글이 없습니다.
+                    </li>
+                {% endif %}
             </ul>
         </div>
 
