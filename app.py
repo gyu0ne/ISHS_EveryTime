@@ -12,6 +12,7 @@ import sqlite3
 import bleach
 import socket
 import math
+import html
 import os
 
 from route import *
@@ -62,13 +63,74 @@ def check_auto_login():
             session['user_id'] = user[0]
             session.permanent = True
 
+# Bob (School Meal Information)
+def get_bob():
+        date = (datetime.now()).strftime('%Y%m%d')
+        date = '20251001'  # Test
+
+        url = (
+            "https://open.neis.go.kr/hub/mealServiceDietInfo"
+            "?KEY=75f40bb14ddd41d1b5ecda3389258cb1"
+            "&TYPE=JSON"
+            "&ATPT_OFCDC_SC_CODE=E10"
+            "&SD_SCHUL_CODE=7310058"
+            f"&MLSV_YMD={date}"
+            f"&"
+        )
+
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+
+            try:
+                meals = data['mealServiceDietInfo'][1]['row']
+                meal_names = {
+                    '1': '조식',
+                    '2': '중식',
+                    '3': '석식'
+                }
+
+                result = []
+                for meal in meals:
+                    meal_type = meal_names.get(meal['MMEAL_SC_CODE'], '기타')
+                    menu = html.escape(meal['DDISH_NM']).replace('&lt;br/&gt;', '<br>')
+
+                    result.append(f"{menu}<br>")
+                
+                content = result
+
+            except (KeyError, IndexError):
+                content = ["급식 정보가 없습니다.","급식 정보가 없습니다.","급식 정보가 없습니다."]
+        else:
+            content = ["API 호출 실패","API 호출 실패","API 호출 실패"]
+
+        return content
+
 # Main Page
 @app.route('/')
 def main_page():
     if 'user_id' in session:
-        return render_template('main_logined.html')
+        conn = get_db()
+        conn.row_factory = sqlite3.Row  # 컬럼 이름으로 접근 가능하도록 설정
+        cursor = conn.cursor()
+
+        # 사용자 정보 조회
+        cursor.execute("SELECT nickname, hakbun, login_id FROM users WHERE login_id = ?", (session['user_id'],))
+        user_data = cursor.fetchone()
+
+        bob_data = get_bob()
+
+        # 사용자 정보가 있으면 템플릿에 전달
+        if user_data:
+            return render_template('main_logined.html', user=user_data, bob=bob_data)
+        else:
+            # 혹시 모를 예외 처리 (세션은 있는데 DB에 유저가 없는 경우)
+            session.clear()
+            return redirect(url_for('login'))
     else:
-        return render_template('main_notlogined.html')
+        # 비로그인 시
+        bob_data = get_bob()
+        return render_template('main_notlogined.html', bob=bob_data)
 
 # Googlebot Verification Logic
 def is_googlebot():

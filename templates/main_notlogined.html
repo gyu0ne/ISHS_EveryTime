@@ -60,15 +60,15 @@
                 <div class="daily-meal">
                     <div class="meal-item">
                         <h4><span>조식</span></h4>
-                        <p class="meal-menu">흰쌀밥<br>소고기미역국<br>계란장조림<br>배추김치<br>뭐시기<br>저시기<br>암튼</p>
+                        <p class="meal-menu">{{ bob[0] |safe}}</p>
                     </div>
                     <div class="meal-item">
                         <h4><span>중식</span></h4>
-                        <p class="meal-menu">짜장면<br>탕수육<br>단무지<br>군만두</p>
+                        <p class="meal-menu">{{ bob[1] |safe}}</p>
                     </div>
                     <div class="meal-item">
                         <h4><span>석식</span></h4>
-                        <p class="meal-menu">치킨마요덮밥<br>유부된장국<br>오이무침<br>깍두기</p>
+                        <p class="meal-menu">{{ bob[2] |safe}}</p>
                     </div>
                     <div class="meal-item timetable-widget">
                         <h4><span>시간표</span></h4>

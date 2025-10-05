@@ -5,7 +5,6 @@
         <meta charset="utf-8">
         <title>log인곽</title>
         <link rel="stylesheet" href="{{ url_for('static', filename='css/main_logined.css') }}">
-        <link rel="stylesheet" href="C:\Users\User\Downloads\1307 김규원\VSC\ISHS EveryTime\static\css\main_logined.css">
         <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
         <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
         <meta property="og:title" content="log인곽">
@@ -31,15 +30,15 @@
                 </nav>
                 <div class="user-menu">
                     <div class="dropdown">
-                        <a href="#" class="dropdown-toggle">1234567890님 ▼</a>
+                        <a href="#" class="dropdown-toggle">{{ user.nickname }}님 ▼</a>
                         <div class="dropdown-menu">
-                            <a href="#">마이페이지</a>
-                            <a href="#">로그아웃</a>
+                            <a href="{{ url_for('mypage') }}">마이페이지</a>
+                            <a href="{{ url_for('logout') }}">로그아웃</a>
                         </div>
                     </div>
                 </div>
-                </div>
-            <div class="sub-nav-bar">
+                    </div>
+                <div class="sub-nav-bar">
                 </div>
         </header>
         <main>
@@ -55,10 +54,10 @@
                     </ul>
                 </div>
                  <div class="widget user-info-widget">
-                    <h3 class="user-name">홍길동</h3>
+                    <h3 class="user-name">{{ user.nickname }}</h3>
                     <ul class="user-details">
-                        <li><span>학번</span><span>20250000</span></li>
-                        <li><span>아이디</span><span>ishs_student</span></li>
+                        <li><span>학번</span><span>{{ user.hakbun }}</span></li>
+                        <li><span>아이디</span><span>{{ user.login_id }}</span></li>
                     </ul>
                 </div>
                 </aside>
@@ -67,15 +66,15 @@
                 <div class="daily-meal">
                     <div class="meal-item">
                         <h4><span>조식</span></h4>
-                        <p class="meal-menu">흰쌀밥<br>소고기미역국<br>계란장조림<br>배추김치<br>뭐시기<br>저시기<br>암튼</p>
+                        <p class="meal-menu">{{ bob[0] |safe}}</p>
                     </div>
                     <div class="meal-item">
                         <h4><span>중식</span></h4>
-                        <p class="meal-menu">짜장면<br>탕수육<br>단무지<br>군만두</p>
+                        <p class="meal-menu">{{ bob[1] |safe}}</p>
                     </div>
                     <div class="meal-item">
                         <h4><span>석식</span></h4>
-                        <p class="meal-menu">치킨마요덮밥<br>유부된장국<br>오이무침<br>깍두기</p>
+                        <p class="meal-menu">{{ bob[2] |safe}}</p>
                     </div>
                     <div class="meal-item timetable-widget">
                         <h4><span>시간표</span></h4>
