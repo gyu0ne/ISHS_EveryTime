@@ -65,7 +65,10 @@ def check_auto_login():
 # Main Page
 @app.route('/')
 def main_page():
-    return render_template('main.html')
+    if 'user_id' in session:
+        return render_template('main_logined.html')
+    else:
+        return render_template('main_notlogined.html')
 
 # Googlebot Verification Logic
 def is_googlebot():
@@ -619,6 +622,7 @@ def post_list(board_id, page):
                            board_id=board_id)
 
 @app.route('/post/<int:post_id>')
+@login_required
 def post_detail(post_id):
     conn = get_db()
     conn.row_factory = sqlite3.Row

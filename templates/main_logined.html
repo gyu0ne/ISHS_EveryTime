@@ -4,7 +4,8 @@
         <script src=""></script>
         <meta charset="utf-8">
         <title>log인곽</title>
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/main_logined.css') }}">
+        <link rel="stylesheet" href="C:\Users\User\Downloads\1307 김규원\VSC\ISHS EveryTime\static\css\main_logined.css">
         <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
         <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
         <meta property="og:title" content="log인곽">
@@ -29,10 +30,15 @@
                     </ul>
                 </nav>
                 <div class="user-menu">
-                    <a href="#">로그인</a>
-                    <a href="#">회원가입</a>
+                    <div class="dropdown">
+                        <a href="#" class="dropdown-toggle">1234567890님 ▼</a>
+                        <div class="dropdown-menu">
+                            <a href="#">마이페이지</a>
+                            <a href="#">로그아웃</a>
+                        </div>
+                    </div>
                 </div>
-            </div>
+                </div>
             <div class="sub-nav-bar">
                 </div>
         </header>
@@ -48,12 +54,14 @@
                         <li><a href="#">입시게시판</a></li>
                     </ul>
                 </div>
-                 <div class="widget login-widget-side">
-                    <p>커뮤니티 이용을 위해 로그인이 필요합니다.</p>
-                    <button class="login-btn">로그인</button>
-                    <button class="register-btn">에브리타임 회원가입</button>
+                 <div class="widget user-info-widget">
+                    <h3 class="user-name">홍길동</h3>
+                    <ul class="user-details">
+                        <li><span>학번</span><span>20250000</span></li>
+                        <li><span>아이디</span><span>ishs_student</span></li>
+                    </ul>
                 </div>
-            </aside>
+                </aside>
 
             <section class="main-content">
                 <div class="daily-meal">

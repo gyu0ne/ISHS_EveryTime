@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="kr">
+    <head>
+        <script src=""></script>
+        <meta charset="utf-8">
+        <title>log인곽</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+        <link rel="stylesheet" href="C:\Users\User\Downloads\1307 김규원\VSC\ISHS EveryTime\static\css\main.css">
+        <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
+        <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
+        <meta property="og:title" content="log인곽">
+        <link rel="shortcut icon" href=""> <meta name="title" content="log인곽">
+        <meta name="keywords" content="log인곽">
+        <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+<body>
+    <div class="container">
+        <header>
+            <div class="top-bar">
+                <div class="logo">ISHS</div>
+                <nav class="main-nav">
+                    <ul>
+                        <li><a href="#">게시판</a></li>
+                        <li><a href="#">시간표</a></li>
+                        <li><a href="#">강의실</a></li>
+                        <li><a href="#">학점계산기</a></li>
+                        <li><a href="#">책방</a></li>
+                        <li><a href="#">캠퍼스픽</a></li>
+                    </ul>
+                </nav>
+                <div class="user-menu">
+                    <a href="#">로그인</a>
+                    <a href="#">회원가입</a>
+                </div>
+            </div>
+            <div class="sub-nav-bar">
+                </div>
+        </header>
+        <main>
+            <aside class="sidebar left-sidebar">
+                <div class="widget">
+                    <h3>전체 게시판 목록</h3>
+                    <ul>
+                        <li><a href="#">자유게시판</a></li>
+                        <li><a href="#">비밀게시판</a></li>
+                        <li><a href="#">졸업생게시판</a></li>
+                        <li><a href="#">새내기게시판</a></li>
+                        <li><a href="#">입시게시판</a></li>
+                    </ul>
+                </div>
+                 <div class="widget login-widget-side">
+                    <p>커뮤니티 이용을 위해 로그인이 필요합니다.</p>
+                    <button class="login-btn">로그인</button>
+                    <button class="register-btn">에브리타임 회원가입</button>
+                </div>
+            </aside>
+
+            <section class="main-content">
+                <div class="daily-meal">
+                    <div class="meal-item">
+                        <h4><span>조식</span></h4>
+                        <p class="meal-menu">흰쌀밥<br>소고기미역국<br>계란장조림<br>배추김치<br>뭐시기<br>저시기<br>암튼</p>
+                    </div>
+                    <div class="meal-item">
+                        <h4><span>중식</span></h4>
+                        <p class="meal-menu">짜장면<br>탕수육<br>단무지<br>군만두</p>
+                    </div>
+                    <div class="meal-item">
+                        <h4><span>석식</span></h4>
+                        <p class="meal-menu">치킨마요덮밥<br>유부된장국<br>오이무침<br>깍두기</p>
+                    </div>
+                    <div class="meal-item timetable-widget">
+                        <h4><span>시간표</span></h4>
+                        <ol class="timetable-list">
+                            <li><span class="period">1교시</span><span class="subject">문학</span></li>
+                            <li><span class="period">2교시</span><span class="subject">수학 II</span></li>
+                            <li><span class="period">3교시</span><span class="subject">물리학 I</span></li>
+                            <li><span class="period">4교시</span><span class="subject">영어</span></li>
+                            <li><span class="period">5교시</span><span class="subject">영어</span></li>
+                            <li><span class="period">6교시</span><span class="subject">영어</span></li>
+                            <li><span class="period">7교시</span><span class="subject">영어</span></li>
+                        </ol>
+                    </div>
+                </div>
+                <div class="board-preview">
+                    <div class="board-column">
+                        <h3>국제캠 자유게시판</h3>
+                        <ul>
+                            <li><a href="#">국전 300 부러버터터</a><span>1분 전</span></li>
+                            <li><a href="#">운동장 바닥 상태 어때용??</a><span>5분 전</span></li>
+                            <li><a href="#">오 핫해요</a><span>5분 전</span></li>
+                            <li><a href="#">슬슬 윤곽 보이네</a><span>6분 전</span></li>
+                        </ul>
+                    </div>
+                    <div class="board-column">
+                        <h3>서울캠 자유게시판</h3>
+                        <ul>
+                            <li><a href="#">그전 인기 차카부 스트라</a><span>3분 전</span></li>
+                            <li><a href="#">nct 호감사는법</a><span>4분 전</span></li>
+                            <li><a href="#">리구 에쁘지</a><span>6분 전</span></li>
+                            <li><a href="#">글별</a><span>7분 전</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <aside class="sidebar right-sidebar">
+                <div class="widget search-widget">
+                    <input type="text" placeholder="전체 게시판의 글을 검색하세요!">
+                </div>
+                <div class="widget">
+                    <h3>실시간 인기 글</h3>
+                    <ul>
+                        <li><a href="#">로그인 후 확인할 수 있습니다.</a></li>
+                    </ul>
+                </div>
+                <div class="widget">
+                    <h3>HOT 게시물</h3>
+                     <ul>
+                        <li><a href="#">로그인 후 이용가능</a><span>09/17 13:39</span></li>
+                        <li><a href="#">로그인 후 이용가능</a><span>09/17 02:22</span></li>
+                        <li><a href="#">로그인 후 이용가능</a><span>09/17 14:10</span></li>
+                        <li><a href="#">로그인 후 이용가능</a><span>09/17 11:58</span></li>
+                    </ul>
+                </div>
+            </aside>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 Incheon Science HighSchool Community. All rights reserved.</p>
+            <nav>
+                <a href="#">이용약관</a>
+                <a href="#">개인정보처리방침</a>
+                <a href="#">문의하기</a>
+            </nav>
+        </footer>
+    </div>
+</body>
+</html>

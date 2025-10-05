@@ -9,10 +9,11 @@
 
 body {
     font-family: 'pretendard', '맑은 고딕', sans-serif;
-    background-color: #212121; /* 다크 테마 배경 */
-    color: #e0e0e0; /* 다크 테마 기본 텍스트 색상 */
+    background-color: #212121;
+    color: #e0e0e0;
     font-size: 14px;
-    letter-spacing: -0.2px; /* 폰트 자간 조정 */
+    letter-spacing: -0.2px;
+    overflow-x: hidden;
 }
 
 a {
@@ -33,7 +34,7 @@ ul {
 header {
     padding: 10px 0;
     border-bottom: 1px solid #333;
-    position: relative; /* 가상 요소를 위한 기준점 설정 */
+    position: relative;
 }
 
 header::before {
@@ -43,9 +44,9 @@ header::before {
     bottom: 0;
     left: 50%;
     transform: translateX(-50%);
-    width: 100vw; /* 화면 전체 너비(Viewport Width)를 의미합니다 */
-    background-color: #212121; /* 원래 헤더의 배경색을 여기에 적용 */
-    z-index: -1; /* 내용물(로고, 메뉴 등)보다 뒤에 있도록 설정 */
+    width: 100vw;
+    background-color: #212121;
+    z-index: -1;
 }
 
 .top-bar {
@@ -58,7 +59,7 @@ header::before {
 .logo {
     font-size: 24px;
     font-weight: bold;
-    color: #d9534f; /* 로고 색상 강조 (빨간색) */
+    color: #d9534f;
 }
 
 .main-nav ul {
@@ -71,17 +72,28 @@ header::before {
     font-weight: bold;
 }
 .main-nav li a:hover {
-    color: #d9534f; /* 호버 시 색상 변경 */
+    color: #d9534f;
+}
+
+/* ▼▼▼▼▼ 최종 수정된 부분 ▼▼▼▼▼ */
+.user-menu {
+    width: 180px; /* 로그인/회원가입 버튼이 차지하는 너비로 고정 */
+    display: flex;
+    justify-content: flex-end; /* 내부 아이템을 오른쪽으로 정렬 */
+    align-items: center;
 }
 
 .user-menu a {
     margin-left: 15px;
     padding: 8px 12px;
-    border: 1px solid #555; /* 다크 테마 테두리 */
+    border: 1px solid #555;
     border-radius: 5px;
-    background-color: #3e3e3e; /* 버튼 배경 */
+    background-color: #3e3e3e;
     color: #e0e0e0;
+    white-space: nowrap; /* 버튼 내 줄바꿈 방지 */
 }
+/* ▲▲▲▲▲ 최종 수정된 부분 ▲▲▲▲▲ */
+
 .user-menu a:hover {
     background-color: #4f4f4f;
 }
@@ -102,40 +114,40 @@ main {
     flex-grow: 1;
 }
 
-/* 위젯 공통 스타일 (다크 테마 적용) */
+/* 위젯 공통 스타일 */
 .widget {
-    background-color: #2e2e2e; /* 다크 테마 위젯 배경 */
-    border: 1px solid #3a3a3a; /* 다크 테마 위젯 테두리 */
+    background-color: #2e2e2e;
+    border: 1px solid #3a3a3a;
     padding: 15px;
     margin-bottom: 20px;
-    border-radius: 8px; /* 위젯 모서리 둥글게 */
+    border-radius: 8px;
 }
 
 .widget h3 {
     font-size: 16px;
     margin-bottom: 15px;
     padding-bottom: 10px;
-    border-bottom: 1px solid #444; /* 다크 테마 구분선 */
-    color: #f1f1f1; /* 제목 색상 */
+    border-bottom: 1px solid #444;
+    color: #f1f1f1;
 }
 
 .widget ul li {
-    padding: 7px 0; /* 여백 조정 */
+    padding: 7px 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px; /* 폰트 크기 조정 */
+    font-size: 13px;
 }
 .widget ul li a {
-    color: #cccccc; /* 링크 색상 */
+    color: #cccccc;
 }
 .widget ul li a:hover {
-    color: #d9534f; /* 호버 시 색상 변경 */
+    color: #d9534f;
 }
 .widget ul li span {
     float: right;
     color: #888;
-    font-size: 11px; /* 폰트 크기 조정 */
+    font-size: 11px;
 }
 
 /* 왼쪽 사이드바 로그인 위젯 */
@@ -156,22 +168,21 @@ main {
 }
 
 .login-btn {
-    background-color: #d9534f; /* 강조색 (빨간색) */
+    background-color: #d9534f;
     color: white;
 }
 .login-btn:hover {
     background-color: #c9302c;
 }
 .register-btn {
-    background-color: #4f4f4f; /* 다크 테마 보조 버튼 */
+    background-color: #4f4f4f;
     color: #e0e0e0;
 }
 .register-btn:hover {
     background-color: #5f5f5f;
 }
 
-/* main.css 파일에서 기존 식단표 관련 스타일을 아래 코드로 교체합니다. */
-/* ----- 식단표 및 시간표 위젯 시작 ----- */
+/* 식단표 및 시간표 위젯 */
 .daily-meal {
     background-color: transparent;
     border: none;
@@ -185,7 +196,7 @@ main {
 }
 
 .meal-item {
-    flex: 6; /* 기본적으로 3의 비율을 가짐 */
+    flex: 6;
     text-align: center;
     background-color: #2e2e2e;
     border: 1px solid #3a3a3a;
@@ -197,9 +208,8 @@ main {
     flex-direction: column;
 }
 
-/* 시간표 위젯만 너비를 좁게 설정 */
 .timetable-widget {
-    flex: 6; /* 2의 비율을 가져 다른 카드보다 좁아짐 */
+    flex: 6;
 }
 
 
@@ -209,7 +219,7 @@ main {
 }
 
 .meal-item h4 {
-    font-size: 20px; /* 폰트 크기 조정 */
+    font-size: 20px;
     font-weight: 600;
     color: #f1f1f1;
     margin-bottom: 20px;
@@ -228,41 +238,38 @@ main {
     bottom: 0;
     left: 50%;
     transform: translateX(-50%);
-    width: 30%; /* 라인 길이 조정 */
+    width: 30%;
     height: 3px;
     background-color: #d9534f;
     border-radius: 2px;
 }
 
-/* 식단 메뉴 텍스트 */
 .meal-menu {
     font-size: 15px;
     line-height: 1.8;
     color: #cccccc;
     white-space: pre-wrap;
-    text-align: center; /* 가운데 정렬 */
-    flex-grow: 1; /* 남은 공간 채우기 */
+    text-align: center;
+    flex-grow: 1;
     display: flex;
     flex-direction: column;
-    justify-content: center; /* 메뉴 내용을 세로 중앙에 배치 */
+    justify-content: center;
 }
 
-
-/* 시간표 위젯 내부 스타일 */
 .timetable-list {
     list-style: none;
     padding: 0;
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    justify-content: space-around; /* 항목들을 세로로 균등 분배 */
+    justify-content: space-around;
 }
 
 .timetable-list li {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 6px 5px; /* 패딩 조정 */
+    padding: 6px 5px;
     border-bottom: 1px solid #3e3e3e;
 }
 
@@ -271,16 +278,15 @@ main {
 }
 
 .timetable-list .period {
-    font-size: 13px; /* 폰트 크기 조정 */
+    font-size: 13px;
     color: #aaa;
 }
 
 .timetable-list .subject {
-    font-size: 15px; /* 폰트 크기 조정 */
+    font-size: 15px;
     font-weight: 500;
     color: #e0e0e0;
 }
-/* ----- 식단표 및 시간표 위젯 끝 ----- */
 
 .board-preview {
     display: flex;
@@ -289,17 +295,17 @@ main {
 
 .board-column {
     flex: 1;
-    background-color: #2e2e2e; /* 다크 테마 배경 */
-    border: 1px solid #3a3a3a; /* 다크 테마 테두리 */
+    background-color: #2e2e2e;
+    border: 1px solid #3a3a3a;
     padding: 15px;
-    border-radius: 8px; /* 모서리 둥글게 */
+    border-radius: 8px;
 }
 
 .board-column h3 {
     font-size: 16px;
     margin-bottom: 15px;
     padding-bottom: 10px;
-    border-bottom: 1px solid #444; /* 다크 테마 구분선 */
+    border-bottom: 1px solid #444;
     color: #f1f1f1;
 }
 
@@ -320,32 +326,32 @@ main {
     font-size: 11px;
 }
 
-
 /* 오른쪽 사이드바 검색 위젯 */
 .search-widget input {
     width: 100%;
     padding: 10px;
-    border: 1px solid #555; /* 다크 테마 테두리 */
+    border: 1px solid #555;
     border-radius: 4px;
-    background-color: #3e3e3e; /* 배경색 */
-    color: #e0e0e0; /* 텍스트 색상 */
+    background-color: #3e3e3e;
+    color: #e0e0e0;
 }
 .search-widget input::placeholder {
-    color: #aaa; /* 플레이스홀더 색상 */
+    color: #aaa;
 }
 .search-widget input:focus {
     outline: none;
-    border-color: #d9534f; /* 포커스 시 강조색 */
+    border-color: #d9534f;
 }
 
 /* 푸터 스타일 */
 footer {
-    border-top: 1px solid #333; /* 다크 테마 테두리 */
+    position: relative;
+    border-top: 1px solid #333;
     padding: 20px;
     text-align: center;
     color: #777;
     font-size: 12px;
-    background-color: #212121; /* 푸터 배경색 */
+    background-color: #212121;
     margin-top: 20px;
 }
 
@@ -368,7 +374,93 @@ footer::before {
     bottom: 0;
     left: 50%;
     transform: translateX(-50%);
-    width: 100vw; /* 화면 전체 너비(Viewport Width)를 의미합니다 */
-    background-color: #212121; /* 원래 헤더의 배경색을 여기에 적용 */
-    z-index: -1; /* 내용물(로고, 메뉴 등)보다 뒤에 있도록 설정 */
+    width: 100vw;
+    background-color: #212121;
+    z-index: -1;
+}
+
+/* ▼▼▼▼▼ 로그인 후 상태를 위한 CSS ▼▼▼▼▼ */
+/* 이 코드는 main_logined.css에만 있어도 되고, 공통 css에 있어도 무방합니다. */
+
+/* 헤더 드롭다운 메뉴 */
+.user-menu .dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.user-menu .dropdown-toggle {
+    border: 1px solid #555;
+    background-color: #3e3e3e;
+    color: #e0e0e0;
+    padding: 8px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    /* margin-left는 부모인 .user-menu가 제어하므로 여기서는 0으로 처리 */
+    margin-left: 0; 
+    white-space: nowrap;
+}
+
+.user-menu .dropdown-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background-color: #2e2e2e;
+    border: 1px solid #3a3a3a;
+    border-radius: 5px;
+    min-width: 120px;
+    z-index: 100;
+    margin-top: 5px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.user-menu .dropdown-menu a {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin: 0;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 0;
+    background: none;
+}
+
+.user-menu .dropdown-menu a:hover {
+    background-color: #d9534f;
+    color: white;
+}
+
+.user-menu .dropdown:hover .dropdown-menu {
+    display: block;
+}
+
+/* 왼쪽 사이드바 사용자 정보 위젯 */
+.user-info-widget .user-name {
+    text-align: center;
+    font-size: 18px;
+}
+
+.user-info-widget .user-details {
+    margin-top: 10px;
+}
+
+.user-info-widget .user-details li {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    font-size: 13px;
+    border-bottom: 1px solid #3e3e3e;
+}
+
+.user-info-widget .user-details li:last-child {
+    border-bottom: none;
+}
+
+.user-info-widget .user-details li span:first-child {
+    color: #aaa;
+}
+
+.user-info-widget .user-details li span:last-child {
+    color: #e0e0e0;
+    font-weight: 500;
 }
