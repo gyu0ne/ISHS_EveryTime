@@ -66,45 +66,59 @@ def check_auto_login():
 # Bob (School Meal Information)
 def get_bob():
         date = (datetime.now()).strftime('%Y%m%d')
-        date = '20251001'  # Test
 
-        url = (
-            "https://open.neis.go.kr/hub/mealServiceDietInfo"
-            "?KEY=75f40bb14ddd41d1b5ecda3389258cb1"
-            "&TYPE=JSON"
-            "&ATPT_OFCDC_SC_CODE=E10"
-            "&SD_SCHUL_CODE=7310058"
-            f"&MLSV_YMD={date}"
-            f"&"
-        )
+        conn = get_db()
+        cursor = conn.cursor()
 
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
+        cursor.execute('SELECT breakfast, lunch, dinner FROM meals WHERE date = ?', (date,))
+        meal_data = cursor.fetchone()
 
-            try:
-                meals = data['mealServiceDietInfo'][1]['row']
-                meal_names = {
-                    '1': '조식',
-                    '2': '중식',
-                    '3': '석식'
-                }
-
-                result = []
-                for meal in meals:
-                    meal_type = meal_names.get(meal['MMEAL_SC_CODE'], '기타')
-                    menu = html.escape(meal['DDISH_NM']).replace('&lt;br/&gt;', '<br>')
-
-                    result.append(f"{menu}<br>")
-                
-                content = result
-
-            except (KeyError, IndexError):
-                content = ["급식 정보가 없습니다.","급식 정보가 없습니다.","급식 정보가 없습니다."]
+        if meal_data:
+            return [meal_data[0], meal_data[1], meal_data[2]]
         else:
-            content = ["API 호출 실패","API 호출 실패","API 호출 실패"]
+            url = (
+                "https://open.neis.go.kr/hub/mealServiceDietInfo"
+                "?KEY=75f40bb14ddd41d1b5ecda3389258cb1"
+                "&TYPE=JSON"
+                "&ATPT_OFCDC_SC_CODE=E10"
+                "&SD_SCHUL_CODE=7310058"
+                f"&MLSV_YMD={date}"
+                f"&"
+            )
 
-        return content
+            response = requests.get(url)
+            if response.status_code == 200:
+                data = response.json()
+
+                result = {'1': '급식 정보가 없습니다.', '2': '급식 정보가 없습니다.', '3': '급식 정보가 없습니다.'}  # 1: 아침, 2: 점심, 3: 저녁
+
+                try:
+                    meals = data['mealServiceDietInfo'][1]['row']
+
+                    for meal in meals:
+                        meal_code = meal.get('MMEAL_SC_CODE')
+                        dish_nm = meal.get('DDISH_NM')
+                        if meal_code and dish_nm:
+                            menu = html.escape(meal['DDISH_NM']).replace('&lt;br/&gt;', '<br>')
+                            result[str(meal_code)] = menu
+
+                except (KeyError, IndexError):
+                    pass
+
+                content = result
+                print(content)
+                print(content['1'], content['2'], content['3'])
+                cursor.execute('INSERT INTO meals (date, breakfast, lunch, dinner) VALUES (?, ?, ?, ?)',(date, content['1'], content['2'], content['3']))
+                conn.commit()
+            
+                cursor.execute('SELECT breakfast, lunch, dinner FROM meals WHERE date = ?', (date,))
+                meal_data = cursor.fetchone()
+
+                return [meal_data[0], meal_data[1], meal_data[2]]
+            else:
+                content = ["API 호출 실패","API 호출 실패","API 호출 실패"]
+
+            return content
 
 # Main Page
 @app.route('/')
