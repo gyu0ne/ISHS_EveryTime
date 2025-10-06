@@ -1,220 +1,133 @@
 // CSRF 토큰 설정
 const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-// 아이디 입력 필드와 메시지 표시 영역을 가져옴
+// 입력 필드 및 메시지 영역 요소 가져오기
 const loginIdInput = document.getElementById('login_id');
 const nicknameInput = document.getElementById('nickname');
+const birthInput = document.getElementById('birth');
+const pwInput = document.getElementById('password');
+const pwConfirmInput = document.getElementById('password_confirm');
+
 const idCheckMsg = document.getElementById('id-check-msg');
 const nicknameCheckMsg = document.getElementById('nickname-check-msg');
-const birthInput = document.getElementById('birth');
 const birthCheckMsg = document.getElementById('birth-check-msg');
-
-// 아이디 중복 확인
-loginIdInput.addEventListener('blur', async function() {
-    const id = loginIdInput.value;
-    const nickname = nicknameInput.value;
-    const birth = birthInput.value;
-
-    // 아이디를 입력하지 않았으면 메시지를 지움
-    if (id.length === 0) {
-        idCheckMsg.textContent = '';
-        return;
-    }
-
-    // fetch API를 사용해 서버에 POST 요청 보내기
-    try {
-        const response = await fetch('/check-register', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify({ 'id': id, 'nick': nickname, 'birth': birth })
-        });
-
-        const data = await response.json(); // 서버 응답을 JSON으로 파싱
-
-        // 서버 응답(data.exists)에 따라 메시지 업데이트
-        if (data.login_id == 'True') {
-            idCheckMsg.textContent = '이미 사용 중인 아이디입니다.';
-            idCheckMsg.style.color = 'red';
-        } else {
-            idCheckMsg.textContent = '사용 가능한 아이디입니다.';
-            idCheckMsg.style.color = 'green';
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        idCheckMsg.textContent = '확인 중 오류가 발생했습니다.';
-        idCheckMsg.style.color = 'orange';
-    }
-});
-
-// 닉네임 중복 확인
-nicknameInput.addEventListener('blur', async function() {
-    const id = loginIdInput.value;
-    const nickname = nicknameInput.value;
-    const birth = birthInput.value;
-
-    // 닉네임을 입력하지 않았으면 메시지를 지움
-    if (nickname.length === 0) {
-        nicknameCheckMsg.textContent = '';
-        return;
-    }
-
-    // fetch API를 사용해 서버에 POST 요청 보내기
-    try {
-        const response = await fetch('/check-register', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify({ 'id': id, 'nick': nickname, 'birth': birth })
-        });
-
-        const data = await response.json(); // 서버 응답을 JSON으로 파싱
-
-        // 서버 응답(data.exists)에 따라 메시지 업데이트
-        if (data.nickname == 'True') {
-            nicknameCheckMsg.textContent = '이미 사용 중인 닉네임입니다.';
-            nicknameCheckMsg.style.color = 'red';
-        } else {
-            nicknameCheckMsg.textContent = '사용 가능한 닉네임입니다.';
-            nicknameCheckMsg.style.color = 'green';
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        nicknameCheckMsg.textContent = '확인 중 오류가 발생했습니다.';
-        nicknameCheckMsg.style.color = 'orange';
-    }
-});
-
-birthInput.addEventListener('blur', async function() {
-    const id = loginIdInput.value;
-    const nickname = nicknameInput.value;
-    const birth = birthInput.value;
-
-    // 생년월일을 입력하지 않았으면 메시지를 지움
-    if (birth.length === 0) {
-        birthCheckMsg.textContent = '';
-        return;
-    }
-
-    // fetch API를 사용해 서버에 POST 요청 보내기
-    try {
-        const response = await fetch('/check-register', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify({ 'id': id, 'nick': nickname, 'birth': birth })
-        });
-
-        const data = await response.json(); // 서버 응답을 JSON으로 파싱
-
-        // 서버 응답(data.exists)에 따라 메시지 업데이트
-        if (data.birth == 'True') {
-            birthCheckMsg.textContent = '';
-            birthCheckMsg.style.color = 'red';
-        } else {
-            birthCheckMsg.textContent = '날짜 형식이 올바르지 않습니다.';
-            birthCheckMsg.style.color = 'red';
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        birthCheckMsg.textContent = '확인 중 오류가 발생했습니다.';
-        birthCheckMsg.style.color = 'orange';
-    }
-})
-
-const pwInput = document.getElementById('password');
 const pwCheckMsg = document.getElementById('password-check-msg');
-const pwConfirmInput = document.getElementById('password_confirm');
 const pwConfirmMsg = document.getElementById('password-same-check-msg');
 
-// 비밀번호 글자 수 확인
-pwInput.addEventListener('blur', async function() {
-    const pw = pwInput.value;
-    const pw_check = pwConfirmInput.value;
+// Helper function to set message style
+const setMessage = (element, message, color) => {
+    element.textContent = message;
+    element.style.color = color;
+};
 
-    // 비밀번호를 입력하지 않았으면 메시지를 지움
-    if (pw.length === 0) {
-        pwCheckMsg.textContent = '';
+// 1. 아이디 중복 확인 (서버 DB 조회 필요) - 'blur' 이벤트 유지
+loginIdInput.addEventListener('blur', async function() {
+    const id = this.value;
+    if (id.length === 0) {
+        setMessage(idCheckMsg, '', 'black');
         return;
     }
 
-    // fetch API를 사용해 서버에 POST 요청 보내기
     try {
-        const response = await fetch('/check-pw-register', {
+        const response = await fetch('/check-register', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
-            body: JSON.stringify({ 'pw': pw, 'pw_check': pw_check })
+            // 서버에는 아이디와 닉네임 정보만 보냄
+            body: JSON.stringify({ 'id': id, 'nick': nicknameInput.value })
         });
-
-        const data = await response.json(); // 서버 응답을 JSON으로 파싱
-
-        // 서버 응답(data.exists)에 따라 메시지 업데이트
-        if (data.pw == 'True') {
-            pwCheckMsg.textContent = '';
-            pwCheckMsg.style.color = 'red';
+        const data = await response.json();
+        if (data.login_id === 'True') {
+            setMessage(idCheckMsg, '이미 사용 중인 아이디입니다.', 'red');
         } else {
-            pwCheckMsg.textContent = '비밀번호는 최소 6자 이상이어야 합니다.';
-            pwCheckMsg.style.color = 'red';
-        }
-
-        if (data.pw_check == 'True' && data.pw == 'True') {
-            pwConfirmMsg.textContent = '비밀번호가 일치하지 않습니다.';
-            pwConfirmMsg.style.color = 'red';
-        } else {
-            pwConfirmMsg.textContent = '';
-            pwConfirmMsg.style.color = 'red';
+            setMessage(idCheckMsg, '사용 가능한 아이디입니다.', 'green');
         }
     } catch (error) {
         console.error('Error:', error);
-        pwCheckMsg.textContent = '확인 중 오류가 발생했습니다.';
-        pwCheckMsg.style.color = 'orange';
+        setMessage(idCheckMsg, '확인 중 오류 발생', 'orange');
     }
-})
+});
 
-// 비밀번호 일치 여부 확인
-pwConfirmInput.addEventListener('input', async function() {
-    const pw = pwInput.value;
-    const pw_check = pwConfirmInput.value;
-
-    // 비밀번호를 입력하지 않았으면 메시지를 지움
-    if (pw_check.length === 0) {
-        pwConfirmMsg.textContent = '';
+// 2. 닉네임 중복 확인 (서버 DB 조회 필요) - 'blur' 이벤트 유지
+nicknameInput.addEventListener('blur', async function() {
+    const nickname = this.value;
+    if (nickname.length === 0) {
+        setMessage(nicknameCheckMsg, '', 'black');
         return;
     }
 
-    // fetch API를 사용해 서버에 POST 요청 보내기
     try {
-        const response = await fetch('/check-pw-register', {
+        const response = await fetch('/check-register', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
-            body: JSON.stringify({ 'pw': pw, 'pw_check': pw_check })
+            body: JSON.stringify({ 'id': loginIdInput.value, 'nick': nickname })
         });
-
-        const data = await response.json(); // 서버 응답을 JSON으로 파싱
-
-        // 서버 응답에 따라 메시지 업데이트
-        if (data.pw_check == 'True' && data.pw == 'True') {
-            pwConfirmMsg.textContent = '비밀번호가 일치하지 않습니다.';
-            pwConfirmMsg.style.color = 'red';
+        const data = await response.json();
+        if (data.nickname === 'True') {
+            setMessage(nicknameCheckMsg, '이미 사용 중인 닉네임입니다.', 'red');
         } else {
-            pwConfirmMsg.textContent = '';
-            pwConfirmMsg.style.color = 'red';
+            setMessage(nicknameCheckMsg, '사용 가능한 닉네임입니다.', 'green');
         }
     } catch (error) {
         console.error('Error:', error);
-        pwConfirmMsg.textContent = '확인 중 오류가 발생했습니다.';
-        pwConfirmMsg.style.color = 'orange';
+        setMessage(nicknameCheckMsg, '확인 중 오류 발생', 'orange');
     }
-})
+});
+
+// 3. 생년월일 유효성 검사 (클라이언트) - 'input' 이벤트로 실시간 검사
+birthInput.addEventListener('input', function() {
+    const birth = this.value;
+    // 정규식으로 8자리 숫자인지 확인
+    const regex = /^\d{8}$/;
+
+    if (birth.length === 0) {
+        setMessage(birthCheckMsg, '', 'black');
+        return;
+    }
+
+    if (!regex.test(birth)) {
+        setMessage(birthCheckMsg, '날짜 형식(8자리 숫자)이 올바르지 않습니다.', 'red');
+        return;
+    }
+
+    // 유효한 날짜인지 확인
+    const year = parseInt(birth.substring(0, 4), 10);
+    const month = parseInt(birth.substring(4, 6), 10) - 1; // month는 0부터 시작
+    const day = parseInt(birth.substring(6, 8), 10);
+    const d = new Date(year, month, day);
+
+    if (d.getFullYear() === year && d.getMonth() === month && d.getDate() === day) {
+        setMessage(birthCheckMsg, '', 'green'); // 유효하면 메시지 없음
+    } else {
+        setMessage(birthCheckMsg, '유효하지 않은 날짜입니다.', 'red');
+    }
+});
+
+
+// 4. 비밀번호 유효성 검사 (클라이언트) - 'input' 이벤트로 실시간 검사
+function validatePasswords() {
+    const pw = pwInput.value;
+    const pw_check = pwConfirmInput.value;
+
+    // 비밀번호 길이 검사
+    if (pw.length > 0 && pw.length < 6) {
+        setMessage(pwCheckMsg, '비밀번호는 최소 6자 이상이어야 합니다.', 'red');
+    } else {
+        setMessage(pwCheckMsg, '', 'black');
+    }
+
+    // 비밀번호 일치 여부 검사
+    if (pw_check.length > 0 && pw !== pw_check) {
+        setMessage(pwConfirmMsg, '비밀번호가 일치하지 않습니다.', 'red');
+    } else {
+        setMessage(pwConfirmMsg, '', 'black');
+    }
+}
+
+pwInput.addEventListener('input', validatePasswords);
+pwConfirmInput.addEventListener('input', validatePasswords);

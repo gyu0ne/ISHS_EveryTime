@@ -224,12 +224,13 @@ def riro_auth():
             count_hakbun = cursor.fetchone()[0]
 
             if count_name > 0 and count_hakbun > 0:
-                return Response(f'''
-        <script>
-            alert("이미 가입된 계정이 있습니다.");
-            history.back();
-        </script>
-    ''')
+                pass
+    #             return Response(f'''
+    #     <script>
+    #         alert("이미 가입된 계정이 있습니다.");
+    #         history.back();
+    #     </script>
+    # ''')
 
             session['hakbun'] = api_result['student_number']
             session['name'] = api_result['name']
@@ -268,20 +269,6 @@ def check_register():
 
     id = data.get('id')
     nick = data.get('nick')
-    birth = data.get('birth')
-
-    year = birth[0:4]
-    month = birth[4:6]
-    day = birth[6:8]
-
-    try:
-        datetime.date(int(year), int(month), int(day))
-        birth_tf = 'True'
-    except:
-        birth_tf = 'False'
-
-    if len(birth) != 8:
-        birth_tf = 'False'
 
     cursor = conn.cursor()
 
@@ -301,32 +288,8 @@ def check_register():
     else:
         nickname_tf = 'False'
 
-    print ({'login_id': id_tf, 'nickname': nickname_tf, 'birth': birth_tf})
-    return {'login_id': id_tf, 'nickname': nickname_tf, 'birth': birth_tf}
-
-# Check PW
-@app.route('/check-pw-register/', methods=['POST'])
-def check_pw_register():
-    data = request.get_json()
-
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
-
-    pw = data.get('pw')
-    pw_check = data.get('pw_check')
-
-    if len(pw) < 6:
-        pw_result = 'False'
-    else:
-        pw_result = 'True'
-    
-    if pw_check == pw:
-        pw_check_result = 'False'
-    else:
-        pw_check_result = 'True'
-
-    print ({'pw': pw_result, 'pw_check': pw_check_result})
-    return {'pw': pw_result, 'pw_check': pw_check_result}
+    print ({'login_id': id_tf, 'nickname': nickname_tf})
+    return {'login_id': id_tf, 'nickname': nickname_tf}
 
 # YakGwan
 @app.route('/yakgwan', methods=['GET', 'POST'])
