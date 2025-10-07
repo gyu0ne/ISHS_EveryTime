@@ -120,6 +120,60 @@ def get_bob():
 
             return content
 
+# Jinja2 Filter for Datetime Formatting
+def format_datetime(value):
+    # DB에서 가져온 날짜/시간 문자열을 datetime 객체로 변환
+    # DB에 저장된 형식이 '%Y-%m-%d'이므로, 시간 정보를 추가하여 파싱
+    post_time = datetime.strptime(value, '%Y-%m-%d')
+    now = datetime.now()
+    
+    # 시간 차이 계산
+    delta = now - post_time
+    
+    seconds = delta.total_seconds()
+    
+    if seconds < 60:
+        return '방금 전'
+    elif seconds < 3600:
+        return f'{int(seconds // 60)}분 전'
+    elif seconds < 86400:
+        return f'{int(seconds // 3600)}시간 전'
+    elif seconds < 2592000:
+        return f'{delta.days}일 전'
+    else:
+        # 한 달이 넘으면 원래 날짜 형식을 반환
+        return post_time.strftime('%Y-%m-%d')
+
+# 위에서 만든 함수를 템플릿에서 'datetime'이라는 이름의 필터로 사용할 수 있도록 등록
+app.jinja_env.filters['datetime'] = format_datetime
+
+def get_recent_posts(board_id):
+    """
+    특정 게시판 ID를 받아 해당 게시판의 게시글을 최신순으로 5개 가져옵니다.
+    """
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    try:
+        # board_id에 해당하는 게시글을 created_at 기준으로 내림차순(최신순) 정렬하여 상위 5개를 선택합니다.
+        # users 테이블과 JOIN하여 작성자 닉네임도 함께 가져옵니다.
+        query = """
+            SELECT p.id, p.title, u.nickname, p.created_at
+            FROM posts p
+            JOIN users u ON p.author = u.login_id
+            WHERE p.board_id = ?
+            ORDER BY p.created_at DESC
+            LIMIT 5
+        """
+        cursor.execute(query, (board_id,))
+        posts = cursor.fetchall()
+        return posts
+    except Exception as e:
+        # 데이터베이스 조회 중 오류가 발생하면 콘솔에 에러를 출력하고 빈 리스트를 반환합니다.
+        print(f"Error fetching recent posts for board_id {board_id}: {e}")
+        return []
+
 # Main Page
 @app.route('/')
 def main_page():
@@ -127,6 +181,9 @@ def main_page():
         conn = get_db()
         conn.row_factory = sqlite3.Row  # 컬럼 이름으로 접근 가능하도록 설정
         cursor = conn.cursor()
+
+        free_board_posts = get_recent_posts(1)
+        info_board_posts = get_recent_posts(2)
 
         # 사용자 정보 조회
         cursor.execute("SELECT nickname, hakbun, login_id FROM users WHERE login_id = ?", (session['user_id'],))
@@ -136,11 +193,11 @@ def main_page():
 
         # 사용자 정보가 있으면 템플릿에 전달
         if user_data:
-            return render_template('main_logined.html', user=user_data, bob=bob_data)
+            return render_template('main_logined.html', user=user_data, bob=bob_data, free_posts=free_board_posts, info_posts=info_board_posts)
         else:
             # 혹시 모를 예외 처리 (세션은 있는데 DB에 유저가 없는 경우)
             session.clear()
-            return redirect(url_for('login'))
+            return redirect('/')
     else:
         # 비로그인 시
         bob_data = get_bob()

@@ -91,21 +91,47 @@
                 </div>
                 <div class="board-preview">
                     <div class="board-column">
-                        <h3>국제캠 자유게시판</h3>
+                        <h3>자유게시판</h3>
                         <ul>
-                            <li><a href="#">국전 300 부러버터터</a><span>1분 전</span></li>
-                            <li><a href="#">운동장 바닥 상태 어때용??</a><span>5분 전</span></li>
-                            <li><a href="#">오 핫해요</a><span>5분 전</span></li>
-                            <li><a href="#">슬슬 윤곽 보이네</a><span>6분 전</span></li>
+                            {# 1. DB에서 불러온 게시글 목록을 먼저 출력합니다. #}
+                            {% for post in free_posts %}
+                            <li>
+                                <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
+                                <span>{{ post.created_at|datetime }}</span>
+                            </li>
+                            {% endfor %}
+
+                            {# 2. 만약 게시글 수가 5개 미만이라면, 빈 자리를 채우기 위해 5에서 게시글 수를 뺀 만큼 반복합니다. #}
+                            {% if free_posts|length < 5 %}
+                                {% for i in range(5 - free_posts|length) %}
+                                <li>
+                                    <a href="#">게시글이 없습니다.</a>
+                                    <span></span>
+                                </li>
+                                {% endfor %}
+                            {% endif %}
                         </ul>
                     </div>
                     <div class="board-column">
-                        <h3>서울캠 자유게시판</h3>
+                        <h3>정보게시판</h3>
                         <ul>
-                            <li><a href="#">그전 인기 차카부 스트라</a><span>3분 전</span></li>
-                            <li><a href="#">nct 호감사는법</a><span>4분 전</span></li>
-                            <li><a href="#">리구 에쁘지</a><span>6분 전</span></li>
-                            <li><a href="#">글별</a><span>7분 전</span></li>
+                            {# 1. 정보게시판도 동일한 방식으로 먼저 게시글을 출력합니다. #}
+                            {% for post in info_posts %}
+                            <li>
+                                <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
+                                <span>{{ post.created_at|datetime }}</span>
+                            </li>
+                            {% endfor %}
+
+                            {# 2. 정보게시판도 5개 미만일 경우 빈 자리를 채웁니다. #}
+                            {% if info_posts|length < 5 %}
+                                {% for i in range(5 - info_posts|length) %}
+                                <li>
+                                    <a href="#">게시글이 없습니다.</a>
+                                    <span></span>
+                                </li>
+                                {% endfor %}
+                            {% endif %}
                         </ul>
                     </div>
                 </div>
