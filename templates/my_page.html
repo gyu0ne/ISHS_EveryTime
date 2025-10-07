@@ -83,7 +83,7 @@
                             {% for post in user_posts %}
                             <li>
                                 <div class="post-info">
-                                    <a href="#" class="post-title">{{ post.title }}</a>
+                                    <a href="{{ url_for('post_detail', post_id=post.id) }}" class="post-title">{{ post.title }}</a>
                                     <p class="post-meta">{{ post.board_name }} ・ {{ post.created_at }}</p>
                                 </div>
                                 <div class="post-stats">
@@ -103,7 +103,7 @@
                             <li>
                                 <div class="post-info">
                                     <p class="comment-content">{{ comment.content }}</p>
-                                    <a href="#" class="post-meta">
+                                    <a href="{{ url_for('post_detail', post_id=comment.post_id) }}" class="post-meta">
                                         원본 글: {{ comment.post_title }} ・ {{ comment.created_at }}
                                     </a>
                                 </div>

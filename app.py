@@ -124,7 +124,7 @@ def get_bob():
 def format_datetime(value):
     # DB에서 가져온 날짜/시간 문자열을 datetime 객체로 변환
     # DB에 저장된 형식이 '%Y-%m-%d'이므로, 시간 정보를 추가하여 파싱
-    post_time = datetime.strptime(value, '%Y-%m-%d')
+    post_time = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
     now = datetime.now()
     
     # 시간 차이 계산
@@ -147,6 +147,7 @@ def format_datetime(value):
 # 위에서 만든 함수를 템플릿에서 'datetime'이라는 이름의 필터로 사용할 수 있도록 등록
 app.jinja_env.filters['datetime'] = format_datetime
 
+# Get Recent Posts from board id
 def get_recent_posts(board_id):
     """
     특정 게시판 ID를 받아 해당 게시판의 게시글을 최신순으로 5개 가져옵니다.
@@ -559,10 +560,11 @@ def mypage():
         board_info = cursor.fetchone()
         board_name_str = board_info['board_name'] if board_info else "알 수 없음"
         
-        created_at_dt = datetime.strptime(post['created_at'], '%Y-%m-%d')
+        created_at_dt = datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
         created_at_formatted = created_at_dt.strftime('%Y.%m.%d')
 
         user_posts.append({
+            'id': post['id'],
             'title': post['title'],
             'comment_count': post['comment_count'],
             'board_name': board_name_str,
@@ -640,7 +642,7 @@ def post_write():
 
         # 4. 데이터베이스에 저장
         try:
-            created_at = datetime.now().strftime('%Y-%m-%d')
+            created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             query = """
                 INSERT INTO posts
