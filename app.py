@@ -912,6 +912,81 @@ def add_comment(post_id):
 
     return redirect(url_for('post_detail', post_id=post_id))
 
+@app.route('/comment/delete/<int:comment_id>', methods=['POST'])
+@login_required
+def delete_comment(comment_id):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # 1. 삭제할 댓글 정보 조회 (권한 확인 및 post_id 확보용)
+    cursor.execute("SELECT author, post_id FROM comments WHERE id = ?", (comment_id,))
+    comment = cursor.fetchone()
+
+    if not comment:
+        return Response('<script>alert("존재하지 않는 댓글입니다."); history.back();</script>')
+
+    # 2. 권한 확인 (본인 또는 관리자만 삭제 가능)
+    if comment['author'] != session['user_id'] and (not g.user or g.user['role'] != 'admin'):
+        return Response('<script>alert("삭제 권한이 없습니다."); history.back();</script>')
+
+    try:
+        # 3. 데이터베이스에서 댓글 삭제
+        cursor.execute("DELETE FROM comments WHERE id = ?", (comment_id,))
+
+        # 4. 게시글의 댓글 수 1 감소
+        cursor.execute("UPDATE posts SET comment_count = comment_count - 1 WHERE id = ?", (comment['post_id'],))
+        
+        # 5. 사용자의 댓글 수 1 감소
+        cursor.execute("UPDATE users SET comment_count = comment_count - 1 WHERE login_id = ?", (comment['author'],))
+
+        conn.commit()
+    except Exception as e:
+        print(f"Database error while deleting comment: {e}")
+        conn.rollback()
+        return Response('<script>alert("댓글 삭제 중 오류가 발생했습니다."); history.back();</script>')
+
+    return redirect(url_for('post_detail', post_id=comment['post_id']))
+
+@app.route('/comment/edit/<int:comment_id>', methods=['POST'])
+@login_required
+def edit_comment(comment_id):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # 1. 수정할 댓글 정보 조회 (권한 확인용)
+    cursor.execute("SELECT author, post_id FROM comments WHERE id = ?", (comment_id,))
+    comment = cursor.fetchone()
+
+    if not comment:
+        return Response('<script>alert("존재하지 않는 댓글입니다."); history.back();</script>')
+
+    # 2. 권한 확인 (본인만 수정 가능)
+    if comment['author'] != session['user_id']:
+        return Response('<script>alert("수정 권한이 없습니다."); history.back();</script>')
+
+    # 3. 폼에서 수정된 내용 가져오기 및 유효성 검사
+    new_content = request.form.get('edit_content')
+    if not new_content or not new_content.strip():
+        return Response('<script>alert("댓글 내용을 입력해주세요."); history.back();</script>')
+    
+    try:
+        # 4. 데이터베이스 업데이트
+        updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        sanitized_content = bleach.clean(new_content)
+        
+        query = "UPDATE comments SET content = ?, updated_at = ? WHERE id = ?"
+        cursor.execute(query, (sanitized_content, updated_at, comment_id))
+        conn.commit()
+
+    except Exception as e:
+        print(f"Database error while editing comment: {e}")
+        conn.rollback()
+        return Response('<script>alert("댓글 수정 중 오류가 발생했습니다."); history.back();</script>')
+
+    return redirect(url_for('post_detail', post_id=comment['post_id']))
+
 # Server Drive Unit
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

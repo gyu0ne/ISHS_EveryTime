@@ -71,15 +71,46 @@
             <ul class="comment-list">
                 {% if comments %}
                     {% for comment in comments %}
-                    <li class="comment-item">
-                        <div class="comment-author">
-                            <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진">
-                            <span class="author-name">{{ comment.nickname }}</span>
+                    <li class="comment-item" id="comment-{{ comment.id }}">
+                        <div class="comment-view">
+                            <div class="comment-author">
+                                <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진">
+                                <span class="author-name">{{ comment.nickname }}</span>
+                            </div>
+                            <div class="comment-body">
+                                <p class="comment-text">
+                                    {{ comment.content }}
+                                    {% if comment.created_at != comment.updated_at %}
+                                        <span class="edited-indicator">(수정됨)</span>
+                                    {% endif %}
+                                </p>
+                                <div class="comment-meta">
+                                    <span class="comment-date">{{ comment.updated_at|datetime }}</span>
+                                    {% if g.user and (g.user.login_id == comment.author or g.user.role == 'admin') %}
+                                    <div class="comment-actions">
+                                        <a href="#" onclick="toggleEdit('{{ comment.id }}'); return false;">수정</a>
+                                        <form method="POST" action="{{ url_for('delete_comment', comment_id=comment.id) }}" onsubmit="return confirm('정말로 삭제하시겠습니까?');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button type="submit">삭제</button>
+                                        </form>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
                         </div>
-                        <div class="comment-body">
-                            <p class="comment-text">{{ comment.content }}</p>
-                            <span class="comment-date">{{ comment.created_at }}</span>
+
+                        {% if g.user and g.user.login_id == comment.author %}
+                        <div class="comment-edit" style="display: none;">
+                            <form method="POST" action="{{ url_for('edit_comment', comment_id=comment.id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <textarea name="edit_content" required>{{ comment.content }}</textarea>
+                                <div class="edit-actions">
+                                    <button type="button" class="btn-cancel" onclick="toggleEdit('{{ comment.id }}'); return false;">취소</button>
+                                    <button type="submit" class="btn-save">저장</button>
+                                </div>
+                            </form>
                         </div>
+                        {% endif %}
                     </li>
                     {% endfor %}
                 {% else %}
@@ -92,5 +123,22 @@
             <a href="{{ url_for('post_list', board_id=post.board_id) }}" class="btn btn-list">목록으로</a>
         </div>
     </div>
+    <script>
+        function toggleEdit(commentId) {
+            const commentItem = document.getElementById('comment-' + commentId);
+            const viewDiv = commentItem.querySelector('.comment-view');
+            const editDiv = commentItem.querySelector('.comment-edit');
+
+            if (viewDiv.style.display === 'none') {
+                // 수정 모드 -> 보기 모드로 전환 (취소)
+                viewDiv.style.display = 'block';
+                editDiv.style.display = 'none';
+            } else {
+                // 보기 모드 -> 수정 모드로 전환
+                viewDiv.style.display = 'none';
+                editDiv.style.display = 'block';
+            }
+        }
+    </script>
 </body>
 </html>
