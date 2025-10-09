@@ -698,16 +698,18 @@ def post_list(board_id, page):
 
         # 2. 공지사항 목록 조회 (is_notice = 1) - 쿼리 수정
         notice_query = """
-            SELECT p.id, p.title, u.nickname, p.updated_at, p.view_count,
-                   (SELECT COUNT(*) FROM reactions WHERE target_type = 'post' AND target_id = p.id AND reaction_type = 'like') as like_count
-            FROM posts p JOIN users u ON p.author = u.login_id
+            SELECT
+                p.id, p.title, u.nickname, p.updated_at, p.view_count,
+                SUM(CASE WHEN r.reaction_type = 'like' THEN 1 WHEN r.reaction_type = 'dislike' THEN -1 ELSE 0 END) as net_reactions
+            FROM posts p
+            JOIN users u ON p.author = u.login_id
+            LEFT JOIN reactions r ON r.target_id = p.id AND r.target_type = 'post'
             WHERE p.board_id = ? AND p.is_notice = 1
+            GROUP BY p.id
             ORDER BY p.updated_at DESC
         """
         cursor.execute(notice_query, (board_id,))
         notices = cursor.fetchall()
-        if not notices:
-            print("No notices found.")
 
         # 3. 일반 게시글 총 개수 조회
         cursor.execute("SELECT COUNT(*) FROM posts WHERE board_id = ? AND is_notice = 0", (board_id,))
@@ -717,10 +719,14 @@ def post_list(board_id, page):
         # 4. 현재 페이지에 해당하는 일반 게시글 목록 조회 (is_notice = 0) - 쿼리 수정
         offset = (page - 1) * posts_per_page
         posts_query = """
-            SELECT p.id, p.title, p.comment_count, p.updated_at, p.view_count, u.nickname,
-                   (SELECT COUNT(*) FROM reactions WHERE target_type = 'post' AND target_id = p.id AND reaction_type = 'like') as like_count
-            FROM posts p JOIN users u ON p.author = u.login_id
+            SELECT
+                p.id, p.title, p.comment_count, p.updated_at, p.view_count, u.nickname,
+                SUM(CASE WHEN r.reaction_type = 'like' THEN 1 WHEN r.reaction_type = 'dislike' THEN -1 ELSE 0 END) as net_reactions
+            FROM posts p
+            JOIN users u ON p.author = u.login_id
+            LEFT JOIN reactions r ON r.target_id = p.id AND r.target_type = 'post'
             WHERE p.board_id = ? AND p.is_notice = 0
+            GROUP BY p.id
             ORDER BY p.updated_at DESC
             LIMIT ? OFFSET ?
         """
@@ -1033,11 +1039,11 @@ def edit_comment(comment_id):
 @app.route('/react/<target_type>/<int:target_id>', methods=['POST'])
 @login_required
 def react(target_type, target_id):
-    reaction_type = request.form.get('reaction_type') # 'like' 또는 'dislike'
+    reaction_type = request.form.get('reaction_type')
     user_id = session['user_id']
     
     if target_type not in ['post', 'comment'] or reaction_type not in ['like', 'dislike']:
-        return Response('<script>alert("잘못된 접근입니다."); history.back();</script>')
+        return jsonify({'status': 'error', 'message': '잘못된 접근입니다.'}), 400
 
     conn = get_db()
     cursor = conn.cursor()
@@ -1049,30 +1055,51 @@ def react(target_type, target_id):
         existing_reaction = cursor.fetchone()
 
         if existing_reaction:
-            # 이미 반응이 있는 경우
             if existing_reaction[0] == reaction_type:
-                # 같은 버튼을 다시 누름 -> 취소
+                # 같은 버튼 다시 누름 -> 취소
                 cursor.execute("DELETE FROM reactions WHERE user_id = ? AND target_type = ? AND target_id = ?",
                                (user_id, target_type, target_id))
             else:
-                # 다른 버튼을 누름 -> 기존 반응 변경
-                cursor.execute("UPDATE reactions SET reaction_type = ?, created_at = ? WHERE user_id = ? AND target_type = ? AND target_id = ?",
-                               (reaction_type, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), user_id, target_type, target_id))
+                # 다른 버튼 누름 -> 변경
+                cursor.execute("UPDATE reactions SET reaction_type = ? WHERE user_id = ? AND target_type = ? AND target_id = ?",
+                               (reaction_type, user_id, target_type, target_id))
         else:
-            # 첫 반응인 경우
+            # 첫 반응 -> 추가
             cursor.execute("INSERT INTO reactions (user_id, target_type, target_id, reaction_type, created_at) VALUES (?, ?, ?, ?, ?)",
                            (user_id, target_type, target_id, reaction_type, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
         
         conn.commit()
 
+        # 2. 업데이트된 추천/비추천 수 다시 계산
+        cursor.execute("SELECT reaction_type, COUNT(*) as count FROM reactions WHERE target_type = ? AND target_id = ? GROUP BY reaction_type",
+                       (target_type, target_id))
+        reactions = cursor.fetchall()
+        likes = 0
+        dislikes = 0
+        for r in reactions:
+            if r[0] == 'like':
+                likes = r[1]
+            elif r[0] == 'dislike':
+                dislikes = r[1]
+
+        # 3. 사용자의 최종 반응 상태 확인
+        cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = ? AND target_id = ?",
+                       (user_id, target_type, target_id))
+        final_reaction_row = cursor.fetchone()
+        user_reaction = final_reaction_row[0] if final_reaction_row else None
+
+        # 4. JSON 형태로 결과 반환
+        return jsonify({
+            'status': 'success',
+            'likes': likes,
+            'dislikes': dislikes,
+            'user_reaction': user_reaction
+        })
+
     except Exception as e:
         print(f"Database error while reacting: {e}")
         conn.rollback()
-        return Response('<script>alert("요청 처리 중 오류가 발생했습니다."); history.back();</script>')
-
-    # 게시글 ID를 찾아서 해당 게시글로 리디렉션
-    post_id = target_id if target_type == 'post' else cursor.execute("SELECT post_id FROM comments WHERE id = ?", (target_id,)).fetchone()[0]
-    return redirect(url_for('post_detail', post_id=post_id))
+        return jsonify({'status': 'error', 'message': '요청 처리 중 오류가 발생했습니다.'}), 500
 
 # Server Drive Unit
 if __name__ == '__main__':

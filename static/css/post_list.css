@@ -176,3 +176,13 @@ a {
 .pagination .nav-arrow {
     font-size: 18px;
 }
+
+/* === [추가] 순 추천수 스타일 === */
+.col-likes.score-plus {
+    color: #4CAF50; /* 초록색 */
+    font-weight: bold;
+}
+.col-likes.score-minus {
+    color: #d9534f; /* 빨간색 */
+    font-weight: bold;
+}
