@@ -48,6 +48,12 @@
             <div class="title-input-wrapper">
                 <input type="text" name="title" id="post-title" class="form-control" placeholder="제목을 입력하세요" required>
             </div>
+            {% if g.user and g.user.role == 'admin' %}
+            <div class="custom-control custom-checkbox my-2">
+                <input type="checkbox" class="custom-control-input" id="is_notice" name="is_notice">
+                <label class="custom-control-label" for="is_notice">공지사항으로 등록</label>
+            </div>
+            {% endif %}
             <div id="summernote-editor"></div>
             <textarea name="content" id="post-content" style="display:none;"></textarea>
         </main>

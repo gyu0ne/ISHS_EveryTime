@@ -63,6 +63,18 @@ def check_auto_login():
             session['user_id'] = user[0]
             session.permanent = True
 
+@app.before_request
+def load_logged_in_user():
+    user_id = session.get('user_id')
+    if user_id is None:
+        g.user = None
+    else:
+        conn = get_db()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE login_id = ?", (user_id,))
+        g.user = cursor.fetchone()
+
 # Bob (School Meal Information)
 def get_bob():
         date = (datetime.now()).strftime('%Y%m%d')
@@ -608,6 +620,10 @@ def post_write():
         board_id = request.form.get('board_id') # board_id 수신
         author_id = session['user_id']
 
+        is_notice = 0
+        if g.user and g.user['role'] == 'admin':
+            is_notice = 1 if request.form.get('is_notice') == 'on' else 0
+
         # 2. 서버 사이드 유효성 검사
         if not title or not content or not board_id:
             return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
@@ -645,9 +661,9 @@ def post_write():
             query = """
                 INSERT INTO posts
                 (board_id, title, content, author, created_at, updated_at, view_count, like_count, dislike_count, comment_count, is_notice)
-                VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0)
+                VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, ?)
             """
-            cursor.execute(query, (board_id, title, sanitized_content, author_id, created_at, created_at))
+            cursor.execute(query, (board_id, title, sanitized_content, author_id, created_at, created_at, is_notice))
 
             cursor.execute("UPDATE users SET post_count = post_count + 1 WHERE login_id = ?", (author_id,))
 
@@ -686,7 +702,7 @@ def post_list(board_id, page):
             SELECT p.id, p.title, u.nickname, p.updated_at, p.view_count, p.like_count
             FROM posts p JOIN users u ON p.author = u.login_id
             WHERE p.board_id = ? AND p.is_notice = 1
-            ORDER BY p.id DESC
+            ORDER BY p.updated_at DESC
         """
         cursor.execute(notice_query, (board_id,))
         notices = cursor.fetchall()
@@ -702,7 +718,7 @@ def post_list(board_id, page):
             SELECT p.id, p.title, p.comment_count, p.updated_at, p.view_count, p.like_count, u.nickname
             FROM posts p JOIN users u ON p.author = u.login_id
             WHERE p.board_id = ? AND p.is_notice = 0
-            ORDER BY p.id DESC
+            ORDER BY p.updated_at DESC
             LIMIT ? OFFSET ?
         """
         cursor.execute(posts_query, (board_id, posts_per_page, offset))
@@ -795,6 +811,10 @@ def post_edit(post_id):
         if not title or not content or not board_id:
             return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
         
+        is_notice = 0
+        if g.user and g.user['role'] == 'admin':
+            is_notice = 1 if request.form.get('is_notice') == 'on' else 0
+        
         plain_text_content = bleach.clean(content, tags=[], strip=True)
         if len(plain_text_content) > 5000:
             return Response('<script>alert("글자 수는 5,000자를 초과할 수 없습니다."); history.back();</script>')
@@ -819,8 +839,8 @@ def post_edit(post_id):
         sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'])
 
         updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        query = "UPDATE posts SET board_id = ?, title = ?, content = ?, updated_at = ? WHERE id = ?"
-        cursor.execute(query, (board_id, title, sanitized_content, updated_at, post_id))
+        query = "UPDATE posts SET board_id = ?, title = ?, content = ?, updated_at = ?, is_notice = ? WHERE id = ?"
+        cursor.execute(query, (board_id, title, sanitized_content, updated_at, is_notice, post_id))
         conn.commit()
 
         return redirect(url_for('post_detail', post_id=post_id))
@@ -828,7 +848,6 @@ def post_edit(post_id):
         cursor.execute("SELECT board_id, board_name FROM board ORDER BY board_id")
         boards = cursor.fetchall()
         return render_template('post_edit.html', post=post, boards=boards)
-
 
 @app.route('/post-delete/<int:post_id>', methods=['POST'])
 @login_required
