@@ -59,7 +59,7 @@
                             {% endif %}
                         </span>
                         <span class="col-author">{{ post.nickname }}</span>
-                        <span class="col-date">{{ post.updated_at }}</span>
+                        <span class="col-date">{{ post.updated_at|datetime }}</span>
                         <span class="col-views">{{ post.view_count }}</span>
                         <span class="col-likes">{{ post.like_count }}</span>
                     </li>

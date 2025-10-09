@@ -55,8 +55,23 @@
             </div>
             {% endif %}
             <footer class="post-actions">
-                <button class="btn btn-like">👍 추천 {{ post.like_count }}</button>
-                <button class="btn btn-bookmark">스크랩</button>
+                <form method="POST" action="{{ url_for('react', target_type='post', target_id=post.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <input type="hidden" name="reaction_type" value="like">
+                    <button type="submit" class="btn btn-like {% if post.user_reaction == 'like' %}active{% endif %}">
+                        👍 추천 {{ post.likes }}
+                    </button>
+                </form>
+                <div class="reaction-score {% if (post.likes - post.dislikes) > 0 %}score-plus{% elif (post.likes - post.dislikes) < 0 %}score-minus{% endif %}">
+                    {{ post.likes - post.dislikes }}
+                </div>
+                <form method="POST" action="{{ url_for('react', target_type='post', target_id=post.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <input type="hidden" name="reaction_type" value="dislike">
+                    <button type="submit" class="btn btn-dislike {% if post.user_reaction == 'dislike' %}active{% endif %}">
+                        👎 비추천 {{ post.dislikes }}
+                    </button>
+                </form>
             </footer>
         </div>
 
@@ -87,13 +102,23 @@
                                 <div class="comment-meta">
                                     <span class="comment-date">{{ comment.updated_at|datetime }}</span>
                                     {% if g.user and (g.user.login_id == comment.author or g.user.role == 'admin') %}
-                                    <div class="comment-actions">
-                                        <a href="#" onclick="toggleEdit('{{ comment.id }}'); return false;">수정</a>
-                                        <form method="POST" action="{{ url_for('delete_comment', comment_id=comment.id) }}" onsubmit="return confirm('정말로 삭제하시겠습니까?');">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                            <button type="submit">삭제</button>
-                                        </form>
-                                    </div>
+                                <div class="comment-actions">
+                                    <form method="POST" action="{{ url_for('react', target_type='comment', target_id=comment.id) }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <input type="hidden" name="reaction_type" value="like">
+                                        <button type="submit" class="btn-reaction {% if comment.user_reaction == 'like' %}active{% endif %}">👍 {{ comment.likes }}</button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('react', target_type='comment', target_id=comment.id) }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <input type="hidden" name="reaction_type" value="dislike">
+                                        <button type="submit" class="btn-reaction {% if comment.user_reaction == 'dislike' %}active{% endif %}">👎 {{ comment.dislikes }}</button>
+                                    </form>
+                                    <a href="#" onclick="toggleEdit('{{ comment.id }}'); return false;">수정</a>
+                                    <form method="POST" action="{{ url_for('delete_comment', comment_id=comment.id) }}" onsubmit="return confirm('정말로 삭제하시겠습니까?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit">삭제</button>
+                                    </form>
+                                </div>
                                     {% endif %}
                                 </div>
                             </div>

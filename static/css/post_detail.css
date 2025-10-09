@@ -399,3 +399,51 @@ body {
     color: #888; /* 회색으로 설정 */
     margin-left: 6px; /* 댓글 내용과의 간격 */
 }
+
+/* === [추가] 추천/비추천 관련 스타일 === */
+.post-actions {
+    gap: 0; /* form 간의 간격을 없애고 버튼 자체에 margin 부여 */
+}
+.post-actions form {
+    margin: 0 10px;
+}
+.reaction-score {
+    font-size: 18px;
+    font-weight: bold;
+    color: #aaa;
+    min-width: 40px;
+    text-align: center;
+}
+.reaction-score.score-plus {
+    color: #4CAF50; /* 초록색 */
+}
+.reaction-score.score-minus {
+    color: #d9534f; /* 빨간색 */
+}
+.btn-dislike {
+    border-color: #aaa;
+    color: #aaa;
+}
+.btn-dislike:hover {
+    background-color: #555;
+    color: #fff;
+}
+.btn-like.active {
+    background-color: #d9534f;
+    color: #fff;
+}
+.btn-dislike.active {
+    background-color: #555;
+    color: #fff;
+}
+.comment-actions .btn-reaction {
+    color: #888;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 4px;
+}
+.comment-actions .btn-reaction.active {
+    font-weight: bold;
+    color: #d9534f;
+}
