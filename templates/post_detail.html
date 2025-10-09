@@ -62,8 +62,10 @@
 
         <div class="comments-card">
             <h3>댓글 {{ comments|length }}개</h3>
-            <form class="comment-form">
-                <textarea placeholder="댓글을 입력하세요..."></textarea>
+            
+            <form class="comment-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <textarea name="comment_content" placeholder="댓글을 입력하세요..." required minlength="1"></textarea>
                 <button type="submit">등록</button>
             </form>
             <ul class="comment-list">

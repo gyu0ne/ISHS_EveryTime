@@ -876,6 +876,42 @@ def post_delete(post_id):
 
     return redirect(url_for('post_list', board_id=board_id))
 
+@app.route('/comment/add/<int:post_id>', methods=['POST'])
+@login_required
+def add_comment(post_id):
+    content = request.form.get('comment_content')
+
+    if not content or not content.strip():
+        return Response('<script>alert("댓글 내용을 입력해주세요."); history.back();</script>')
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        author_id = session['user_id']
+        created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        sanitized_content = bleach.clean(content)
+
+        # 'id' 컬럼은 INSERT 문에서 제외하여 자동으로 채워지도록 합니다.
+        query = """
+            INSERT INTO comments 
+            (post_id, author, content, created_at, updated_at, like_count, dislike_count, is_reply, parent_comment_id)
+            VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0)
+        """
+        cursor.execute(query, (post_id, author_id, sanitized_content, created_at, created_at))
+
+        cursor.execute("UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?", (post_id,))
+        cursor.execute("UPDATE users SET comment_count = comment_count + 1 WHERE login_id = ?", (author_id,))
+
+        conn.commit()
+
+    except Exception as e:
+        print(f"Database error while adding comment: {e}")
+        conn.rollback()
+        return Response('<script>alert("댓글 작성 중 오류가 발생했습니다."); history.back();</script>')
+
+    return redirect(url_for('post_detail', post_id=post_id))
+
 # Server Drive Unit
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
