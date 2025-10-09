@@ -776,7 +776,7 @@ def post_detail(post_id):
             FROM comments c
             JOIN users u ON c.author = u.login_id
             WHERE c.post_id = ?
-            ORDER BY c.created_at ASC
+            ORDER BY c.updated_at DESC
         """
         cursor.execute(comment_query, (post_id,))
         comments = cursor.fetchall()
