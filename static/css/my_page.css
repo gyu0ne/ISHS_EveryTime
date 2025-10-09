@@ -237,3 +237,7 @@ ul {
 .post-meta:hover {
     text-decoration: underline;
 }
+
+body > div > header > h1 > a:hover {
+    border-bottom: 3px solid #d9534f;
+}

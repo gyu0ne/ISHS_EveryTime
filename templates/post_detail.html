@@ -32,14 +32,28 @@
                     </div>
                 </div>
                 <div class="post-meta">
-                    <span>작성일: {{ post.created_at }}</span>
-                    <span>조회수: {{ post.view_count + 1 }}</span> </div>
+                    {% if (post.updated_at_datetime - post.created_at_datetime).total_seconds() < 2 %}
+                        <span>작성일: {{ post.created_at|datetime }}</span>
+                    {% else %}
+                        <span>수정일: {{ post.updated_at|datetime }}</span>
+                    {% endif %}
+                    <span>조회수: {{ post.view_count + 1 }}</span> 
+                </div>
             </header>
 
             <div class="post-content">
                 {{ post.content|safe }}
             </div>
 
+            {% if session['user_id'] == post.author %}
+            <div class="author-actions">
+                <a href="{{ url_for('post_edit', post_id=post.id) }}" class="btn btn-edit">수정</a>
+                <form action="{{ url_for('post_delete', post_id=post.id) }}" method="POST" onsubmit="return confirm('정말로 삭제하시겠습니까?');" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-delete">삭제</button>
+                </form>
+            </div>
+            {% endif %}
             <footer class="post-actions">
                 <button class="btn btn-like">👍 추천 {{ post.like_count }}</button>
                 <button class="btn btn-bookmark">스크랩</button>

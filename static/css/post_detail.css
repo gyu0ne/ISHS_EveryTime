@@ -301,3 +301,29 @@ body {
     justify-content: flex-end;
     margin-top: 10px;
 }
+
+.author-actions {
+    padding: 0 30px 20px;
+    text-align: right;
+}
+
+.author-actions .btn {
+    margin-left: 10px;
+}
+
+.btn-edit {
+    border-color: #555;
+    color: #e0e0e0;
+}
+.btn-edit:hover {
+    background-color: #4f4f4f;
+}
+
+.btn-delete {
+    border-color: #d9534f;
+    color: #d9534f;
+}
+.btn-delete:hover {
+    background-color: #d9534f;
+    color: #fff;
+}

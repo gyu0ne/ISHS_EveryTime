@@ -123,7 +123,6 @@ def get_bob():
 # Jinja2 Filter for Datetime Formatting
 def format_datetime(value):
     # DB에서 가져온 날짜/시간 문자열을 datetime 객체로 변환
-    # DB에 저장된 형식이 '%Y-%m-%d'이므로, 시간 정보를 추가하여 파싱
     post_time = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
     now = datetime.now()
     
@@ -141,7 +140,7 @@ def format_datetime(value):
     elif seconds < 2592000:
         return f'{delta.days}일 전'
     else:
-        # 한 달이 넘으면 원래 날짜 형식을 반환
+        # 한 달이 넘으면 'YYYY-MM-DD' 형식으로 반환
         return post_time.strftime('%Y-%m-%d')
 
 # 위에서 만든 함수를 템플릿에서 'datetime'이라는 이름의 필터로 사용할 수 있도록 등록
@@ -157,14 +156,14 @@ def get_recent_posts(board_id):
     cursor = conn.cursor()
 
     try:
-        # board_id에 해당하는 게시글을 created_at 기준으로 내림차순(최신순) 정렬하여 상위 5개를 선택합니다.
+        # board_id에 해당하는 게시글을 updated_at 기준으로 내림차순(최신순) 정렬하여 상위 5개를 선택합니다.
         # users 테이블과 JOIN하여 작성자 닉네임도 함께 가져옵니다.
         query = """
-            SELECT p.id, p.title, u.nickname, p.created_at
+            SELECT p.id, p.title, u.nickname, p.updated_at
             FROM posts p
             JOIN users u ON p.author = u.login_id
             WHERE p.board_id = ?
-            ORDER BY p.created_at DESC
+            ORDER BY p.updated_at DESC
             LIMIT 5
         """
         cursor.execute(query, (board_id,))
@@ -296,13 +295,12 @@ def riro_auth():
             count_hakbun = cursor.fetchone()[0]
 
             if count_name > 0 and count_hakbun > 0:
-                pass
-    #             return Response(f'''
-    #     <script>
-    #         alert("이미 가입된 계정이 있습니다.");
-    #         history.back();
-    #     </script>
-    # ''')
+                return Response(f'''
+        <script>
+            alert("이미 가입된 계정이 있습니다.");
+            history.back();
+        </script>
+    ''')
 
             session['hakbun'] = api_result['student_number']
             session['name'] = api_result['name']
@@ -550,7 +548,7 @@ def mypage():
     cash = data['point']
     profile_image = data['profile_image']
 
-    cursor.execute("SELECT * FROM posts WHERE author = ? ORDER BY created_at DESC", (session['user_id'],))
+    cursor.execute("SELECT * FROM posts WHERE author = ? ORDER BY updated_at DESC", (session['user_id'],))
     post_data = cursor.fetchall()
 
     user_posts = []
@@ -560,18 +558,18 @@ def mypage():
         board_info = cursor.fetchone()
         board_name_str = board_info['board_name'] if board_info else "알 수 없음"
         
-        created_at_dt = datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
-        created_at_formatted = created_at_dt.strftime('%Y.%m.%d')
+        updated_at_dt = datetime.strptime(post['updated_at'], '%Y-%m-%d %H:%M:%S')
+        updated_at_formatted = updated_at_dt.strftime('%Y-%m-%d %H:%M:%S')
 
         user_posts.append({
             'id': post['id'],
             'title': post['title'],
             'comment_count': post['comment_count'],
             'board_name': board_name_str,
-            'created_at': created_at_formatted
+            'updated_at': updated_at_formatted
         })
 
-    cursor.execute("SELECT * FROM comments WHERE author = ? ORDER BY created_at DESC", (session['user_id'],))
+    cursor.execute("SELECT * FROM comments WHERE author = ? ORDER BY updated_at DESC", (session['user_id'],))
     comment_data = cursor.fetchall()
 
     user_comments = []
@@ -580,14 +578,14 @@ def mypage():
         post_info = cursor.fetchone()
         post_title = post_info['title'] if post_info else "삭제된 게시글"
 
-        created_at_dt = datetime.strptime(comment['created_at'], '%Y-%m-%d %H:%M:%S')
-        created_at_formatted = created_at_dt.strftime('%Y.%m.%d')
+        updated_at_dt = datetime.strptime(comment['updated_at'], '%Y-%m-%d %H:%M:%S')
+        updated_at_formatted = updated_at_dt.strftime('%Y-%m-%d %H:%M:%S')
 
         user_comments.append({
             'content': comment['content'],
             'post_title': post_title,
             'post_id': comment['post_id'],
-            'created_at': created_at_formatted
+            'updated_at': updated_at_formatted
         })
 
     return render_template('my_page.html', 
@@ -650,6 +648,9 @@ def post_write():
                 VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0)
             """
             cursor.execute(query, (board_id, title, sanitized_content, author_id, created_at, created_at))
+
+            cursor.execute("UPDATE users SET post_count = post_count + 1 WHERE login_id = ?", (author_id,))
+
             conn.commit()
 
             return redirect(url_for('post_list', board_id=board_id))
@@ -682,7 +683,7 @@ def post_list(board_id, page):
 
         # 2. 공지사항 목록 조회 (is_notice = 1)
         notice_query = """
-            SELECT p.id, p.title, u.nickname, p.created_at, p.view_count, p.like_count
+            SELECT p.id, p.title, u.nickname, p.updated_at, p.view_count, p.like_count
             FROM posts p JOIN users u ON p.author = u.login_id
             WHERE p.board_id = ? AND p.is_notice = 1
             ORDER BY p.id DESC
@@ -698,7 +699,7 @@ def post_list(board_id, page):
         # 4. 현재 페이지에 해당하는 일반 게시글 목록 조회 (is_notice = 0)
         offset = (page - 1) * posts_per_page
         posts_query = """
-            SELECT p.id, p.title, p.comment_count, p.created_at, p.view_count, p.like_count, u.nickname
+            SELECT p.id, p.title, p.comment_count, p.updated_at, p.view_count, p.like_count, u.nickname
             FROM posts p JOIN users u ON p.author = u.login_id
             WHERE p.board_id = ? AND p.is_notice = 0
             ORDER BY p.id DESC
@@ -737,10 +738,15 @@ def post_detail(post_id):
             WHERE p.id = ?
         """
         cursor.execute(query, (post_id,))
-        post = cursor.fetchone()
+        post_data = cursor.fetchone()
 
-        if not post:
+        if not post_data:
             return Response('<script>alert("존재하지 않거나 삭제된 게시글입니다."); history.back();</script>')
+    
+        post = dict(post_data)
+
+        post['created_at_datetime'] = datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
+        post['updated_at_datetime'] = datetime.strptime(post['updated_at'], '%Y-%m-%d %H:%M:%S')
 
         # 2. 조회수 1 증가 (UPDATE)
         # 동일 사용자의 반복적인 조회수 증가를 막기 위한 로직은 추후 세션을 이용해 구현할 수 있습니다.
@@ -764,6 +770,92 @@ def post_detail(post_id):
         return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
 
     return render_template('post_detail.html', post=post, comments=comments)
+
+@app.route('/post-edit/<int:post_id>', methods=['GET', 'POST'])
+@login_required
+def post_edit(post_id):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM posts WHERE id = ?", (post_id,))
+    post = cursor.fetchone()
+
+    if not post:
+        return Response('<script>alert("존재하지 않거나 삭제된 게시글입니다."); history.back();</script>')
+
+    if post['author'] != session['user_id']:
+        return Response('<script>alert("수정 권한이 없습니다."); history.back();</script>')
+
+    if request.method == 'POST':
+        title = request.form.get('title')
+        content = request.form.get('content')
+        board_id = request.form.get('board_id')
+
+        if not title or not content or not board_id:
+            return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
+        
+        plain_text_content = bleach.clean(content, tags=[], strip=True)
+        if len(plain_text_content) > 5000:
+            return Response('<script>alert("글자 수는 5,000자를 초과할 수 없습니다."); history.back();</script>')
+        if len(plain_text_content) == 0:
+            return Response('<script>alert("내용을 입력해주세요."); history.back();</script>')
+
+        allowed_tags = [
+            'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3',
+            'img', 'a', 'video', 'source', 'iframe',
+            'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
+            'ol', 'ul', 'li', 'blockquote', 'span', 'font'
+        ]
+        allowed_attrs = {
+            '*': ['class', 'style'],
+            'a': ['href', 'target'],
+            'img': ['src', 'alt', 'width', 'height'],
+            'video': ['src', 'width', 'height', 'controls'],
+            'source': ['src', 'type'],
+            'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+            'font': ['color', 'face']
+        }
+        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'])
+
+        updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        query = "UPDATE posts SET board_id = ?, title = ?, content = ?, updated_at = ? WHERE id = ?"
+        cursor.execute(query, (board_id, title, sanitized_content, updated_at, post_id))
+        conn.commit()
+
+        return redirect(url_for('post_detail', post_id=post_id))
+    else: # GET 요청
+        cursor.execute("SELECT board_id, board_name FROM board ORDER BY board_id")
+        boards = cursor.fetchall()
+        return render_template('post_edit.html', post=post, boards=boards)
+
+
+@app.route('/post-delete/<int:post_id>', methods=['POST'])
+@login_required
+def post_delete(post_id):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT author, board_id FROM posts WHERE id = ?", (post_id,))
+    post = cursor.fetchone()
+
+    if not post:
+        return Response('<script>alert("존재하지 않거나 삭제된 게시글입니다."); history.back();</script>')
+
+    board_id = post[1]
+
+    if post[0] != session['user_id']:
+        return Response('<script>alert("삭제 권한이 없습니다."); history.back();</script>')
+
+    cursor.execute("DELETE FROM posts WHERE id = ?", (post_id,))
+    cursor.execute("UPDATE users SET post_count = post_count - 1 WHERE login_id = ?", (session['user_id'],))
+    
+    # 해당 게시글의 댓글들도 모두 삭제합니다.
+    cursor.execute("DELETE FROM comments WHERE post_id = ?", (post_id,))
+    
+    conn.commit()
+
+    return redirect(url_for('post_list', board_id=board_id))
 
 # Server Drive Unit
 if __name__ == '__main__':

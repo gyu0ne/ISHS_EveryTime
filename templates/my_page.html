@@ -84,7 +84,7 @@
                             <li>
                                 <div class="post-info">
                                     <a href="{{ url_for('post_detail', post_id=post.id) }}" class="post-title">{{ post.title }}</a>
-                                    <p class="post-meta">{{ post.board_name }} ・ {{ post.created_at }}</p>
+                                    <p class="post-meta">{{ post.board_name }} ・ {{ post.updated_at|datetime }}</p>
                                 </div>
                                 <div class="post-stats">
                                     <span>댓글 {{ post.comment_count }}</span>
@@ -104,7 +104,7 @@
                                 <div class="post-info">
                                     <p class="comment-content">{{ comment.content }}</p>
                                     <a href="{{ url_for('post_detail', post_id=comment.post_id) }}" class="post-meta">
-                                        원본 글: {{ comment.post_title }} ・ {{ comment.created_at }}
+                                        원본 글: {{ comment.post_title }} ・ {{ comment.updated_at }}
                                     </a>
                                 </div>
                             </li>

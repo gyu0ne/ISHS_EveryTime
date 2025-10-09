@@ -42,7 +42,7 @@
                             <a href="{{ url_for('post_detail', post_id=notice.id) }}">{{ notice.title }}</a>
                         </span>
                         <span class="col-author">{{ notice.nickname }}</span>
-                        <span class="col-date">{{ notice.created_at.split(' ')[0] }}</span> <span class="col-views">{{ notice.view_count }}</span>
+                        <span class="col-date">{{ notice.updated_at.split(' ')[0] }}</span> <span class="col-views">{{ notice.view_count }}</span>
                         <span class="col-likes">{{ notice.like_count }}</span>
                     </li>
                     {% endfor %}
@@ -59,7 +59,7 @@
                             {% endif %}
                         </span>
                         <span class="col-author">{{ post.nickname }}</span>
-                        <span class="col-date">{{ post.created_at }}</span>
+                        <span class="col-date">{{ post.updated_at }}</span>
                         <span class="col-views">{{ post.view_count }}</span>
                         <span class="col-likes">{{ post.like_count }}</span>
                     </li>
