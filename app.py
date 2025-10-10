@@ -380,7 +380,7 @@ def riro_auth():
             print(f"응답 내용: {response.text}")
             return Response(f'''
     <script>
-        alert("HTTP 오류 발생 : {http_err}, 응답 내용 : {response.text}")
+        alert("HTTP 오류 발생")
         history.back();
     </script>
 ''')
@@ -388,7 +388,7 @@ def riro_auth():
             print(f"요청 중 에러 발생: {req_err}")
             return Response(f'''
     <script>
-        alert("요청 중 오류 발생 : {req_err}")
+        alert("요청 중 오류가 발생했습니다.")
         history.back();
     </script>
 ''')
@@ -585,14 +585,13 @@ def logout():
 
 # My Page
 @app.route('/mypage')
+@login_required # login_required 데코레이터로 변경
 def mypage():
-    if 'user_id' not in session:
-        return redirect('/login')
-
+    # g.user 객체를 통해 사용자 정보를 가져오므로, 추가적인 DB 조회가 불필요합니다.
     user_data = g.user 
 
     if not user_data:
-        # 혹시 모를 예외 처리 (세션은 있는데 DB에 유저가 없는 경우)
+        # 세션은 있지만 DB에 유저가 없는 예외적인 경우
         session.clear()
         return redirect('/login')
 
@@ -600,76 +599,59 @@ def mypage():
     conn.row_factory = sqlite3.Row 
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM users WHERE login_id = ?", (session['user_id'],))
-    data = cursor.fetchone()
+    # --- 1. 사용자 게시글 목록 조회 (N+1 문제 해결) ---
+    # JOIN을 사용하여 한 번의 쿼리로 게시글 정보와 게시판 이름을 함께 가져옵니다.
+    posts_query = """
+        SELECT 
+            p.id, p.title, p.comment_count, p.updated_at, b.board_name
+        FROM posts p
+        JOIN board b ON p.board_id = b.board_id
+        WHERE p.author = ?
+        ORDER BY p.updated_at DESC
+    """
+    cursor.execute(posts_query, (session['user_id'],))
+    user_posts = cursor.fetchall()
 
-    if not data:
-        return redirect('/login')
-
-    hakbun = data['hakbun']
-    name = data['name']
-    gen = data['gen']
-    nick = data['nickname']
-    birth = data['birth']
+    # --- 2. 사용자 댓글 목록 조회 (N+1 문제 해결) ---
+    # JOIN을 사용하여 한 번의 쿼리로 댓글 정보와 원본 게시글 제목을 함께 가져옵니다.
+    comments_query = """
+        SELECT 
+            c.content, c.post_id, c.updated_at, p.title AS post_title
+        FROM comments c
+        JOIN posts p ON c.post_id = p.id
+        WHERE c.author = ?
+        ORDER BY c.updated_at DESC
+    """
+    cursor.execute(comments_query, (session['user_id'],))
+    user_comments = cursor.fetchall()
+    
+    # 날짜 형식 변환
+    birth = user_data['birth']
     birth_year = birth[0:4]
     birth_month = birth[4:6]
     birth_day = birth[6:8]
-    join_date = data['join_date']
+    formatted_birth = f'{birth_year}.{birth_month}.{birth_day}'
+
+    join_date = user_data['join_date']
     datetime_obj = datetime.strptime(join_date, '%Y-%m-%d %H:%M:%S')
-    output_join_date = datetime_obj.strftime('%Y.%m.%d')
-    level = data['level']
-    exp = data['exp']
-    post_count = data['post_count']
-    comment_count = data['comment_count']
-    cash = data['point']
-    profile_image = data['profile_image']
+    formatted_join_date = datetime_obj.strftime('%Y.%m.%d')
 
-    cursor.execute("SELECT * FROM posts WHERE author = ? ORDER BY updated_at DESC", (session['user_id'],))
-    post_data = cursor.fetchall()
-
-    user_posts = []
-    for post in post_data:
-        post_board_id = post['board_id']
-        cursor.execute("SELECT board_name FROM board WHERE board_id = ?", (post_board_id,))
-        board_info = cursor.fetchone()
-        board_name_str = board_info['board_name'] if board_info else "알 수 없음"
-        
-        updated_at_dt = datetime.strptime(post['updated_at'], '%Y-%m-%d %H:%M:%S')
-        updated_at_formatted = updated_at_dt.strftime('%Y-%m-%d %H:%M:%S')
-
-        user_posts.append({
-            'id': post['id'],
-            'title': post['title'],
-            'comment_count': post['comment_count'],
-            'board_name': board_name_str,
-            'updated_at': updated_at_formatted
-        })
-
-    cursor.execute("SELECT * FROM comments WHERE author = ? ORDER BY updated_at DESC", (session['user_id'],))
-    comment_data = cursor.fetchall()
-
-    user_comments = []
-    for comment in comment_data:
-        cursor.execute("SELECT title FROM posts WHERE id = ?", (comment['post_id'],))
-        post_info = cursor.fetchone()
-        post_title = post_info['title'] if post_info else "삭제된 게시글"
-
-        updated_at_dt = datetime.strptime(comment['updated_at'], '%Y-%m-%d %H:%M:%S')
-        updated_at_formatted = updated_at_dt.strftime('%Y-%m-%d %H:%M:%S')
-
-        user_comments.append({
-            'content': comment['content'],
-            'post_title': post_title,
-            'post_id': comment['post_id'],
-            'updated_at': updated_at_formatted
-        })
-
-    return render_template('my_page.html', user=user_data,
-                           hakbun=hakbun, name=name, gen=gen, nickname=nick, 
-                           birth=f'{birth_year}.{birth_month}.{birth_day}', profile_image=profile_image,
-                           join_date=output_join_date, level=level, exp=exp, 
-                           post_count=post_count, comment_count=comment_count, 
-                           point=cash, user_posts=user_posts, user_comments=user_comments)
+    return render_template('my_page.html', 
+                           user=user_data, # g.user 객체를 템플릿에 전달
+                           hakbun=user_data['hakbun'], 
+                           name=user_data['name'], 
+                           gen=user_data['gen'], 
+                           nickname=user_data['nickname'], 
+                           birth=formatted_birth, 
+                           profile_image=user_data['profile_image'],
+                           join_date=formatted_join_date, 
+                           level=user_data['level'], 
+                           exp=user_data['exp'], 
+                           post_count=user_data['post_count'], 
+                           comment_count=user_data['comment_count'], 
+                           point=user_data['point'], 
+                           user_posts=user_posts, 
+                           user_comments=user_comments)
 
 # Post Write
 @app.route('/post-write', methods=['GET', 'POST'])
@@ -997,18 +979,33 @@ def post_delete(post_id):
 
     board_id = post[1]
 
-    if post[0] != session['user_id']:
+    # 관리자는 다른 사람의 글도 삭제할 수 있도록 수정 (선택 사항)
+    if post[0] != session['user_id'] and (not g.user or g.user['role'] != 'admin'):
         return Response('<script>alert("삭제 권한이 없습니다."); history.back();</script>')
 
-    cursor.execute("DELETE FROM posts WHERE id = ?", (post_id,))
-    cursor.execute("UPDATE users SET post_count = post_count - 1 WHERE login_id = ?", (session['user_id'],))
-    
-    # 해당 게시글의 댓글들도 모두 삭제합니다.
+    # --- 로직 수정 시작 ---
+
+    # 1. 삭제될 댓글들의 작성자와 각 작성자별 댓글 수를 미리 조회합니다.
+    cursor.execute("SELECT author, COUNT(*) FROM comments WHERE post_id = ? GROUP BY author", (post_id,))
+    comment_authors_counts = cursor.fetchall() # [('user1', 3), ('user2', 1)] 과 같은 형태로 반환됩니다.
+
+    # 2. 각 작성자별로 댓글 수를 차감합니다.
+    for author, count in comment_authors_counts:
+        cursor.execute("UPDATE users SET comment_count = comment_count - ? WHERE login_id = ?", (count, author))
+
+    # 3. 해당 게시글의 댓글들을 모두 삭제합니다.
     cursor.execute("DELETE FROM comments WHERE post_id = ?", (post_id,))
+
+    # 4. 게시글을 삭제합니다.
+    cursor.execute("DELETE FROM posts WHERE id = ?", (post_id,))
+
+    # 5. 게시글 작성자의 post_count를 1 감소시킵니다.
+    # session['user_id'] 대신 post[0] (게시글의 실제 author)를 사용해야 관리자가 삭제할 때도 정상 작동합니다.
+    cursor.execute("UPDATE users SET post_count = post_count - 1 WHERE login_id = ?", (post[0],))
     
     conn.commit()
 
-    add_log('DELETE_POST', session['user_id'], f"게시글 {post[0]} (id : {post_id})를 삭제했습니다.")
+    add_log('DELETE_POST', session['user_id'], f"게시글 (id : {post_id})를 삭제했습니다.")
 
     return redirect(url_for('post_list', board_id=board_id))
 

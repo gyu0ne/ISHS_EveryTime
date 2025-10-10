@@ -20,7 +20,7 @@
                     <div class="level-info">
                         <span>Lv. {{ level }}</span>
                         <div class="exp-bar">
-                            <div class="exp-gauge" style="width: 75%;"></div>
+                            <div class="exp-gauge" style="width: {{ exp/10 }}%;"></div>
                         </div>
                         <span class="exp-text">{{ exp }} / 1000 EXP</span>
                     </div>
@@ -93,7 +93,7 @@
                                 <div class="post-info">
                                     <p class="comment-content">{{ comment.content }}</p>
                                     <a href="{{ url_for('post_detail', post_id=comment.post_id) }}" class="post-meta">
-                                        원본 글: {{ comment.post_title }} ・ {{ comment.updated_at }}
+                                        원본 글: {{ comment.post_title }} ・ {{ comment.updated_at|datetime }}
                                     </a>
                                 </div>
                             </li>
