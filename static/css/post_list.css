@@ -10,9 +10,9 @@
 
 body {
     font-family: 'Pretendard', sans-serif;
-    background-color: #1a1a1a;
+    background-color: #212121;
     color: #e0e0e0;
-    padding: 40px 0;
+    padding: 0 0;
 }
 
 a {
@@ -30,6 +30,7 @@ a {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-top: 20px;
     margin-bottom: 20px;
     padding-bottom: 15px;
     border-bottom: 1px solid #3a3a3a;

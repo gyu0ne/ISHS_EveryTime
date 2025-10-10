@@ -532,6 +532,13 @@ def mypage():
     if 'user_id' not in session:
         return redirect('/login')
 
+    user_data = g.user 
+
+    if not user_data:
+        # 혹시 모를 예외 처리 (세션은 있는데 DB에 유저가 없는 경우)
+        session.clear()
+        return redirect('/login')
+
     conn = get_db()
     conn.row_factory = sqlite3.Row 
     cursor = conn.cursor()
@@ -600,13 +607,14 @@ def mypage():
             'updated_at': updated_at_formatted
         })
 
-    return render_template('my_page.html', 
+    return render_template('my_page.html', user=user_data,
                            hakbun=hakbun, name=name, gen=gen, nickname=nick, 
                            birth=f'{birth_year}.{birth_month}.{birth_day}', profile_image=profile_image,
                            join_date=output_join_date, level=level, exp=exp, 
                            post_count=post_count, comment_count=comment_count, 
                            point=cash, user_posts=user_posts, user_comments=user_comments)
 
+# Post Write
 @app.route('/post-write', methods=['GET', 'POST'])
 @login_required
 def post_write():
@@ -679,6 +687,7 @@ def post_write():
     boards = cursor.fetchall() # (board_id, board_name) 튜플의 리스트
     return render_template('post_write.html', boards=boards)
 
+# Post List with Pagination
 @app.route('/board/<int:board_id>', defaults={'page': 1})
 @app.route('/board/<int:board_id>/<int:page>')
 @login_required
@@ -688,6 +697,13 @@ def post_list(board_id, page):
     cursor = conn.cursor()
 
     posts_per_page = 20
+
+    user_data = g.user
+
+    if not user_data:
+        # 혹시 모를 예외 처리 (세션은 있는데 DB에 유저가 없는 경우)
+        session.clear()
+        return redirect('/login')
 
     try:
         cursor.execute("SELECT board_name FROM board WHERE board_id = ?", (board_id,))
@@ -737,7 +753,7 @@ def post_list(board_id, page):
         print(f"Error fetching post list: {e}")
         return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
 
-    return render_template('post_list.html',
+    return render_template('post_list.html', user=user_data,
                            board=board,
                            notices=notices,
                            posts=posts,
@@ -745,12 +761,20 @@ def post_list(board_id, page):
                            current_page=page,
                            board_id=board_id)
 
+# Post Detail
 @app.route('/post/<int:post_id>')
 @login_required
 def post_detail(post_id):
     conn = get_db()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+
+    user_data = g.user 
+
+    if not user_data:
+        # 혹시 모를 예외 처리 (세션은 있는데 DB에 유저가 없는 경우)
+        session.clear()
+        return redirect('/login')
 
     try:
         # 1. 게시글 정보 조회 (posts, users, board 테이블 JOIN)
@@ -834,8 +858,9 @@ def post_detail(post_id):
         print(f"Error fetching post detail: {e}")
         return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
 
-    return render_template('post_detail.html', post=post, comments=comments)
+    return render_template('post_detail.html', user=user_data, post=post, comments=comments)
 
+# Post Edit
 @app.route('/post-edit/<int:post_id>', methods=['GET', 'POST'])
 @login_required
 def post_edit(post_id):
@@ -898,6 +923,7 @@ def post_edit(post_id):
         boards = cursor.fetchall()
         return render_template('post_edit.html', post=post, boards=boards)
 
+# Post Delete
 @app.route('/post-delete/<int:post_id>', methods=['POST'])
 @login_required
 def post_delete(post_id):
@@ -925,6 +951,7 @@ def post_delete(post_id):
 
     return redirect(url_for('post_list', board_id=board_id))
 
+# Comment Add
 @app.route('/comment/add/<int:post_id>', methods=['POST'])
 @login_required
 def add_comment(post_id):
@@ -961,6 +988,7 @@ def add_comment(post_id):
 
     return redirect(url_for('post_detail', post_id=post_id))
 
+# Comment Delete
 @app.route('/comment/delete/<int:comment_id>', methods=['POST'])
 @login_required
 def delete_comment(comment_id):
@@ -997,6 +1025,7 @@ def delete_comment(comment_id):
 
     return redirect(url_for('post_detail', post_id=comment['post_id']))
 
+# Comment Edit
 @app.route('/comment/edit/<int:comment_id>', methods=['POST'])
 @login_required
 def edit_comment(comment_id):
@@ -1036,6 +1065,7 @@ def edit_comment(comment_id):
 
     return redirect(url_for('post_detail', post_id=comment['post_id']))
 
+# React (Like/Dislike) for Post and Comment
 @app.route('/react/<target_type>/<int:target_id>', methods=['POST'])
 @login_required
 def react(target_type, target_id):
@@ -1100,6 +1130,10 @@ def react(target_type, target_id):
         print(f"Database error while reacting: {e}")
         conn.rollback()
         return jsonify({'status': 'error', 'message': '요청 처리 중 오류가 발생했습니다.'}), 500
+
+@app.route('/yakgwan-view')
+def yakgwan_view():
+    return render_template('yakgwan-view.html')
 
 # Server Drive Unit
 if __name__ == '__main__':

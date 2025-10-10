@@ -31,13 +31,13 @@ ul {
 }
 
 /* 헤더 스타일 */
-header {
+.base-header {
     padding: 10px 0;
     border-bottom: 1px solid #333;
     position: relative;
 }
 
-header::before {
+.base-header::before {
     content: '';
     position: absolute;
     top: 0;
@@ -344,7 +344,7 @@ main {
 }
 
 /* 푸터 스타일 */
-footer {
+.base-footer {
     position: relative;
     border-top: 1px solid #333;
     padding: 20px;
@@ -355,19 +355,20 @@ footer {
     margin-top: 20px;
 }
 
-footer nav {
+.base-footer nav {
     margin-top: 10px;
 }
 
-footer nav a {
+.base-footer nav a {
     margin: 0 10px;
     color: #999;
 }
-footer nav a:hover {
+
+.base-footer nav a:hover {
     color: #d9534f;
 }
 
-footer::before {
+.base-footer::before {
     content: '';
     position: absolute;
     top: 0;

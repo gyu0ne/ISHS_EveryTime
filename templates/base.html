@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="kr">
+<head>
+    <meta charset="utf-8">
+    <title>{% block title %}log인곽{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main_logined.css') }}">
+    <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
+    <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
+    <meta property="og:title" content="log인곽">
+    <link rel="shortcut icon" href="">
+    <meta name="title" content="log인곽">
+    <meta name="keywords" content="log인곽">
+    <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="container">
+        <header class="base-header">
+            <div class="top-bar">
+                <div class="logo">ISHS</div>
+                <nav class="main-nav">
+                    <ul>
+                        <li><a href="#">게시판</a></li>
+                        <li><a href="#">시간표</a></li>
+                        <li><a href="#">강의실</a></li>
+                        <li><a href="#">학점계산기</a></li>
+                        <li><a href="#">책방</a></li>
+                        <li><a href="#">캠퍼스픽</a></li>
+                    </ul>
+                </nav>
+                <div class="user-menu">
+                    <div class="dropdown">
+                        <a href="#" class="dropdown-toggle">{{ user.nickname }}님 ▼</a>
+                        <div class="dropdown-menu">
+                            <a href="{{ url_for('mypage') }}">마이페이지</a>
+                            <a href="{{ url_for('logout') }}">로그아웃</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="sub-nav-bar">
+            </div>
+        </header>
+
+        {% block content %}{% endblock %}
+
+        <footer class="base-footer">
+            <p>&copy; 2025 Incheon Science HighSchool Community. All rights reserved.</p>
+            <p style="margin-top: 10px; color: #999;">Made By. 32nd Kim Gyuwon</p>
+            <nav>
+                <a href="{{ url_for('yakgwan_view') }}">이용약관</a>
+                <a href="{{ url_for('yakgwan_view') }}">개인정보처리방침</a>
+                <a href="#">문의하기</a>
+            </nav>
+        </footer>
+    </div>
+</body>
+</html>

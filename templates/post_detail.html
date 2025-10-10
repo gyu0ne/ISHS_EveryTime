@@ -1,18 +1,12 @@
-<!DOCTYPE html>
-<html lang="kr">
-<head>
-    <meta charset="utf-8">
-    <title>log인곽 - {{ post.title }}</title>
+{% extends "base.html" %}
+
+{% block title %}log인곽 - {{ post.title }}{% endblock %}
+
+{% block head %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/post_detail.css') }}">
-    <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
-    <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
-    <meta property="og:title" content="log인곽">
-    <link rel="shortcut icon" href=""> <meta name="title" content="log인곽">
-    <meta name="keywords" content="log인곽">
-    <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <div class="container">
         <header class="board-header">
             <div class="board-nav">
@@ -226,5 +220,4 @@
             }
         }
     </script>
-</body>
-</html>
+{% endblock %}

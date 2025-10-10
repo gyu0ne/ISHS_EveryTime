@@ -1,25 +1,14 @@
-<!DOCTYPE html>
-<html lang="kr">
-    <head>
-        <script src="{{ url_for('static', filename='js/my_page.js') }}"></script>
-        <meta charset="utf-8">
-        <title>log인곽</title>
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/my_page.css') }}">
-        <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
-        <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
-        <meta property="og:title" content="log인곽">
-        <link rel="shortcut icon" href=""> <!-- 파비콘 설정 -->
-        <meta name="title" content="log인곽">
-        <meta name="keywords" content="log인곽">
-        <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-    </head>
-<body>
+{% extends "base.html" %}
+
+{% block title %}log인곽 - 마이페이지{% endblock %}
+
+{% block head %}
+    <script src="{{ url_for('static', filename='js/my_page.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/my_page.css') }}">
+{% endblock %}
+
+{% block content %}
     <div class="mypage-container">
-        <header class="mypage-header">
-            <h1><a href="/">Log인곽</a></h1>
-        </header>
-        
         <main class="content-wrapper">
             <aside class="profile-sidebar">
                 <div class="card profile-card">
@@ -117,5 +106,4 @@
             </section>
         </main>
     </div>
-</body>
-</html>
+{% endblock %}

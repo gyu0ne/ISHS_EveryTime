@@ -1,173 +1,123 @@
-<!DOCTYPE html>
-<html lang="kr">
-    <head>
-        <script src=""></script>
-        <meta charset="utf-8">
-        <title>log인곽</title>
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/main_logined.css') }}">
-        <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
-        <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
-        <meta property="og:title" content="log인곽">
-        <link rel="shortcut icon" href=""> <meta name="title" content="log인곽">
-        <meta name="keywords" content="log인곽">
-        <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-    </head>
-<body>
-    <div class="container">
-        <header>
-            <div class="top-bar">
-                <div class="logo">ISHS</div>
-                <nav class="main-nav">
-                    <ul>
-                        <li><a href="#">게시판</a></li>
-                        <li><a href="#">시간표</a></li>
-                        <li><a href="#">강의실</a></li>
-                        <li><a href="#">학점계산기</a></li>
-                        <li><a href="#">책방</a></li>
-                        <li><a href="#">캠퍼스픽</a></li>
-                    </ul>
-                </nav>
-                <div class="user-menu">
-                    <div class="dropdown">
-                        <a href="#" class="dropdown-toggle">{{ user.nickname }}님 ▼</a>
-                        <div class="dropdown-menu">
-                            <a href="{{ url_for('mypage') }}">마이페이지</a>
-                            <a href="{{ url_for('logout') }}">로그아웃</a>
-                        </div>
-                    </div>
-                </div>
-                    </div>
-                <div class="sub-nav-bar">
-                </div>
-        </header>
-        <main>
-            <aside class="sidebar left-sidebar">
-                <div class="widget">
-                    <h3>전체 게시판 목록</h3>
-                    <ul>
-                        <li><a href="#">자유게시판</a></li>
-                        <li><a href="#">비밀게시판</a></li>
-                        <li><a href="#">졸업생게시판</a></li>
-                        <li><a href="#">새내기게시판</a></li>
-                        <li><a href="#">입시게시판</a></li>
-                    </ul>
-                </div>
-                 <div class="widget user-info-widget">
-                    <h3 class="user-name">{{ user.nickname }}</h3>
-                    <ul class="user-details">
-                        <li><span>학번</span><span>{{ user.hakbun }}</span></li>
-                        <li><span>아이디</span><span>{{ user.login_id }}</span></li>
-                    </ul>
-                </div>
-                </aside>
+{% extends "base.html" %}
 
-            <section class="main-content">
-                <div class="daily-meal">
-                    <div class="meal-item">
-                        <h4><span>조식</span></h4>
-                        <p class="meal-menu">{{ bob[0] |safe}}</p>
-                    </div>
-                    <div class="meal-item">
-                        <h4><span>중식</span></h4>
-                        <p class="meal-menu">{{ bob[1] |safe}}</p>
-                    </div>
-                    <div class="meal-item">
-                        <h4><span>석식</span></h4>
-                        <p class="meal-menu">{{ bob[2] |safe}}</p>
-                    </div>
-                    <div class="meal-item timetable-widget">
-                        <h4><span>시간표</span></h4>
-                        <ol class="timetable-list">
-                            <li><span class="period">1교시</span><span class="subject">문학</span></li>
-                            <li><span class="period">2교시</span><span class="subject">수학 II</span></li>
-                            <li><span class="period">3교시</span><span class="subject">물리학 I</span></li>
-                            <li><span class="period">4교시</span><span class="subject">영어</span></li>
-                            <li><span class="period">5교시</span><span class="subject">영어</span></li>
-                            <li><span class="period">6교시</span><span class="subject">영어</span></li>
-                            <li><span class="period">7교시</span><span class="subject">영어</span></li>
-                        </ol>
-                    </div>
-                </div>
-                <div class="board-preview">
-                    <div class="board-column">
-                        <h3>자유게시판</h3>
-                        <ul>
-                            {# 1. DB에서 불러온 게시글 목록을 먼저 출력합니다. #}
-                            {% for post in free_posts %}
-                            <li>
-                                <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
-                                <span>{{ post.updated_at|datetime }}</span>
-                            </li>
-                            {% endfor %}
+{% block title %}log인곽 - 로그인됨{% endblock %}
 
-                            {# 2. 만약 게시글 수가 5개 미만이라면, 빈 자리를 채우기 위해 5에서 게시글 수를 뺀 만큼 반복합니다. #}
-                            {% if free_posts|length < 5 %}
-                                {% for i in range(5 - free_posts|length) %}
-                                <li>
-                                    <a href="#">게시글이 없습니다.</a>
-                                    <span></span>
-                                </li>
-                                {% endfor %}
-                            {% endif %}
-                        </ul>
-                    </div>
-                    <div class="board-column">
-                        <h3>정보게시판</h3>
-                        <ul>
-                            {# 1. 정보게시판도 동일한 방식으로 먼저 게시글을 출력합니다. #}
-                            {% for post in info_posts %}
-                            <li>
-                                <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
-                                <span>{{ post.updated_at|datetime }}</span>
-                            </li>
-                            {% endfor %}
+{% block content %}
+<main>
+    <aside class="sidebar left-sidebar">
+        <div class="widget">
+            <h3>전체 게시판 목록</h3>
+            <ul>
+                <li><a href="#">자유게시판</a></li>
+                <li><a href="#">비밀게시판</a></li>
+                <li><a href="#">졸업생게시판</a></li>
+                <li><a href="#">새내기게시판</a></li>
+                <li><a href="#">입시게시판</a></li>
+            </ul>
+        </div>
+         <div class="widget user-info-widget">
+            <h3 class="user-name">{{ user.nickname }}</h3>
+            <ul class="user-details">
+                <li><span>학번</span><span>{{ user.hakbun }}</span></li>
+                <li><span>아이디</span><span>{{ user.login_id }}</span></li>
+            </ul>
+        </div>
+    </aside>
 
-                            {# 2. 정보게시판도 5개 미만일 경우 빈 자리를 채웁니다. #}
-                            {% if info_posts|length < 5 %}
-                                {% for i in range(5 - info_posts|length) %}
-                                <li>
-                                    <a href="#">게시글이 없습니다.</a>
-                                    <span></span>
-                                </li>
-                                {% endfor %}
-                            {% endif %}
-                        </ul>
-                    </div>
-                </div>
-            </section>
+    <section class="main-content">
+        <div class="daily-meal">
+            <div class="meal-item">
+                <h4><span>조식</span></h4>
+                <p class="meal-menu">{{ bob[0] |safe}}</p>
+            </div>
+            <div class="meal-item">
+                <h4><span>중식</span></h4>
+                <p class="meal-menu">{{ bob[1] |safe}}</p>
+            </div>
+            <div class="meal-item">
+                <h4><span>석식</span></h4>
+                <p class="meal-menu">{{ bob[2] |safe}}</p>
+            </div>
+            <div class="meal-item timetable-widget">
+                <h4><span>시간표</span></h4>
+                <ol class="timetable-list">
+                    <li><span class="period">1교시</span><span class="subject">문학</span></li>
+                    <li><span class="period">2교시</span><span class="subject">수학 II</span></li>
+                    <li><span class="period">3교시</span><span class="subject">물리학 I</span></li>
+                    <li><span class="period">4교시</span><span class="subject">영어</span></li>
+                    <li><span class="period">5교시</span><span class="subject">영어</span></li>
+                    <li><span class="period">6교시</span><span class="subject">영어</span></li>
+                    <li><span class="period">7교시</span><span class="subject">영어</span></li>
+                </ol>
+            </div>
+        </div>
+        <div class="board-preview">
+            <div class="board-column">
+                <h3>자유게시판</h3>
+                <ul>
+                    {# 1. DB에서 불러온 게시글 목록을 먼저 출력합니다. #}
+                    {% for post in free_posts %}
+                    <li>
+                        <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
+                        <span>{{ post.updated_at|datetime }}</span>
+                    </li>
+                    {% endfor %}
 
-            <aside class="sidebar right-sidebar">
-                <div class="widget search-widget">
-                    <input type="text" placeholder="전체 게시판의 글을 검색하세요!">
-                </div>
-                <div class="widget">
-                    <h3>실시간 인기 글</h3>
-                    <ul>
-                        <li><a href="#">로그인 후 확인할 수 있습니다.</a></li>
-                    </ul>
-                </div>
-                <div class="widget">
-                    <h3>HOT 게시물</h3>
-                     <ul>
-                        <li><a href="#">로그인 후 이용가능</a><span>09/17 13:39</span></li>
-                        <li><a href="#">로그인 후 이용가능</a><span>09/17 02:22</span></li>
-                        <li><a href="#">로그인 후 이용가능</a><span>09/17 14:10</span></li>
-                        <li><a href="#">로그인 후 이용가능</a><span>09/17 11:58</span></li>
-                    </ul>
-                </div>
-            </aside>
-        </main>
+                    {# 2. 만약 게시글 수가 5개 미만이라면, 빈 자리를 채우기 위해 5에서 게시글 수를 뺀 만큼 반복합니다. #}
+                    {% if free_posts|length < 5 %}
+                        {% for i in range(5 - free_posts|length) %}
+                        <li>
+                            <a href="#">게시글이 없습니다.</a>
+                            <span></span>
+                        </li>
+                        {% endfor %}
+                    {% endif %}
+                </ul>
+            </div>
+            <div class="board-column">
+                <h3>정보게시판</h3>
+                <ul>
+                    {# 1. 정보게시판도 동일한 방식으로 먼저 게시글을 출력합니다. #}
+                    {% for post in info_posts %}
+                    <li>
+                        <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
+                        <span>{{ post.updated_at|datetime }}</span>
+                    </li>
+                    {% endfor %}
 
-        <footer>
-            <p>&copy; 2025 Incheon Science HighSchool Community. All rights reserved.</p>
-            <p style="margin-top: 10px; color: #999;">Made By. 32nd Kim Gyuwon</p>
-            <nav>
-                <a href="#">이용약관</a>
-                <a href="#">개인정보처리방침</a>
-                <a href="#">문의하기</a>
-            </nav>
-        </footer>
-    </div>
-</body>
-</html>
+                    {# 2. 정보게시판도 5개 미만일 경우 빈 자리를 채웁니다. #}
+                    {% if info_posts|length < 5 %}
+                        {% for i in range(5 - info_posts|length) %}
+                        <li>
+                            <a href="#">게시글이 없습니다.</a>
+                            <span></span>
+                        </li>
+                        {% endfor %}
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <aside class="sidebar right-sidebar">
+        <div class="widget search-widget">
+            <input type="text" placeholder="전체 게시판의 글을 검색하세요!">
+        </div>
+        <div class="widget">
+            <h3>실시간 인기 글</h3>
+            <ul>
+                <li><a href="#">로그인 후 확인할 수 있습니다.</a></li>
+            </ul>
+        </div>
+        <div class="widget">
+            <h3>HOT 게시물</h3>
+             <ul>
+                <li><a href="#">로그인 후 이용가능</a><span>09/17 13:39</span></li>
+                <li><a href="#">로그인 후 이용가능</a><span>09/17 02:22</span></li>
+                <li><a href="#">로그인 후 이용가능</a><span>09/17 14:10</span></li>
+                <li><a href="#">로그인 후 이용가능</a><span>09/17 11:58</span></li>
+            </ul>
+        </div>
+    </aside>
+</main>
+{% endblock %}

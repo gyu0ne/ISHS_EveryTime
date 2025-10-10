@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel  # pydantic 임포트
 import requests, time
 from bs4 import BeautifulSoup
 
@@ -10,8 +11,18 @@ app.add_middleware(
     allow_methods=["*"], allow_headers=["*"],
 )
 
-@app.get("/api/riro_login")
-def riro_login(id: str, password: str):
+# POST 요청 본문의 형식을 정의하는 모델
+class UserCredentials(BaseModel):
+    id: str
+    password: str
+
+# @app.get을 @app.post로 변경
+@app.post("/api/riro_login")
+# 함수 인자를 Pydantic 모델로 변경
+def riro_login(credentials: UserCredentials):
+    id = credentials.id
+    password = credentials.password
+    
     s = requests.Session()
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
