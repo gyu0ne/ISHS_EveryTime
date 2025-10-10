@@ -26,6 +26,7 @@ bcrypt = Bcrypt(app)
 csrf = CSRFProtect(app)
 
 DATABASE = 'data.db'
+LOG_DATABASE = 'log.db'
 
 # DB connect (first line of all route)
 def get_db():
@@ -34,12 +35,66 @@ def get_db():
         db = g._database = sqlite3.connect(DATABASE)
     return db
 
+# Log DB connect
+def get_log_db():
+    db = getattr(g, '_log_database', None)
+    if db is None:
+        db = g._log_database = sqlite3.connect(LOG_DATABASE)
+    return db
+
 # Close DB connecting
 @app.teardown_appcontext
 def close_connection(exception):
     db = getattr(g, '_database', None)
     if db is not None:
         db.close()
+
+# Close Log DB connecting
+@app.teardown_appcontext
+def close_log_connection(exception):
+    db = getattr(g, '_log_database', None)
+    if db is not None:
+        db.close()
+
+# Add Log to log.db
+def add_log(action, user_id, details):
+    """
+    활동 로그를 log.db에 기록합니다.
+    action: 'CREATE_USER', 'DELETE_USER', 'CREATE_POST', 'DELETE_POST' 등
+    user_id: 활동을 수행한 사용자의 login_id
+    details: 로그에 기록할 추가 정보 (예: 게시글 ID)
+    """
+    try:
+        conn = get_log_db()
+        cursor = conn.cursor()
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        ip_address = request.remote_addr
+
+        cursor.execute(
+            "INSERT INTO activity_logs (timestamp, action, user_id, ip_address, details) VALUES (?, ?, ?, ?, ?)",
+            (timestamp, action, user_id, ip_address, details)
+        )
+        conn.commit()
+    except Exception as e:
+        # 로그 기록에 실패하더라도 메인 기능에 영향을 주지 않도록 처리
+        print(f"Error writing to log database: {e}")
+
+# Initialize log.db
+def init_log_db():
+    with app.app_context():
+        conn = get_log_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS activity_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                action TEXT NOT NULL,
+                user_id TEXT,
+                ip_address TEXT,
+                details TEXT
+            )
+        ''')
+        conn.commit()
 
 # Check Auto Login
 @app.before_request
@@ -470,6 +525,8 @@ def register():
         session.pop('gen', None)
         session.pop('agree', None)
 
+        add_log('CREATE_USER', id, f"'{nick}'({id})님이 가입했습니다.({hakbun}, {name})")
+
         return Response('<script> alert("회원가입이 완료되었습니다."); window.location.href = "/"; </script>') # After Register
     
     return render_template('register_form.html', hakbun=hakbun, name=name, gen=gen) # GET
@@ -668,14 +725,16 @@ def post_write():
 
             query = """
                 INSERT INTO posts
-                (board_id, title, content, author, created_at, updated_at, view_count, like_count, dislike_count, comment_count, is_notice)
-                VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, ?)
+                (board_id, title, content, author, created_at, updated_at, view_count, comment_count, is_notice)
+                VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)
             """
             cursor.execute(query, (board_id, title, sanitized_content, author_id, created_at, created_at, is_notice))
 
             cursor.execute("UPDATE users SET post_count = post_count + 1 WHERE login_id = ?", (author_id,))
 
             conn.commit()
+
+            add_log('CREATE_POST', author_id, f"'{title}' 글 작성. 내용 : {sanitized_content}")
 
             return redirect(url_for('post_list', board_id=board_id))
         except Exception as e:
@@ -949,6 +1008,8 @@ def post_delete(post_id):
     
     conn.commit()
 
+    add_log('DELETE_POST', session['user_id'], f"게시글 {post[0]} (id : {post_id})를 삭제했습니다.")
+
     return redirect(url_for('post_list', board_id=board_id))
 
 # Comment Add
@@ -1137,4 +1198,5 @@ def yakgwan_view():
 
 # Server Drive Unit
 if __name__ == '__main__':
+    init_log_db()
     app.run(host='0.0.0.0', port=5000, debug=True)

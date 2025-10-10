@@ -36,7 +36,7 @@
                             <a href="{{ url_for('post_detail', post_id=notice.id) }}">{{ notice.title }}</a>
                         </span>
                         <span class="col-author">{{ notice.nickname }}</span>
-                        <span class="col-date">{{ notice.updated_at.split(' ')[0] }}</span> <span class="col-views">{{ notice.view_count }}</span>
+                        <span class="col-date">{{ notice.updated_at|datetime }}</span> <span class="col-views">{{ notice.view_count }}</span>
                         <span class="col-likes {% if notice.net_reactions > 0 %}score-plus{% elif notice.net_reactions < 0 %}score-minus{% endif %}">
                             {{ notice.net_reactions if notice.net_reactions is not none else 0 }}
                         </span>
@@ -44,7 +44,7 @@
                     {% endfor %}
                 {% endif %}
 
-                {% if posts %}
+                {% if posts or notices %}
                     {% for post in posts %}
                     <li>
                         <span class="col-id">{{ post.id }}</span>
