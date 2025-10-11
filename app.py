@@ -1,4 +1,6 @@
 from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response, make_response
+from bleach.css_sanitizer import CSSSanitizer
+from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
@@ -11,6 +13,7 @@ import secrets
 import sqlite3
 import bleach
 import socket
+import uuid
 import math
 import html
 import os
@@ -546,7 +549,7 @@ def register():
         
         hashed_pw = bcrypt.generate_password_hash(pw).decode('utf-8')
         join_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        default_profile = 'images/default_profile.jpg'
+        default_profile = 'images/profiles/defualt_images.jpeg'
         
         # DATA INSERT to DB
         cursor = conn.cursor()
@@ -731,8 +734,14 @@ def post_write():
             'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
             'font': ['color', 'face']
         }
+        allowed_css_properties = [
+        'color', 'background-color', 'font-family', 'font-size', 
+        'font-weight', 'text-align', 'text-decoration'
+        ]
+        css_sanitizer = CSSSanitizer(allowed_css_properties=allowed_css_properties)
+        
         # data URI를 허용하도록 protocols에 'data' 추가
-        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'])
+        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'], css_sanitizer=css_sanitizer)
 
         # 4. 데이터베이스에 저장
         try:
@@ -751,7 +760,9 @@ def post_write():
 
             conn.commit()
 
-            add_log('CREATE_POST', author_id, f"'{title}' 글 작성. 내용 : {sanitized_content}")
+            cursor.execute("SELECT last_insert_rowid()")
+            post_id = cursor.fetchone()[0]
+            add_log('CREATE_POST', author_id, f"'{title}' 글 작성(id : {post_id}). 내용 : {sanitized_content}")
 
             return redirect(url_for('post_list', board_id=board_id))
         except Exception as e:
@@ -991,6 +1002,9 @@ def post_edit(post_id):
         updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         query = "UPDATE posts SET board_id = ?, title = ?, content = ?, updated_at = ?, is_notice = ? WHERE id = ?"
         cursor.execute(query, (board_id, title, sanitized_content, updated_at, is_notice, post_id))
+
+        add_log('EDIT_POST', session['user_id'], f"게시글 (id : {post_id})를 수정했습니다. 제목 : {title} 내용 : {sanitized_content}")
+
         conn.commit()
 
         return redirect(url_for('post_detail', post_id=post_id))
@@ -1038,11 +1052,11 @@ def post_delete(post_id):
     # session['user_id'] 대신 post[0] (게시글의 실제 author)를 사용해야 관리자가 삭제할 때도 정상 작동합니다.
     cursor.execute("UPDATE users SET post_count = post_count - 1 WHERE login_id = ?", (post[0],))
     
-    update_exp_level(post[0], -5000)
+    update_exp_level(post[0], -50)
 
     conn.commit()
 
-    add_log('DELETE_POST', session['user_id'], f"게시글 (id : {post_id})를 삭제했습니다.")
+    add_log('DELETE_POST', session['user_id'], f"게시글 (id : {post_id})를 삭제했습니다. 제목 : {post['title']} 내용 : {post['content']}")
 
     return redirect(url_for('post_list', board_id=board_id))
 
@@ -1075,6 +1089,8 @@ def add_comment(post_id):
         cursor.execute("UPDATE users SET comment_count = comment_count + 1 WHERE login_id = ?", (author_id,))
 
         update_exp_level(author_id, 10)
+
+        add_log('ADD_COMMENT', author_id, f"게시글 (id : {post_id})에 댓글을 작성했습니다. 내용 : {sanitized_content}")
 
         conn.commit()
 
@@ -1116,6 +1132,8 @@ def delete_comment(comment_id):
 
         update_exp_level(comment['author'], -10)
 
+        add_log('DELETE_COMMENT', session['user_id'], f"댓글 (id : {comment_id})를 삭제했습니다. 내용 : {comment['content']}")
+
         conn.commit()
     except Exception as e:
         print(f"Database error while deleting comment: {e}")
@@ -1155,6 +1173,7 @@ def edit_comment(comment_id):
         
         query = "UPDATE comments SET content = ?, updated_at = ? WHERE id = ?"
         cursor.execute(query, (sanitized_content, updated_at, comment_id))
+        add_log('EDIT_COMMENT', session['user_id'], f"댓글 (id : {comment_id})를 수정했습니다. 원본 : {comment['content']}, 내용 : {sanitized_content}")
         conn.commit()
 
     except Exception as e:
@@ -1188,15 +1207,18 @@ def react(target_type, target_id):
                 # 같은 버튼 다시 누름 -> 취소
                 cursor.execute("DELETE FROM reactions WHERE user_id = ? AND target_type = ? AND target_id = ?",
                                (user_id, target_type, target_id))
+                add_log('CANCEL_REACTION', user_id, f"{target_type} (id: {target_id})에 대한 '{reaction_type}' 반응을 취소했습니다.")
             else:
                 # 다른 버튼 누름 -> 변경
                 cursor.execute("UPDATE reactions SET reaction_type = ? WHERE user_id = ? AND target_type = ? AND target_id = ?",
                                (reaction_type, user_id, target_type, target_id))
+                add_log('CHANGE_REACTION', user_id, f"{target_type} (id: {target_id})에 대한 반응을 '{existing_reaction[0]}'에서 '{reaction_type}'(으)로 변경했습니다.")
         else:
             # 첫 반응 -> 추가
             cursor.execute("INSERT INTO reactions (user_id, target_type, target_id, reaction_type, created_at) VALUES (?, ?, ?, ?, ?)",
                            (user_id, target_type, target_id, reaction_type, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-        
+            add_log('ADD_REACTION', user_id, f"{target_type} (id: {target_id})에 '{reaction_type}' 반응을 추가했습니다.")
+
         conn.commit()
 
         # 2. 업데이트된 추천/비추천 수 다시 계산
@@ -1233,6 +1255,52 @@ def react(target_type, target_id):
 @app.route('/yakgwan-view')
 def yakgwan_view():
     return render_template('yakgwan-view.html')
+
+# Profile Image Update
+UPLOAD_FOLDER = 'static/images/profiles'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/update-profile-image', methods=['POST'])
+@login_required
+def update_profile_image():
+    if 'profile_image' not in request.files:
+        return Response('<script>alert("파일이 전송되지 않았습니다."); history.back();</script>')
+    
+    file = request.files['profile_image']
+
+    if file.filename == '':
+        return Response('<script>alert("파일을 선택해주세요."); history.back();</script>')
+
+    if file and allowed_file(file.filename):
+        # 파일명을 안전하게 만들고, 중복을 피하기 위해 고유한 ID를 추가
+        filename = secure_filename(file.filename)
+        unique_filename = str(uuid.uuid4()) + "_" + filename
+        
+        # 파일 저장 경로 설정
+        save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        file.save(save_path)
+
+        # DB에 저장할 상대 경로
+        db_path = 'images/profiles/' + unique_filename
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # 현재 사용자의 프로필 이미지 경로 업데이트
+        cursor.execute("UPDATE users SET profile_image = ? WHERE login_id = ?", (db_path, session['user_id']))
+
+        add_log('UPDATE_PROFILE_IMAGE', session['user_id'], f"프로필 이미지를 '{unique_filename}'(으)로 변경했습니다.")
+
+        conn.commit()
+
+        return redirect(url_for('mypage'))
+    else:
+        return Response('<script>alert("허용되지 않는 파일 형식입니다. (png, jpg, jpeg)"); history.back();</script>')
 
 # Server Drive Unit
 if __name__ == '__main__':
