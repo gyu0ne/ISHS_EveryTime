@@ -49,6 +49,44 @@
                         <li><span>가입일자</span><strong>{{ join_date }}</strong></li>
                     </ul>
                 </div>
+
+                <div class="card profile-edit">
+                    <h3>프로필 편집</h3>
+                    <form action="{{ url_for('update_profile_info') }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <textarea name="profile_message" placeholder="프로필 소개 메시지를 입력하세요. (최대 100자)">{{ user.profile_message }}</textarea>
+                        
+                        <select name="club1">
+                            <option value="" {% if not user.clubhak %}selected{% endif %}>학술 동아리 선택</option>
+                            {% for club in academic_clubs %}
+                            <option value="{{ club }}" {% if user.clubhak == club %}selected{% endif %}>{{ club }}</option>
+                            {% endfor %}
+                        </select>
+
+                        <select name="club2">
+                            <option value="" {% if not user.clubchi %}selected{% endif %}>취미 동아리 선택</option>
+                            {% for club in hobby_clubs %}
+                            <option value="{{ club }}" {% if user.clubchi == club %}selected{% endif %}>{{ club }}</option>
+                            {% endfor %}
+                        </select>
+
+                        <select name="club3">
+                            <option value="" {% if not user.clubjin %}selected{% endif %}>진로탐색 동아리 선택</option>
+                            {% for club in career_clubs %}
+                            <option value="{{ club }}" {% if user.clubjin == club %}selected{% endif %}>{{ club }}</option>
+                            {% endfor %}
+                        </select>
+
+                        <div class="profile-public-toggle">
+                            <label for="profile_public">프로필 공개</label>
+                            <label class="switch">
+                                <input type="checkbox" id="profile_public" name="profile_public" {% if user.profile_public == 1 %}checked{% endif %}>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-save">저장</button>
+                    </form>
+                </div>
                 
                 <div class="card account-management">
                     <h3>계정 관리</h3>

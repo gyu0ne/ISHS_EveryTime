@@ -31,6 +31,10 @@ csrf = CSRFProtect(app)
 DATABASE = 'data.db'
 LOG_DATABASE = 'log.db'
 
+ACADEMIC_CLUBS = ["WIN", "TNT", "PLUTONIUM", "LOGIC", "LOTTOL", "RAIBIT", "QUASAR"]
+HOBBY_CLUBS = ["책톡", "픽쳐스", "메카", "퓨전", "차랑", "스포츠문화부", "체력단련부", "I-FLOW", "아마빌레"]
+CAREER_CLUBS = ["TIP", "필로캠", "천수동", "씽크빅", "WIZARD", "METEOR", "엔진"]
+
 # DB connect (first line of all route)
 def get_db():
     db = getattr(g, '_database', None)
@@ -621,7 +625,7 @@ def logout():
 
 # My Page
 @app.route('/mypage')
-@login_required # login_required 데코레이터로 변경
+@login_required
 def mypage():
     # g.user 객체를 통해 사용자 정보를 가져오므로, 추가적인 DB 조회가 불필요합니다.
     user_data = g.user 
@@ -687,7 +691,11 @@ def mypage():
                            comment_count=user_data['comment_count'], 
                            point=user_data['point'], 
                            user_posts=user_posts, 
-                           user_comments=user_comments)
+                           user_comments=user_comments,
+                           academic_clubs=ACADEMIC_CLUBS,
+                           hobby_clubs=HOBBY_CLUBS,
+                           career_clubs=CAREER_CLUBS
+                           )
 
 # Post Write
 @app.route('/post-write', methods=['GET', 'POST'])
@@ -1317,6 +1325,82 @@ def update_profile_image():
         return redirect(url_for('mypage'))
     else:
         return Response('<script>alert("허용되지 않는 파일 형식입니다. (png, jpg, jpeg)"); history.back();</script>')
+
+# User Profile Page (URL은 nickname 기반 유지)
+@app.route('/profile/<string:nickname>')
+@login_required
+def user_profile(nickname):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # 닉네임을 기반으로 사용자 정보 조회
+    cursor.execute("SELECT * FROM users WHERE nickname = ?", (nickname,))
+    profile_user_data = cursor.fetchone()
+
+    if not profile_user_data:
+        return render_template('404.html', user=g.user), 404
+
+    # 프로필 주인이 본인인지 확인
+    is_own_profile = (g.user['nickname'] == nickname)
+    
+    # --- 로직 변경 ---
+    # 프로필 공개 여부와 관계없이 항상 게시글과 댓글을 조회합니다.
+    # 템플릿 단에서 출력 여부를 결정합니다.
+    login_id = profile_user_data['login_id']
+
+    # 사용자의 게시글 목록 조회
+    posts_query = """
+        SELECT p.id, p.title, p.comment_count, p.updated_at, b.board_name
+        FROM posts p JOIN board b ON p.board_id = b.board_id
+        WHERE p.author = ? ORDER BY p.updated_at DESC
+    """
+    cursor.execute(posts_query, (login_id,))
+    user_posts = cursor.fetchall()
+
+    # 사용자의 댓글 목록 조회
+    comments_query = """
+        SELECT c.content, c.post_id, c.updated_at, p.title AS post_title
+        FROM comments c JOIN posts p ON c.post_id = p.id
+        WHERE c.author = ? ORDER BY c.updated_at DESC
+    """
+    cursor.execute(comments_query, (login_id,))
+    user_comments = cursor.fetchall()
+
+    return render_template('profile.html', 
+                           user=g.user, 
+                           profile_user=profile_user_data, 
+                           user_posts=user_posts, 
+                           user_comments=user_comments,
+                           is_own_profile=is_own_profile)
+
+@app.route('/update-profile-info', methods=['POST'])
+@login_required
+def update_profile_info():
+    profile_message = request.form.get('profile_message')
+    club1 = request.form.get('club1')
+    club2 = request.form.get('club2')
+    club3 = request.form.get('club3')
+    profile_public = request.form.get('profile_public')
+
+    print(f"{club1}, {club2}, {club3}, {profile_public}")
+
+    # profile_public 값 보정 (체크박스가 체크되지 않으면 값이 전송되지 않음)
+    is_public = 1 if profile_public == 'on' else 0
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE users SET
+        profile_message = ?, clubhak = ?, clubchi = ?, clubjin = ?, profile_public = ?
+        WHERE login_id = ?
+    """, (profile_message, club1, club2, club3, is_public, session['user_id']))
+
+    conn.commit()
+    
+    add_log('UPDATE_PROFILE_INFO', session['user_id'], "프로필 정보를 업데이트했습니다.")
+
+    return redirect(url_for('mypage'))
 
 @app.errorhandler(413)
 def request_entity_too_large(error):

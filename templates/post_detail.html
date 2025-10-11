@@ -20,10 +20,12 @@
             <header class="post-header">
                 <div class="post-title-section">
                     <h2>{{ post.title }}</h2>
-                    <div class="author-info">
-                        <img src="{{ url_for('static', filename=post.profile_image) }}" alt="프로필 사진">
-                        <span class="author-name">{{ post.nickname }}</span>
-                    </div>
+                    <a href="{{ url_for('user_profile', nickname=post.nickname) }}" class="author-info-link">
+                        <div class="author-info">
+                            <img src="{{ url_for('static', filename=post.profile_image) }}" alt="프로필 사진">
+                            <span class="author-name">{{ post.nickname }}</span>
+                        </div>
+                    </a>
                 </div>
                 <div class="post-meta">
                     {% if (post.updated_at_datetime - post.created_at_datetime).total_seconds() < 2 %}
@@ -85,10 +87,12 @@
                     {% for comment in comments %}
                     <li class="comment-item" id="comment-{{ comment.id }}">
                         <div class="comment-view">
-                            <div class="comment-author">
-                                <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진">
-                                <span class="author-name">{{ comment.nickname }}</span>
-                            </div>
+                            <a href="{{ url_for('user_profile', nickname=comment.nickname) }}" class="author-info-link">
+                                <div class="comment-author">
+                                    <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진">
+                                    <span class="author-name">{{ comment.nickname }}</span>
+                                </div>
+                            </a>
                             <div class="comment-body">
                                 <p class="comment-text">
                                     {{ comment.content }}

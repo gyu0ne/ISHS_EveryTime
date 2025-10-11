@@ -460,3 +460,18 @@ body {
     text-align: center;
     align-items: center; /* 이 줄을 추가해주세요 */
 }
+
+/* in static/css/post_detail.css */
+
+/* ... (기존 코드) ... */
+
+/* === 프로필 링크 스타일 초기화 === */
+.author-info-link {
+    text-decoration: none;
+    color: inherit;
+    display: inline-block;
+}
+
+.author-info-link:hover .author-name {
+    text-decoration: underline;
+}
