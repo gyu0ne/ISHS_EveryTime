@@ -187,6 +187,39 @@ def get_bob():
 
             return content
 
+# Update User EXP and Level
+def update_exp_level(user_id, exp_change):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # 현재 사용자 정보 조회
+    cursor.execute("SELECT level, exp FROM users WHERE login_id = ?", (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        return
+
+    current_level, current_exp = user
+    new_exp = current_exp + exp_change
+
+    # 레벨업/레벨다운 계산
+    # 실제 서비스에서는 레벨별 필요 경험치를 다르게 설정하는 것이 좋습니다.
+    exp_per_level = 1000
+    level_change = new_exp // exp_per_level
+    final_level = current_level + level_change
+    final_exp = new_exp % exp_per_level
+
+    # 레벨은 최소 1로 유지
+    if final_level < 1:
+        final_level = 1
+        final_exp = 0
+
+    # DB 업데이트
+    cursor.execute(
+        "UPDATE users SET level = ?, exp = ? WHERE login_id = ?",
+        (final_level, final_exp, user_id)
+    )
+    conn.commit()
+
 # Jinja2 Filter for Datetime Formatting
 def format_datetime(value):
     # DB에서 가져온 날짜/시간 문자열을 datetime 객체로 변환
@@ -714,6 +747,8 @@ def post_write():
 
             cursor.execute("UPDATE users SET post_count = post_count + 1 WHERE login_id = ?", (author_id,))
 
+            update_exp_level(author_id, 50)
+
             conn.commit()
 
             add_log('CREATE_POST', author_id, f"'{title}' 글 작성. 내용 : {sanitized_content}")
@@ -1003,6 +1038,8 @@ def post_delete(post_id):
     # session['user_id'] 대신 post[0] (게시글의 실제 author)를 사용해야 관리자가 삭제할 때도 정상 작동합니다.
     cursor.execute("UPDATE users SET post_count = post_count - 1 WHERE login_id = ?", (post[0],))
     
+    update_exp_level(post[0], -5000)
+
     conn.commit()
 
     add_log('DELETE_POST', session['user_id'], f"게시글 (id : {post_id})를 삭제했습니다.")
@@ -1029,13 +1066,15 @@ def add_comment(post_id):
         # 'id' 컬럼은 INSERT 문에서 제외하여 자동으로 채워지도록 합니다.
         query = """
             INSERT INTO comments 
-            (post_id, author, content, created_at, updated_at, like_count, dislike_count, is_reply, parent_comment_id)
-            VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0)
+            (post_id, author, content, created_at, updated_at, is_reply, parent_comment_id)
+            VALUES (?, ?, ?, ?, ?, 0, 0)
         """
         cursor.execute(query, (post_id, author_id, sanitized_content, created_at, created_at))
 
         cursor.execute("UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?", (post_id,))
         cursor.execute("UPDATE users SET comment_count = comment_count + 1 WHERE login_id = ?", (author_id,))
+
+        update_exp_level(author_id, 10)
 
         conn.commit()
 
@@ -1074,6 +1113,8 @@ def delete_comment(comment_id):
         
         # 5. 사용자의 댓글 수 1 감소
         cursor.execute("UPDATE users SET comment_count = comment_count - 1 WHERE login_id = ?", (comment['author'],))
+
+        update_exp_level(comment['author'], -10)
 
         conn.commit()
     except Exception as e:
