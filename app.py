@@ -1260,6 +1260,7 @@ def yakgwan_view():
 UPLOAD_FOLDER = 'static/images/profiles'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -1277,6 +1278,21 @@ def update_profile_image():
         return Response('<script>alert("파일을 선택해주세요."); history.back();</script>')
 
     if file and allowed_file(file.filename):
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # 1. 현재 사용자의 이전 이미지 경로를 DB에서 가져옵니다.
+        cursor.execute("SELECT profile_image FROM users WHERE login_id = ?", (session['user_id'],))
+        old_image_path_tuple = cursor.fetchone()
+        if old_image_path_tuple:
+            old_image_path = old_image_path_tuple[0]
+            # 2. 기본 이미지가 아닐 경우에만 파일을 삭제합니다.
+            if old_image_path and 'default' not in old_image_path:
+                try:
+                    os.remove(os.path.join('static', old_image_path))
+                except FileNotFoundError:
+                    print(f"Warning: 이전 프로필 이미지 파일을 찾을 수 없습니다: {old_image_path}")
+
         # 파일명을 안전하게 만들고, 중복을 피하기 위해 고유한 ID를 추가
         filename = secure_filename(file.filename)
         unique_filename = str(uuid.uuid4()) + "_" + filename
@@ -1301,6 +1317,15 @@ def update_profile_image():
         return redirect(url_for('mypage'))
     else:
         return Response('<script>alert("허용되지 않는 파일 형식입니다. (png, jpg, jpeg)"); history.back();</script>')
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return Response('<script>alert("업로드할 수 있는 파일의 최대 크기는 5MB입니다."); history.back();</script>'), 413
+
+@app.errorhandler(404)
+def page_not_found(error):
+    user_data = g.user if 'user' in g else None
+    return render_template('404.html', user=user_data), 404
 
 # Server Drive Unit
 if __name__ == '__main__':

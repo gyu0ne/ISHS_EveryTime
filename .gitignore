@@ -6,6 +6,8 @@ memo.txt
 *.exe
 /venv
 
+/static/images/profiles/*
+
 __pycache__
 /app_session
 
