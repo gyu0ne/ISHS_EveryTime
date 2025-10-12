@@ -296,6 +296,50 @@ def get_recent_posts(board_id):
         add_log('ERROR', 'SYSTEM', f"Error fetching recent posts for board_id {board_id}: {e}")
         return []
 
+def get_hot_posts():
+    """최근 7일간 추천 수가 10개 이상인 게시글을 상위 5개까지 가져옵니다."""
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # 7일 전 날짜 계산
+    seven_days_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
+    
+    query = """
+        SELECT p.id, p.title, COUNT(r.id) as like_count
+        FROM posts p
+        JOIN reactions r ON p.id = r.target_id
+        WHERE r.target_type = 'post'
+          AND r.reaction_type = 'like'
+          AND p.created_at >= ?
+        GROUP BY p.id
+        HAVING like_count >= 10
+        ORDER BY like_count DESC
+        LIMIT 5
+    """
+    cursor.execute(query, (seven_days_ago,))
+    return cursor.fetchall()
+
+def get_trending_posts():
+    """최근 24시간 동안 조회수가 10 이상인 게시글 중 가장 높은 글을 상위 5개까지 가져옵니다."""
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # 24시간 전 날짜 계산
+    one_day_ago = (datetime.now() - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
+    
+    # 수정: WHERE 절에 view_count >= 10 조건 추가
+    query = """
+        SELECT id, title, view_count
+        FROM posts
+        WHERE created_at >= ? AND view_count >= 10
+        ORDER BY view_count DESC
+        LIMIT 5
+    """
+    cursor.execute(query, (one_day_ago,))
+    return cursor.fetchall()
+
 # Main Page
 @app.route('/')
 def main_page():
@@ -306,16 +350,22 @@ def main_page():
 
         free_board_posts = get_recent_posts(1)
         info_board_posts = get_recent_posts(2)
-
-        # 사용자 정보 조회
+        hot_posts = get_hot_posts()
+        trending_posts = get_trending_posts()
+        
         cursor.execute("SELECT nickname, hakbun, login_id FROM users WHERE login_id = ?", (session['user_id'],))
         user_data = cursor.fetchone()
 
         bob_data = get_bob()
 
-        # 사용자 정보가 있으면 템플릿에 전달
         if user_data:
-            return render_template('main_logined.html', user=user_data, bob=bob_data, free_posts=free_board_posts, info_posts=info_board_posts)
+            return render_template('main_logined.html', 
+                                   user=user_data, 
+                                   bob=bob_data, 
+                                   free_posts=free_board_posts, 
+                                   info_posts=info_board_posts,
+                                   hot_posts=hot_posts,
+                                   trending_posts=trending_posts)
         else:
             # 혹시 모를 예외 처리 (세션은 있는데 DB에 유저가 없는 경우)
             session.clear()
