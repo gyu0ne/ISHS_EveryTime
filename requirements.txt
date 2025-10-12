@@ -25,3 +25,5 @@ sqlite3
 bleach
 
 math
+
+pillow

@@ -7,6 +7,7 @@ from flask_wtf.csrf import CSRFProtect
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from functools import wraps
+from PIL import Image
 import requests
 import hashlib
 import secrets
@@ -17,8 +18,6 @@ import uuid
 import math
 import html
 import os
-
-from route import *
 
 load_dotenv()
 
@@ -85,6 +84,7 @@ def add_log(action, user_id, details):
     except Exception as e:
         # 로그 기록에 실패하더라도 메인 기능에 영향을 주지 않도록 처리
         print(f"Error writing to log database: {e}")
+        print(f"Timestam: {timestamp}, Action: {action}, User ID: {user_id}, ip: {ip_address}, Details: {details}")
 
 # Initialize log.db
 def init_log_db():
@@ -180,8 +180,6 @@ def get_bob():
                     pass
 
                 content = result
-                print(content)
-                print(content['1'], content['2'], content['3'])
                 cursor.execute('INSERT INTO meals (date, breakfast, lunch, dinner) VALUES (?, ?, ?, ?)',(date, content['1'], content['2'], content['3']))
                 conn.commit()
             
@@ -277,8 +275,7 @@ def get_recent_posts(board_id):
         posts = cursor.fetchall()
         return posts
     except Exception as e:
-        # 데이터베이스 조회 중 오류가 발생하면 콘솔에 에러를 출력하고 빈 리스트를 반환합니다.
-        print(f"Error fetching recent posts for board_id {board_id}: {e}")
+        add_log('ERROR', 'SYSTEM', f"Error fetching recent posts for board_id {board_id}: {e}")
         return []
 
 # Main Page
@@ -343,8 +340,7 @@ def is_googlebot():
         # DNS 조회 실패 시
         return False
     except Exception as e:
-        # 기타 예외 처리
-        print(f"Error during Googlebot verification: {e}")
+        add_log('ERROR', 'SYSTEM', f"Error during Googlebot verification: {e}")
         return False
 
     return False
@@ -416,8 +412,7 @@ def riro_auth():
             return redirect('yakgwan')
 
         except requests.exceptions.HTTPError as http_err:
-            print(f"HTTP 에러 발생: {http_err}")
-            print(f"응답 내용: {response.text}")
+            add_log('ERROR', 'SYSTEM', f"HTTP error during Riro Auth: {http_err}, Response: {response.text}")
             return Response(f'''
     <script>
         alert("HTTP 오류 발생")
@@ -425,7 +420,7 @@ def riro_auth():
     </script>
 ''')
         except requests.exceptions.RequestException as req_err:
-            print(f"요청 중 에러 발생: {req_err}")
+            add_log('ERROR', 'SYSTEM', f"Request error during Riro Auth: {req_err}")
             return Response(f'''
     <script>
         alert("요청 중 오류가 발생했습니다.")
@@ -465,7 +460,6 @@ def check_register():
     else:
         nickname_tf = 'False'
 
-    print ({'login_id': id_tf, 'nickname': nickname_tf})
     return {'login_id': id_tf, 'nickname': nickname_tf}
 
 # YakGwan
@@ -775,6 +769,7 @@ def post_write():
             return redirect(url_for('post_list', board_id=board_id))
         except Exception as e:
             print(f"Database error: {e}")
+            add_log('ERROR', author_id, f"Error saving post: {e}")
             return Response('<script>alert("게시글 저장 중 오류가 발생했습니다."); history.back();</script>')
 
     # GET 요청 시: DB에서 게시판 목록을 가져와 템플릿으로 전달
@@ -846,6 +841,7 @@ def post_list(board_id, page):
 
     except Exception as e:
         print(f"Error fetching post list: {e}")
+        add_log('ERROR', user_data['login_id'], f"Error fetching post list for board_id {board_id}, page {page}: {e}")
         return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
 
     return render_template('post_list.html', user=user_data,
@@ -951,6 +947,7 @@ def post_detail(post_id):
 
     except Exception as e:
         print(f"Error fetching post detail: {e}")
+        add_log('ERROR', user_data['login_id'], f"Error fetching post detail for post_id {post_id}: {e}")
         return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
 
     return render_template('post_detail.html', user=user_data, post=post, comments=comments)
@@ -1040,31 +1037,55 @@ def post_delete(post_id):
     if post[0] != session['user_id'] and (not g.user or g.user['role'] != 'admin'):
         return Response('<script>alert("삭제 권한이 없습니다."); history.back();</script>')
 
-    # --- 로직 수정 시작 ---
+    try:
+        # --- 👇 로직 수정 시작 ---
 
-    # 1. 삭제될 댓글들의 작성자와 각 작성자별 댓글 수를 미리 조회합니다.
-    cursor.execute("SELECT author, COUNT(*) FROM comments WHERE post_id = ? GROUP BY author", (post_id,))
-    comment_authors_counts = cursor.fetchall() # [('user1', 3), ('user2', 1)] 과 같은 형태로 반환됩니다.
+        # 1. 삭제될 댓글들의 ID와 작성자 정보를 미리 조회합니다.
+        cursor.execute("SELECT id, author FROM comments WHERE post_id = ?", (post_id,))
+        comments = cursor.fetchall()
+        
+        if comments:
+            comment_ids = [c['id'] for c in comments]
+            
+            # 2. 댓글들의 reaction을 먼저 삭제합니다.
+            placeholders = ', '.join('?' for _ in comment_ids)
+            cursor.execute(f"DELETE FROM reactions WHERE target_type = 'comment' AND target_id IN ({placeholders})", comment_ids)
 
-    # 2. 각 작성자별로 댓글 수를 차감합니다.
-    for author, count in comment_authors_counts:
-        cursor.execute("UPDATE users SET comment_count = comment_count - ? WHERE login_id = ?", (count, author))
+            # 3. 각 댓글 작성자별로 댓글 수를 차감합니다.
+            comment_authors_counts = {}
+            for c in comments:
+                author = c['author']
+                comment_authors_counts[author] = comment_authors_counts.get(author, 0) + 1
+            
+            for author, count in comment_authors_counts.items():
+                cursor.execute("UPDATE users SET comment_count = comment_count - ? WHERE login_id = ?", (count, author))
 
-    # 3. 해당 게시글의 댓글들을 모두 삭제합니다.
-    cursor.execute("DELETE FROM comments WHERE post_id = ?", (post_id,))
+        # 4. 게시글 자체의 reaction을 삭제합니다.
+        cursor.execute("DELETE FROM reactions WHERE target_type = 'post' AND target_id = ?", (post_id,))
+        
+        # 5. 해당 게시글의 댓글들을 모두 삭제합니다.
+        cursor.execute("DELETE FROM comments WHERE post_id = ?", (post_id,))
 
-    # 4. 게시글을 삭제합니다.
-    cursor.execute("DELETE FROM posts WHERE id = ?", (post_id,))
+        # 6. 게시글을 삭제합니다.
+        cursor.execute("DELETE FROM posts WHERE id = ?", (post_id,))
 
-    # 5. 게시글 작성자의 post_count를 1 감소시킵니다.
-    # session['user_id'] 대신 post[0] (게시글의 실제 author)를 사용해야 관리자가 삭제할 때도 정상 작동합니다.
-    cursor.execute("UPDATE users SET post_count = post_count - 1 WHERE login_id = ?", (post[0],))
-    
-    update_exp_level(post[0], -50)
+        # 7. 게시글 작성자의 post_count를 1 감소시킵니다.
+        cursor.execute("UPDATE users SET post_count = post_count - 1 WHERE login_id = ?", (post['author'],))
+        
+        # 8. 경험치를 차감합니다.
+        update_exp_level(post['author'], -50)
 
-    conn.commit()
+        # --- 👆 로직 수정 끝 ---
 
-    add_log('DELETE_POST', session['user_id'], f"게시글 (id : {post_id})를 삭제했습니다. 제목 : {post['title']} 내용 : {post['content']}")
+        add_log('DELETE_POST', session['user_id'], f"게시글 (id : {post_id})를 삭제했습니다. 제목 : {post['title']}")
+        
+        conn.commit()
+
+    except Exception as e:
+        print(f"Error during post deletion: {e}")
+        add_log('ERROR', session['user_id'], f"Error deleting post id {post_id}: {e}")
+        conn.rollback()
+        return Response('<script>alert("게시글 삭제 중 오류가 발생했습니다."); history.back();</script>')
 
     return redirect(url_for('post_list', board_id=board_id))
 
@@ -1104,6 +1125,7 @@ def add_comment(post_id):
 
     except Exception as e:
         print(f"Database error while adding comment: {e}")
+        add_log('ERROR', author_id, f"Error adding comment to post id {post_id}: {e}")
         conn.rollback()
         return Response('<script>alert("댓글 작성 중 오류가 발생했습니다."); history.back();</script>')
 
@@ -1117,8 +1139,8 @@ def delete_comment(comment_id):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    # 1. 삭제할 댓글 정보 조회 (권한 확인 및 post_id 확보용)
-    cursor.execute("SELECT author, post_id FROM comments WHERE id = ?", (comment_id,))
+    # 1. 삭제할 댓글 정보 조회 (권한 확인, post_id 및 내용 확보용)
+    cursor.execute("SELECT author, post_id, content FROM comments WHERE id = ?", (comment_id,))
     comment = cursor.fetchone()
 
     if not comment:
@@ -1129,22 +1151,31 @@ def delete_comment(comment_id):
         return Response('<script>alert("삭제 권한이 없습니다."); history.back();</script>')
 
     try:
-        # 3. 데이터베이스에서 댓글 삭제
+        # --- 👇 로직 수정 시작 ---
+
+        # 3. 해당 댓글의 reaction을 먼저 삭제합니다.
+        cursor.execute("DELETE FROM reactions WHERE target_type = 'comment' AND target_id = ?", (comment_id,))
+
+        # 4. 데이터베이스에서 댓글을 삭제합니다.
         cursor.execute("DELETE FROM comments WHERE id = ?", (comment_id,))
 
-        # 4. 게시글의 댓글 수 1 감소
+        # 5. 게시글의 댓글 수를 1 감소시킵니다.
         cursor.execute("UPDATE posts SET comment_count = comment_count - 1 WHERE id = ?", (comment['post_id'],))
         
-        # 5. 사용자의 댓글 수 1 감소
+        # 6. 사용자의 댓글 수를 1 감소시킵니다.
         cursor.execute("UPDATE users SET comment_count = comment_count - 1 WHERE login_id = ?", (comment['author'],))
 
+        # 7. 경험치를 차감합니다.
         update_exp_level(comment['author'], -10)
+        
+        # --- 👆 로직 수정 끝 ---
 
         add_log('DELETE_COMMENT', session['user_id'], f"댓글 (id : {comment_id})를 삭제했습니다. 내용 : {comment['content']}")
 
         conn.commit()
     except Exception as e:
         print(f"Database error while deleting comment: {e}")
+        add_log('ERROR', session['user_id'], f"Error deleting comment id {comment_id}: {e}")
         conn.rollback()
         return Response('<script>alert("댓글 삭제 중 오류가 발생했습니다."); history.back();</script>')
 
@@ -1186,6 +1217,7 @@ def edit_comment(comment_id):
 
     except Exception as e:
         print(f"Database error while editing comment: {e}")
+        add_log('ERROR', session['user_id'], f"Error editing comment id {comment_id}: {e}")
         conn.rollback()
         return Response('<script>alert("댓글 수정 중 오류가 발생했습니다."); history.back();</script>')
 
@@ -1257,6 +1289,7 @@ def react(target_type, target_id):
 
     except Exception as e:
         print(f"Database error while reacting: {e}")
+        add_log('ERROR', user_id, f"Error processing reaction on {target_type} id {target_id}: {e}")
         conn.rollback()
         return jsonify({'status': 'error', 'message': '요청 처리 중 오류가 발생했습니다.'}), 500
 
@@ -1279,7 +1312,7 @@ def allowed_file(filename):
 def update_profile_image():
     if 'profile_image' not in request.files:
         return Response('<script>alert("파일이 전송되지 않았습니다."); history.back();</script>')
-    
+
     file = request.files['profile_image']
 
     if file.filename == '':
@@ -1297,29 +1330,31 @@ def update_profile_image():
             # 2. 기본 이미지가 아닐 경우에만 파일을 삭제합니다.
             if old_image_path and 'default' not in old_image_path:
                 try:
-                    os.remove(os.path.join('static', old_image_path))
-                except FileNotFoundError:
-                    print(f"Warning: 이전 프로필 이미지 파일을 찾을 수 없습니다: {old_image_path}")
+                    # 'static'을 경로에 포함시켜야 합니다.
+                    full_old_path = os.path.join('static', old_image_path)
+                    if os.path.exists(full_old_path):
+                        os.remove(full_old_path)
+                except Exception as e:
+                    print(f"Warning: 이전 프로필 이미지 삭제 실패: {e}")
+                    add_log('WARNING', session['user_id'], f"이전 프로필 이미지 삭제 실패: {e}")
 
-        # 파일명을 안전하게 만들고, 중복을 피하기 위해 고유한 ID를 추가
         filename = secure_filename(file.filename)
         unique_filename = str(uuid.uuid4()) + "_" + filename
-        
-        # 파일 저장 경로 설정
         save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-        file.save(save_path)
 
-        # DB에 저장할 상대 경로
+        # --- 👇 이미지 최적화 로직 시작 ---
+        img = Image.open(file.stream)
+
+        # 이미지의 가로, 세로 중 더 긴 쪽을 300px에 맞추고 비율 유지
+        img.thumbnail((300, 300))
+
+        img.save(save_path, optimize=True)
+        # --- 👆 이미지 최적화 로직 끝 ---
+
         db_path = 'images/profiles/' + unique_filename
 
-        conn = get_db()
-        cursor = conn.cursor()
-
-        # 현재 사용자의 프로필 이미지 경로 업데이트
         cursor.execute("UPDATE users SET profile_image = ? WHERE login_id = ?", (db_path, session['user_id']))
-
         add_log('UPDATE_PROFILE_IMAGE', session['user_id'], f"프로필 이미지를 '{unique_filename}'(으)로 변경했습니다.")
-
         conn.commit()
 
         return redirect(url_for('mypage'))
@@ -1382,8 +1417,6 @@ def update_profile_info():
     club2 = request.form.get('club2')
     club3 = request.form.get('club3')
     profile_public = request.form.get('profile_public')
-
-    print(f"{club1}, {club2}, {club3}, {profile_public}")
 
     # profile_public 값 보정 (체크박스가 체크되지 않으면 값이 전송되지 않음)
     is_public = 1 if profile_public == 'on' else 0
