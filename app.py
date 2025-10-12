@@ -7,6 +7,7 @@ from flask_wtf.csrf import CSRFProtect
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from functools import wraps
+from flask import jsonify
 from PIL import Image
 import requests
 import hashlib
@@ -61,6 +62,23 @@ def close_log_connection(exception):
     db = getattr(g, '_log_database', None)
     if db is not None:
         db.close()
+
+def create_notification(recipient_id, actor_id, action, target_type, target_id, post_id):
+    """알림을 생성하고 DB에 저장하는 함수"""
+    # 자기 자신에게는 알림을 보내지 않음
+    if recipient_id == actor_id:
+        return
+
+    conn = get_db()
+    cursor = conn.cursor()
+    created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    cursor.execute("""
+        INSERT INTO notifications 
+        (recipient_id, actor_id, action, target_type, target_id, post_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (recipient_id, actor_id, action, target_type, target_id, post_id, created_at))
+    conn.commit()
 
 # Add Log to log.db
 def add_log(action, user_id, details):
@@ -1107,6 +1125,15 @@ def add_comment(post_id):
             # 부모 댓글이 최상위 댓글인지(parent_comment_id가 NULL인지) 확인
             cursor.execute("SELECT parent_comment_id FROM comments WHERE id = ?", (parent_comment_id,))
             parent_comment = cursor.fetchone()
+
+            create_notification(
+                recipient_id=parent_comment['author'],
+                actor_id=author_id,
+                action='reply',
+                target_type='comment',
+                target_id=parent_comment['id'],
+                post_id=post_id
+            )
             
             if not parent_comment:
                 return Response('<script>alert("답글을 작성할 원본 댓글이 존재하지 않습니다."); history.back();</script>')
@@ -1123,6 +1150,18 @@ def add_comment(post_id):
             """
             cursor.execute(query, (post_id, author_id, sanitized_content, created_at, created_at, parent_comment_id))
         else:
+            cursor.execute("SELECT author FROM posts WHERE id = ?", (post_id,))
+            post = cursor.fetchone()
+            if post:
+                create_notification(
+                    recipient_id=post['author'],
+                    actor_id=author_id,
+                    action='comment',
+                    target_type='post',
+                    target_id=post_id,
+                    post_id=post_id
+                )
+
             query = """
                 INSERT INTO comments 
                 (post_id, author, content, created_at, updated_at, parent_comment_id)
@@ -1252,52 +1291,70 @@ def react(target_type, target_id):
         return jsonify({'status': 'error', 'message': '잘못된 접근입니다.'}), 400
 
     conn = get_db()
+    conn.row_factory = sqlite3.Row # .Row 추가
     cursor = conn.cursor()
 
     try:
-        # 1. 사용자의 이전 반응 확인
         cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = ? AND target_id = ?",
                        (user_id, target_type, target_id))
         existing_reaction = cursor.fetchone()
 
         if existing_reaction:
-            if existing_reaction[0] == reaction_type:
-                # 같은 버튼 다시 누름 -> 취소
+            if existing_reaction['reaction_type'] == reaction_type:
                 cursor.execute("DELETE FROM reactions WHERE user_id = ? AND target_type = ? AND target_id = ?",
                                (user_id, target_type, target_id))
                 add_log('CANCEL_REACTION', user_id, f"{target_type} (id: {target_id})에 대한 '{reaction_type}' 반응을 취소했습니다.")
             else:
-                # 다른 버튼 누름 -> 변경
                 cursor.execute("UPDATE reactions SET reaction_type = ? WHERE user_id = ? AND target_type = ? AND target_id = ?",
                                (reaction_type, user_id, target_type, target_id))
-                add_log('CHANGE_REACTION', user_id, f"{target_type} (id: {target_id})에 대한 반응을 '{existing_reaction[0]}'에서 '{reaction_type}'(으)로 변경했습니다.")
+                add_log('CHANGE_REACTION', user_id, f"{target_type} (id: {target_id})에 대한 반응을 '{existing_reaction['reaction_type']}'에서 '{reaction_type}'(으)로 변경했습니다.")
         else:
-            # 첫 반응 -> 추가
             cursor.execute("INSERT INTO reactions (user_id, target_type, target_id, reaction_type, created_at) VALUES (?, ?, ?, ?, ?)",
                            (user_id, target_type, target_id, reaction_type, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
             add_log('ADD_REACTION', user_id, f"{target_type} (id: {target_id})에 '{reaction_type}' 반응을 추가했습니다.")
 
         conn.commit()
 
-        # 2. 업데이트된 추천/비추천 수 다시 계산
+        # --- 👇 HOT 게시물 알림 로직 시작 ---
+        # 1. '게시글'에 '좋아요'를 눌렀을 경우에만 확인
+        if target_type == 'post' and reaction_type == 'like':
+            # 2. 현재 '좋아요' 개수를 다시 계산
+            cursor.execute("SELECT COUNT(*) FROM reactions WHERE target_type = 'post' AND target_id = ? AND reaction_type = 'like'", (target_id,))
+            likes = cursor.fetchone()[0]
+
+            # 3. '좋아요'가 정확히 10개가 되었는지 확인
+            if likes == 10:
+                # 4. 이 게시글에 대해 'hot_post' 알림이 이미 보내졌는지 확인 (중복 방지)
+                cursor.execute("SELECT COUNT(*) FROM notifications WHERE action = 'hot_post' AND target_type = 'post' AND target_id = ?", (target_id,))
+                already_notified = cursor.fetchone()[0]
+
+                if already_notified == 0:
+                    # 5. 게시글 작성자 정보를 가져와서 알림 생성
+                    cursor.execute("SELECT author FROM posts WHERE id = ?", (target_id,))
+                    post = cursor.fetchone()
+                    if post:
+                        create_notification(
+                            recipient_id=post['author'],
+                            actor_id=user_id, # 10번째 좋아요를 누른 사람
+                            action='hot_post',
+                            target_type='post',
+                            target_id=target_id,
+                            post_id=target_id
+                        )
+        # --- 👆 HOT 게시물 알림 로직 끝 ---
+
+
         cursor.execute("SELECT reaction_type, COUNT(*) as count FROM reactions WHERE target_type = ? AND target_id = ? GROUP BY reaction_type",
                        (target_type, target_id))
-        reactions = cursor.fetchall()
-        likes = 0
-        dislikes = 0
-        for r in reactions:
-            if r[0] == 'like':
-                likes = r[1]
-            elif r[0] == 'dislike':
-                dislikes = r[1]
+        reactions = {r['reaction_type']: r['count'] for r in cursor.fetchall()}
+        likes = reactions.get('like', 0)
+        dislikes = reactions.get('dislike', 0)
 
-        # 3. 사용자의 최종 반응 상태 확인
         cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = ? AND target_id = ?",
                        (user_id, target_type, target_id))
         final_reaction_row = cursor.fetchone()
-        user_reaction = final_reaction_row[0] if final_reaction_row else None
+        user_reaction = final_reaction_row['reaction_type'] if final_reaction_row else None
 
-        # 4. JSON 형태로 결과 반환
         return jsonify({
             'status': 'success',
             'likes': likes,
@@ -1307,7 +1364,6 @@ def react(target_type, target_id):
 
     except Exception as e:
         print(f"Database error while reacting: {e}")
-        add_log('ERROR', user_id, f"Error processing reaction on {target_type} id {target_id}: {e}")
         conn.rollback()
         return jsonify({'status': 'error', 'message': '요청 처리 중 오류가 발생했습니다.'}), 500
 
@@ -1627,6 +1683,43 @@ def search():
                            total_posts=total_posts,
                            total_pages=total_pages,
                            current_page=page, user=g.user)
+
+@app.route('/notifications/unread-count')
+@login_required
+def unread_notification_count():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM notifications WHERE recipient_id = ? AND is_read = 0", (g.user['login_id'],))
+    count = cursor.fetchone()[0]
+    return jsonify({'count': count})
+
+@app.route('/notifications')
+@login_required
+def get_notifications():
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    query = """
+        SELECT n.*, u.nickname as actor_nickname
+        FROM notifications n
+        JOIN users u ON n.actor_id = u.login_id
+        WHERE n.recipient_id = ?
+        ORDER BY n.created_at DESC
+        LIMIT 10
+    """
+    cursor.execute(query, (g.user['login_id'],))
+    notifications = [dict(row) for row in cursor.fetchall()]
+    return jsonify(notifications)
+
+@app.route('/notifications/read/<int:notification_id>', methods=['POST'])
+@login_required
+def read_notification(notification_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    # 본인의 알림이 맞는지 확인 후 읽음 처리
+    cursor.execute("UPDATE notifications SET is_read = 1 WHERE id = ? AND recipient_id = ?", (notification_id, g.user['login_id']))
+    conn.commit()
+    return jsonify({'status': 'success'})
 
 @app.errorhandler(413)
 def request_entity_too_large(error):

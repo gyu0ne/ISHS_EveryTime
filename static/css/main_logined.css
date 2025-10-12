@@ -465,3 +465,92 @@ main {
     color: #e0e0e0;
     font-weight: 500;
 }
+
+/* === [추가] 알림 관련 스타일 === */
+.user-menu .notification-bell {
+    position: relative;
+    font-size: 20px;
+    color: #e0e0e0;
+    margin-right: 20px; /* 드롭다운 메뉴와의 간격 */
+    cursor: pointer;
+}
+
+.notification-bell .badge {
+    position: absolute;
+    top: -5px;
+    right: -8px;
+    padding: 2px 5px;
+    border-radius: 50%;
+    background-color: #d9534f;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    display: none; /* 평소엔 숨김 */
+}
+
+.notification-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 120%; /* 아이콘 아래에 위치 */
+    width: 350px;
+    background-color: #2e2e2e;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 101;
+}
+
+.notification-header {
+    padding: 10px 15px;
+    font-weight: bold;
+    border-bottom: 1px solid #3a3a3a;
+}
+
+.notification-list {
+    list-style: none;
+    padding: 0;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.notification-list li a {
+    display: block;
+    color: #ccc;
+    font-size: 14px;
+    border-bottom: 1px solid #3a3a3a;
+    padding: 10px 13px;
+    margin: 10px 13px;
+}
+
+.notification-list li:last-child a {
+    border-bottom: none;
+}
+
+.notification-list li a:hover {
+    background-color: #3e3e3e;
+}
+
+.notification-list li.is-read a {
+    opacity: 0.6;
+}
+
+.notification-list .actor {
+    font-weight: bold;
+    color: #f1f1f1;
+}
+
+.notification-list .no-notifications {
+    align-items: center;
+    text-align: center;
+    color: #ccc;
+    font-size: 14px;
+    padding: 10px 13px; /* li에 직접 패딩을 줌 */
+}
+
+/* '알림 없음' 메시지의 a 태그는 기본 스타일을 제거 */
+.notification-list .no-notifications a {
+    padding: 10px 13px;
+    margin: 0;
+    border-bottom: none;
+}
