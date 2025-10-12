@@ -5,6 +5,35 @@
 {% block head %}
     <script src="{{ url_for('static', filename='js/my_page.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/my_page.css') }}">
+    <script>
+        function confirmDeleteAccount() {
+        // 비밀번호만 묻도록 prompt 수정
+        const password = prompt("계정을 삭제하시려면 비밀번호를 입력해주세요. 이 작업은 되돌릴 수 없습니다.");
+
+        // 사용자가 취소 버튼을 누르지 않았고, 무언가 입력했다면
+        if (password !== null) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = "{{ url_for('delete_account') }}";
+
+            const passwordInput = document.createElement('input');
+            passwordInput.type = 'hidden';
+            passwordInput.name = 'password';
+            passwordInput.value = password; // 사용자가 입력한 비밀번호
+            form.appendChild(passwordInput);
+
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = '{{ csrf_token() }}';
+            form.appendChild(csrfInput);
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+        // 사용자가 '취소'를 누르면 아무 작업도 하지 않음
+    }
+    </script>
 {% endblock %}
 
 {% block content %}
@@ -90,9 +119,9 @@
                 
                 <div class="card account-management">
                     <h3>계정 관리</h3>
-                    <button class="btn">비밀번호 변경</button>
+                    <button class="btn" onclick="location.href='{{ url_for('change_password') }}'">비밀번호 변경</button>
                     <button class="btn" onclick="location.href='/logout'">로그아웃</button>
-                    <button class="btn btn-delete">계정 삭제</button>
+                    <button class="btn btn-delete" onclick="confirmDeleteAccount()">계정 삭제</button>
                 </div>
             </aside>
 

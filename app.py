@@ -391,10 +391,10 @@ def riro_auth():
 
             cursor = conn.cursor()
 
-            cursor.execute('SELECT COUNT(*) FROM users WHERE name = ?', (api_result['name'],))
+            cursor.execute('SELECT COUNT(*) FROM users WHERE name = ? AND status = "active"', (api_result['name'],))
             count_name = cursor.fetchone()[0]
 
-            cursor.execute('SELECT COUNT(*) FROM users WHERE hakbun = ?', (api_result['student_number'],))
+            cursor.execute('SELECT COUNT(*) FROM users WHERE hakbun = ? AND status = "active"', (api_result['student_number'],))
             count_hakbun = cursor.fetchone()[0]
 
             if count_name > 0 and count_hakbun > 0:
@@ -1434,6 +1434,106 @@ def update_profile_info():
     add_log('UPDATE_PROFILE_INFO', session['user_id'], "프로필 정보를 업데이트했습니다.")
 
     return redirect(url_for('mypage'))
+
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    user = g.user 
+
+    if request.method == 'POST':
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+
+        # 1. 현재 비밀번호 확인
+        if not user or 'pw' not in user or not bcrypt.check_password_hash(user['pw'], current_password):
+            return Response('<script>alert("현재 비밀번호가 일치하지 않습니다."); history.back();</script>')
+
+        # --- 👇 추가된 로직 시작 ---
+        # 2. 현재 비밀번호와 새 비밀번호가 동일한지 확인
+        if bcrypt.check_password_hash(user['pw'], new_password):
+            return Response('<script>alert("새 비밀번호는 현재 비밀번호와 다르게 설정해야 합니다."); history.back();</script>')
+        # --- 👆 추가된 로직 끝 ---
+
+        # 3. 새 비밀번호 유효성 검사
+        if len(new_password) < 6:
+            return Response('<script>alert("새 비밀번호는 6자 이상이어야 합니다."); history.back();</script>')
+        
+        if new_password != confirm_password:
+            return Response('<script>alert("새 비밀번호와 확인 비밀번호가 일치하지 않습니다."); history.back();</script>')
+
+        # 4. 비밀번호 업데이트
+        hashed_pw = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET pw = ? WHERE login_id = ?", (hashed_pw, session['user_id']))
+        conn.commit()
+
+        add_log('CHANGE_PASSWORD', session['user_id'], "비밀번호를 변경했습니다.")
+        
+        return Response('<script>alert("비밀번호가 성공적으로 변경되었습니다."); window.location.href = "/mypage";</script>')
+
+    return render_template('change_password.html', user=user)
+
+@app.route('/delete-account', methods=['POST'])
+@login_required
+def delete_account():
+    password = request.form.get('password')
+    user = g.user
+
+    if not user or 'pw' not in user or not bcrypt.check_password_hash(user['pw'], password):
+        return Response('<script>alert("비밀번호가 일치하지 않아 계정을 삭제할 수 없습니다."); history.back();</script>')
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        # --- 👇 수정된 부분 시작 ---
+        
+        # 재가입이 가능하도록 기존 고유 정보를 변경합니다.
+        # 타임스탬프를 사용하여 혹시 모를 중복을 방지합니다.
+        timestamp_suffix = datetime.now().strftime('%Y%m%d%H%M%S')
+        original_login_id = session['user_id']
+        
+        deleted_login_id = f"deleted_{original_login_id}_{timestamp_suffix}"
+        deleted_hakbun = f"deleted_{user['hakbun']}_{timestamp_suffix}"
+        deleted_nickname = f"탈퇴한사용자_{str(uuid.uuid4())[:8]}"
+        
+        # 사용자 정보 비활성화 (Soft Delete)
+        cursor.execute("""
+            UPDATE users 
+            SET 
+                login_id = ?,
+                hakbun = ?,
+                nickname = ?, 
+                pw = ?, 
+                profile_image = 'images/profiles/defualt_images.jpeg',
+                profile_message = '탈퇴한 사용자의 프로필입니다.',
+                clubhak = NULL,
+                clubchi = NULL,
+                clubjin = NULL,
+                profile_public = 0,
+                autologin_token = NULL,
+                status = 'deleted'
+            WHERE login_id = ?
+        """, (deleted_login_id, deleted_hakbun, deleted_nickname, str(uuid.uuid4()), original_login_id))
+        
+        # --- 👆 수정된 부분 끝 ---
+        
+        conn.commit()
+
+        add_log('DELETE_ACCOUNT', original_login_id, f"사용자({original_login_id})가 계정을 삭제했습니다.")
+
+        # 세션 정리 및 로그아웃 처리
+        session.clear()
+        resp = make_response(Response('<script>alert("계정이 안전하게 삭제되었습니다. 이용해주셔서 감사합니다."); window.location.href = "/";</script>'))
+        resp.set_cookie('remember_token', '', max_age=0)
+        return resp
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Error during account deletion: {e}")
+        return Response('<script>alert("계정 삭제 중 오류가 발생했습니다."); history.back();</script>')
 
 @app.errorhandler(413)
 def request_entity_too_large(error):
