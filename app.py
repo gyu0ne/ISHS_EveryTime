@@ -860,16 +860,13 @@ def post_detail(post_id):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    user_data = g.user 
-
+    user_data = g.user
     if not user_data:
-        # 혹시 모를 예외 처리 (세션은 있는데 DB에 유저가 없는 경우)
         session.clear()
         return redirect('/login')
 
     try:
-        # 1. 게시글 정보 조회 (posts, users, board 테이블 JOIN)
-        # 작성자 닉네임과 프로필 이미지, 게시판 이름을 함께 가져옵니다.
+        # --- 게시글 정보 조회 (기존과 동일) ---
         query = """
             SELECT p.*, u.nickname, u.profile_image, b.board_name
             FROM posts p
@@ -884,58 +881,45 @@ def post_detail(post_id):
             return Response('<script>alert("존재하지 않거나 삭제된 게시글입니다."); history.back();</script>')
     
         post = dict(post_data)
-
         post['created_at_datetime'] = datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
         post['updated_at_datetime'] = datetime.strptime(post['updated_at'], '%Y-%m-%d %H:%M:%S')
 
-        # 게시글의 추천/비추천 수 계산
         cursor.execute("SELECT reaction_type, COUNT(*) as count FROM reactions WHERE target_type = 'post' AND target_id = ? GROUP BY reaction_type", (post_id,))
-        reactions = cursor.fetchall()
-        post['likes'] = 0
-        post['dislikes'] = 0
-        for reaction in reactions:
-            if reaction['reaction_type'] == 'like':
-                post['likes'] = reaction['count']
-            elif reaction['reaction_type'] == 'dislike':
-                post['dislikes'] = reaction['count']
+        reactions = {r['reaction_type']: r['count'] for r in cursor.fetchall()}
+        post['likes'] = reactions.get('like', 0)
+        post['dislikes'] = reactions.get('dislike', 0)
 
-        # 현재 사용자가 이 게시글에 어떤 반응을 했는지 확인
         post['user_reaction'] = None
         if g.user:
-            cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = 'post' AND target_id = ?", (g.user['login_id'], post_id))
+            cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = 'post' AND target_id = ?", (g.user['login_id'], post_id,))
             user_reaction_row = cursor.fetchone()
             if user_reaction_row:
                 post['user_reaction'] = user_reaction_row['reaction_type']
 
-        # 2. 조회수 1 증가 (UPDATE)
-        # 동일 사용자의 반복적인 조회수 증가를 막기 위한 로직은 추후 세션을 이용해 구현할 수 있습니다.
         cursor.execute("UPDATE posts SET view_count = view_count + 1 WHERE id = ?", (post_id,))
         conn.commit()
 
-        # 3. 해당 게시글의 댓글 목록 조회 (comments, users 테이블 JOIN)
-        # 댓글 작성자의 닉네임과 프로필 이미지를 함께 가져옵니다.
+        # --- 👇 댓글 로직 수정 시작 ---
         comment_query = """
             SELECT c.*, u.nickname, u.profile_image
             FROM comments c
             JOIN users u ON c.author = u.login_id
             WHERE c.post_id = ?
-            ORDER BY c.created_at ASC
+            ORDER BY c.created_at DESC
         """
         cursor.execute(comment_query, (post_id,))
-        comments_data = cursor.fetchall()
+        all_comments = cursor.fetchall()
         
-        comments = []
-        for comment_row in comments_data:
+        comments_dict = {}
+        # 1. 모든 댓글을 딕셔너리로 변환하고, 'replies' 리스트와 reaction 정보를 초기화합니다.
+        for comment_row in all_comments:
             comment = dict(comment_row)
+            comment['replies'] = []
+
             cursor.execute("SELECT reaction_type, COUNT(*) as count FROM reactions WHERE target_type = 'comment' AND target_id = ? GROUP BY reaction_type", (comment['id'],))
-            comment_reactions = cursor.fetchall()
-            comment['likes'] = 0
-            comment['dislikes'] = 0
-            for r in comment_reactions:
-                if r['reaction_type'] == 'like':
-                    comment['likes'] = r['count']
-                elif r['reaction_type'] == 'dislike':
-                    comment['dislikes'] = r['count']
+            comment_reactions = {r['reaction_type']: r['count'] for r in cursor.fetchall()}
+            comment['likes'] = comment_reactions.get('like', 0)
+            comment['dislikes'] = comment_reactions.get('dislike', 0)
             
             comment['user_reaction'] = None
             if g.user:
@@ -943,14 +927,25 @@ def post_detail(post_id):
                 user_reaction_row = cursor.fetchone()
                 if user_reaction_row:
                     comment['user_reaction'] = user_reaction_row['reaction_type']
-            comments.append(comment)
+            
+            comments_dict[comment['id']] = comment
+
+        # 2. 댓글들을 부모-자식 관계로 연결하여 트리 구조를 만듭니다.
+        comments_tree = []
+        for comment_id, comment in comments_dict.items():
+            parent_id = comment.get('parent_comment_id')
+            if parent_id:
+                if parent_id in comments_dict:
+                    comments_dict[parent_id]['replies'].append(comment)
+            else:
+                comments_tree.append(comment)
+        # --- 👆 댓글 로직 수정 끝 ---
 
     except Exception as e:
         print(f"Error fetching post detail: {e}")
-        add_log('ERROR', user_data['login_id'], f"Error fetching post detail for post_id {post_id}: {e}")
         return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
 
-    return render_template('post_detail.html', user=user_data, post=post, comments=comments)
+    return render_template('post_detail.html', user=user_data, post=post, comments=comments_tree)
 
 # Post Edit
 @app.route('/post-edit/<int:post_id>', methods=['GET', 'POST'])
@@ -1094,6 +1089,7 @@ def post_delete(post_id):
 @login_required
 def add_comment(post_id):
     content = request.form.get('comment_content')
+    parent_comment_id = request.form.get('parent_comment_id', None)
 
     if not content or not content.strip():
         return Response('<script>alert("댓글 내용을 입력해주세요."); history.back();</script>')
@@ -1105,27 +1101,49 @@ def add_comment(post_id):
         author_id = session['user_id']
         created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sanitized_content = bleach.clean(content)
+        
+        if parent_comment_id:
+            # --- 👇 추가된 검증 로직 시작 ---
+            # 부모 댓글이 최상위 댓글인지(parent_comment_id가 NULL인지) 확인
+            cursor.execute("SELECT parent_comment_id FROM comments WHERE id = ?", (parent_comment_id,))
+            parent_comment = cursor.fetchone()
+            
+            if not parent_comment:
+                return Response('<script>alert("답글을 작성할 원본 댓글이 존재하지 않습니다."); history.back();</script>')
+            
+            if parent_comment[0] is not None:
+                # 부모 댓글의 parent_comment_id가 NULL이 아니라면, 그것은 이미 대댓글임.
+                return Response('<script>alert("대댓글에는 답글을 작성할 수 없습니다."); history.back();</script>')
+            # --- 👆 추가된 검증 로직 끝 ---
 
-        # 'id' 컬럼은 INSERT 문에서 제외하여 자동으로 채워지도록 합니다.
-        query = """
-            INSERT INTO comments 
-            (post_id, author, content, created_at, updated_at, is_reply, parent_comment_id)
-            VALUES (?, ?, ?, ?, ?, 0, 0)
-        """
-        cursor.execute(query, (post_id, author_id, sanitized_content, created_at, created_at))
+            query = """
+                INSERT INTO comments 
+                (post_id, author, content, created_at, updated_at, parent_comment_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """
+            cursor.execute(query, (post_id, author_id, sanitized_content, created_at, created_at, parent_comment_id))
+        else:
+            query = """
+                INSERT INTO comments 
+                (post_id, author, content, created_at, updated_at, parent_comment_id)
+                VALUES (?, ?, ?, ?, ?, NULL)
+            """
+            cursor.execute(query, (post_id, author_id, sanitized_content, created_at, created_at))
 
         cursor.execute("UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?", (post_id,))
         cursor.execute("UPDATE users SET comment_count = comment_count + 1 WHERE login_id = ?", (author_id,))
 
         update_exp_level(author_id, 10)
 
-        add_log('ADD_COMMENT', author_id, f"게시글 (id : {post_id})에 댓글을 작성했습니다. 내용 : {sanitized_content}")
+        log_details = f"게시글(id:{post_id})에 댓글 작성. 내용:{sanitized_content}"
+        if parent_comment_id:
+            log_details = f"댓글(id:{parent_comment_id})에 답글 작성. 내용:{sanitized_content}"
+        add_log('ADD_COMMENT', author_id, log_details)
 
         conn.commit()
 
     except Exception as e:
         print(f"Database error while adding comment: {e}")
-        add_log('ERROR', author_id, f"Error adding comment to post id {post_id}: {e}")
         conn.rollback()
         return Response('<script>alert("댓글 작성 중 오류가 발생했습니다."); history.back();</script>')
 

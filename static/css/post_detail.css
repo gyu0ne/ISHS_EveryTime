@@ -475,3 +475,25 @@ body {
 .author-info-link:hover .author-name {
     text-decoration: underline;
 }
+
+.reply-list {
+    list-style: none;
+    padding-left: 36px; /* 대댓글 들여쓰기 */
+    margin-top: 20px;
+    border-top: 1px solid #444;
+}
+
+.reply-item {
+    padding: 20px 0;
+    border-bottom: 1px solid #444;
+}
+.reply-item:last-child {
+    border-bottom: none;
+}
+
+/* 답글 작성 폼 */
+.reply-form-wrapper {
+    display: none; /* 평소에는 숨겨둠 */
+    padding-left: 36px;
+    margin-top: 15px;
+}

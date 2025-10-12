@@ -4,7 +4,158 @@
 
 {% block head %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/post_detail.css') }}">
+    <script>
+        function toggleEdit(commentId) {
+            const commentItem = document.getElementById('comment-' + commentId);
+            const viewDiv = commentItem.querySelector('.comment-view');
+            const editDiv = commentItem.querySelector('.comment-edit');
+
+            if (viewDiv.style.display === 'none') {
+                viewDiv.style.display = 'block';
+                editDiv.style.display = 'none';
+            } else {
+                viewDiv.style.display = 'none';
+                editDiv.style.display = 'block';
+            }
+        }
+
+        function toggleReplyForm(commentId) {
+            const replyForm = document.getElementById('reply-form-' + commentId);
+            if (replyForm.style.display === 'block') {
+                replyForm.style.display = 'none';
+            } else {
+                replyForm.style.display = 'block';
+            }
+        }
+    
+        async function handleReaction(targetType, targetId, reactionType) {
+            const csrfToken = "{{ csrf_token() }}";
+            
+            try {
+                const response = await fetch(`/react/${targetType}/${targetId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: `reaction_type=${reactionType}`
+                });
+
+                if (!response.ok) throw new Error('서버 통신 실패');
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    document.getElementById(`${targetType}-likes-count-${targetId}`).innerText = data.likes;
+                    document.getElementById(`${targetType}-dislikes-count-${targetId}`).innerText = data.dislikes;
+                    
+                    const scoreEl = document.getElementById(`${targetType}-score-${targetId}`);
+                    if (scoreEl) {
+                        const score = data.likes - data.dislikes;
+                        scoreEl.querySelector('.score-text').innerText = score;
+                        scoreEl.className = 'reaction-score';
+                        if (score > 0) scoreEl.classList.add('score-plus');
+                        if (score < 0) scoreEl.classList.add('score-minus');
+                    }
+
+                    const likeBtn = document.getElementById(`${targetType}-like-btn-${targetId}`);
+                    const dislikeBtn = document.getElementById(`${targetType}-dislike-btn-${targetId}`);
+                    likeBtn.classList.remove('active');
+                    dislikeBtn.classList.remove('active');
+                    if (data.user_reaction === 'like') {
+                        likeBtn.classList.add('active');
+                    } else if (data.user_reaction === 'dislike') {
+                        dislikeBtn.classList.add('active');
+                    }
+                } else {
+                    alert(data.message || '오류 발생');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('요청 처리 중 오류 발생');
+            }
+        }
+    </script>
 {% endblock %}
+
+{% macro render_comment(comment, post_id) %}
+<li class="comment-item" id="comment-{{ comment.id }}">
+    <div class="comment-view">
+        <a href="{{ url_for('user_profile', nickname=comment.nickname) }}" class="author-info-link">
+            <div class="comment-author">
+                <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진">
+                <span class="author-name">{{ comment.nickname }}</span>
+            </div>
+        </a>
+        <div class="comment-body">
+            <p class="comment-text">
+                {{ comment.content }}
+                {% if comment.created_at != comment.updated_at %}
+                    <span class="edited-indicator">(수정됨)</span>
+                {% endif %}
+            </p>
+            <div class="comment-meta">
+                <span class="comment-date">{{ comment.updated_at|datetime }}</span>
+                <div class="comment-actions">
+                    <button type="button" 
+                            class="btn-reaction {% if comment.user_reaction == 'like' %}active{% endif %}"
+                            onclick="handleReaction('comment', {{ comment.id }}, 'like')">
+                        👍 <span id="comment-likes-count-{{ comment.id }}">{{ comment.likes }}</span>
+                    </button>
+                    
+                    <button type="button" 
+                            class="btn-reaction {% if comment.user_reaction == 'dislike' %}active{% endif %}"
+                            onclick="handleReaction('comment', {{ comment.id }}, 'dislike')">
+                        👎 <span id="comment-dislikes-count-{{ comment.id }}">{{ comment.dislikes }}</span>
+                    </button>
+
+                    {% if not comment.parent_comment_id %}
+                    <a href="#" onclick="toggleReplyForm('{{ comment.id }}'); return false;">답글</a>
+                    {% endif %}
+                    
+                    {% if g.user and (g.user.login_id == comment.author or g.user.role == 'admin') %}
+                    <a href="#" onclick="toggleEdit('{{ comment.id }}'); return false;">수정</a>
+                    <form method="POST" action="{{ url_for('delete_comment', comment_id=comment.id) }}" onsubmit="return confirm('정말로 삭제하시겠습니까?');" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit">삭제</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if g.user and g.user.login_id == comment.author %}
+    <div class="comment-edit" style="display: none;">
+        <form method="POST" action="{{ url_for('edit_comment', comment_id=comment.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <textarea name="edit_content" required>{{ comment.content }}</textarea>
+            <div class="edit-actions">
+                <button type="button" class="btn-cancel" onclick="toggleEdit('{{ comment.id }}'); return false;">취소</button>
+                <button type="submit" class="btn-save">저장</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    <div class="reply-form-wrapper" id="reply-form-{{ comment.id }}">
+        <form class="comment-form" method="POST" action="{{ url_for('add_comment', post_id=post_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="parent_comment_id" value="{{ comment.id }}">
+            <textarea name="comment_content" placeholder="{{ comment.nickname }}님에게 답글 남기기..." required minlength="1"></textarea>
+            <button type="submit">등록</button>
+        </form>
+    </div>
+
+    {% if comment.replies %}
+        <ul class="reply-list">
+            {% for reply in comment.replies %}
+                {{ render_comment(reply, post_id) }}
+            {% endfor %}
+        </ul>
+    {% endif %}
+</li>
+{% endmacro %}
+
 
 {% block content %}
     <div class="container">
@@ -33,7 +184,7 @@
                     {% else %}
                         <span>수정일: {{ post.updated_at|datetime }}</span>
                     {% endif %}
-                    <span>조회수: {{ post.view_count + 1 }}</span> 
+                    <span>조회수: {{ post.view_count }}</span> 
                 </div>
             </header>
 
@@ -41,7 +192,7 @@
                 {{ post.content|safe }}
             </div>
 
-            {% if session['user_id'] == post.author %}
+            {% if session['user_id'] == post.author or g.user.role == 'admin' %}
             <div class="author-actions">
                 <a href="{{ url_for('post_edit', post_id=post.id) }}" class="btn btn-edit">수정</a>
                 <form action="{{ url_for('post_delete', post_id=post.id) }}" method="POST" onsubmit="return confirm('정말로 삭제하시겠습니까?');" style="display: inline;">
@@ -75,7 +226,7 @@
         </div>
 
         <div class="comments-card">
-            <h3>댓글 {{ comments|length }}개</h3>
+            <h3>댓글 {{ post.comment_count }}개</h3>
             
             <form class="comment-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -85,62 +236,7 @@
             <ul class="comment-list">
                 {% if comments %}
                     {% for comment in comments %}
-                    <li class="comment-item" id="comment-{{ comment.id }}">
-                        <div class="comment-view">
-                            <a href="{{ url_for('user_profile', nickname=comment.nickname) }}" class="author-info-link">
-                                <div class="comment-author">
-                                    <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진">
-                                    <span class="author-name">{{ comment.nickname }}</span>
-                                </div>
-                            </a>
-                            <div class="comment-body">
-                                <p class="comment-text">
-                                    {{ comment.content }}
-                                    {% if comment.created_at != comment.updated_at %}
-                                        <span class="edited-indicator">(수정됨)</span>
-                                    {% endif %}
-                                </p>
-                                <div class="comment-meta">
-                                    <span class="comment-date">{{ comment.updated_at|datetime }}</span>
-                                    {% if g.user and (g.user.login_id == comment.author or g.user.role == 'admin') %}
-                                    <div class="comment-actions">
-                                        <button type="button" 
-                                                class="btn-reaction {% if comment.user_reaction == 'like' %}active{% endif %}"
-                                                id="comment-like-btn-{{ comment.id }}"
-                                                onclick="handleReaction('comment', {{ comment.id }}, 'like')">
-                                            👍 <span id="comment-likes-count-{{ comment.id }}">{{ comment.likes }}</span>
-                                        </button>
-                                        
-                                        <button type="button" 
-                                                class="btn-reaction {% if comment.user_reaction == 'dislike' %}active{% endif %}"
-                                                id="comment-dislike-btn-{{ comment.id }}"
-                                                onclick="handleReaction('comment', {{ comment.id }}, 'dislike')">
-                                            👎 <span id="comment-dislikes-count-{{ comment.id }}">{{ comment.dislikes }}</span>
-                                        </button>
-                                        <a href="#" onclick="toggleEdit('{{ comment.id }}'); return false;">수정</a>
-                                        <form method="POST" action="{{ url_for('delete_comment', comment_id=comment.id) }}" onsubmit="return confirm('정말로 삭제하시겠습니까?');">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                            <button type="submit">삭제</button>
-                                        </form>
-                                    </div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-
-                        {% if g.user and g.user.login_id == comment.author %}
-                        <div class="comment-edit" style="display: none;">
-                            <form method="POST" action="{{ url_for('edit_comment', comment_id=comment.id) }}">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                <textarea name="edit_content" required>{{ comment.content }}</textarea>
-                                <div class="edit-actions">
-                                    <button type="button" class="btn-cancel" onclick="toggleEdit('{{ comment.id }}'); return false;">취소</button>
-                                    <button type="submit" class="btn-save">저장</button>
-                                </div>
-                            </form>
-                        </div>
-                        {% endif %}
-                    </li>
+                        {{ render_comment(comment, post.id) }}
                     {% endfor %}
                 {% else %}
                     <li style="text-align: center; padding: 30px 0; border: none;">작성된 댓글이 없습니다.</li>
@@ -152,76 +248,4 @@
             <a href="{{ url_for('post_list', board_id=post.board_id) }}" class="btn btn-list">목록으로</a>
         </div>
     </div>
-    <script>
-        function toggleEdit(commentId) {
-            const commentItem = document.getElementById('comment-' + commentId);
-            const viewDiv = commentItem.querySelector('.comment-view');
-            const editDiv = commentItem.querySelector('.comment-edit');
-
-            if (viewDiv.style.display === 'none') {
-                // 수정 모드 -> 보기 모드로 전환 (취소)
-                viewDiv.style.display = 'block';
-                editDiv.style.display = 'none';
-            } else {
-                // 보기 모드 -> 수정 모드로 전환
-                viewDiv.style.display = 'none';
-                editDiv.style.display = 'block';
-            }
-        }
-    
-        async function handleReaction(targetType, targetId, reactionType) {
-            const csrfToken = "{{ csrf_token() }}";
-            const form = new FormData();
-            form.append('reaction_type', reactionType);
-            form.append('csrf_token', csrfToken);
-
-            try {
-                const response = await fetch(`/react/${targetType}/${targetId}`, {
-                    method: 'POST',
-                    body: form,
-                });
-
-                if (!response.ok) {
-                    throw new Error('서버와의 통신에 실패했습니다.');
-                }
-
-                const data = await response.json();
-
-                if (data.status === 'success') {
-                    // UI 업데이트
-                    const likesCountEl = document.getElementById(`${targetType}-likes-count-${targetId}`);
-                    const dislikesCountEl = document.getElementById(`${targetType}-dislikes-count-${targetId}`);
-                    const scoreEl = document.getElementById(`${targetType}-score-${targetId}`);
-                    const likeBtn = document.getElementById(`${targetType}-like-btn-${targetId}`);
-                    const dislikeBtn = document.getElementById(`${targetType}-dislike-btn-${targetId}`);
-
-                    likesCountEl.innerText = data.likes;
-                    dislikesCountEl.innerText = data.dislikes;
-                    
-                    if (scoreEl) { // 게시글에만 scoreEl이 존재
-                        const score = data.likes - data.dislikes;
-                        if (score > 0) scoreEl.innerText = "+"+score;
-                        else scoreEl.innerText = score;
-                        scoreEl.className = 'reaction-score'; // 클래스 초기화
-                        if (score > 0) scoreEl.classList.add('score-plus');
-                        if (score < 0) scoreEl.classList.add('score-minus');
-                    }
-
-                    // 버튼 활성화 상태 업데이트
-                    likeBtn.classList.remove('active');
-                    dislikeBtn.classList.remove('active');
-                    if (data.user_reaction === 'like') {
-                        likeBtn.classList.add('active');
-                    } else if (data.user_reaction === 'dislike') {
-                        dislikeBtn.classList.add('active');
-                    }
-                } else {
-                    alert(data.message || '오류가 발생했습니다.');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('요청 처리 중 오류가 발생했습니다.');
-            }
-        }
-    </script>
 {% endblock %}
