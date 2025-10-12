@@ -101,7 +101,9 @@
 
     <aside class="sidebar right-sidebar">
         <div class="widget search-widget">
-            <input type="text" placeholder="전체 게시판의 글을 검색하세요!">
+            <form method="GET" action="{{ url_for('search') }}">
+                <input type="text" name="q" placeholder="전체 게시판의 글을 검색하세요!">
+            </form>
         </div>
         <div class="widget">
             <h3>실시간 인기 글</h3>

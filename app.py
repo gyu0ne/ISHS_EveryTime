@@ -1534,6 +1534,81 @@ def delete_account():
         conn.rollback()
         print(f"Error during account deletion: {e}")
         return Response('<script>alert("계정 삭제 중 오류가 발생했습니다."); history.back();</script>')
+    
+@app.route('/search')
+@login_required
+def search():
+    query = request.args.get('q', '').strip()
+    page = request.args.get('page', 1, type=int)
+    posts_per_page = 20
+
+    if not query:
+        return redirect(request.referrer or url_for('main_page'))
+
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # FTS 검색어 형식으로 변경 (띄어쓰기를 AND 연산자로)
+    # 예: "안녕 하세요" -> "안녕 AND 하세요"
+    search_term_fts = ' AND '.join(query.split())
+    # 닉네임 검색은 기존 LIKE 방식 유지
+    search_term_like = f'%{query}%'
+
+    try:
+        # 1. 검색 결과 총 개수 조회 (FTS와 닉네임 검색 결과를 합산)
+        # FTS를 사용하여 제목/내용 검색, LIKE를 사용하여 닉네임 검색
+        count_query = """
+            SELECT COUNT(DISTINCT p.id)
+            FROM posts p
+            JOIN users u ON p.author = u.login_id
+            WHERE 
+                (p.id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH ?))
+                OR (u.nickname LIKE ?)
+        """
+        cursor.execute(count_query, (search_term_fts, search_term_like))
+        total_posts = cursor.fetchone()[0]
+        total_pages = math.ceil(total_posts / posts_per_page) if total_posts > 0 else 1
+
+        # 2. 현재 페이지에 해당하는 검색 결과 목록 조회
+        offset = (page - 1) * posts_per_page
+        search_query = """
+            SELECT
+                p.id, p.title, p.comment_count, p.updated_at, p.view_count,
+                u.nickname,
+                b.board_name,
+                SUM(CASE WHEN r.reaction_type = 'like' THEN 1 WHEN r.reaction_type = 'dislike' THEN -1 ELSE 0 END) as net_reactions
+            FROM posts p
+            JOIN users u ON p.author = u.login_id
+            JOIN board b ON p.board_id = b.board_id
+            LEFT JOIN reactions r ON r.target_id = p.id AND r.target_type = 'post'
+            WHERE 
+                (p.id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH ?))
+                OR (u.nickname LIKE ?)
+              AND u.status = 'active'
+            GROUP BY p.id
+            ORDER BY p.updated_at DESC
+            LIMIT ? OFFSET ?
+        """
+        cursor.execute(search_query, (search_term_fts, search_term_like, posts_per_page, offset))
+        posts = cursor.fetchall()
+
+    except sqlite3.OperationalError as e:
+        # FTS 구문 오류 등 예외 처리
+        if "fts5" in str(e):
+             return Response('<script>alert("검색어에 특수문자를 사용할 수 없습니다."); history.back();</script>')
+        print(f"Error during search: {e}")
+        return Response('<script>alert("검색 중 오류가 발생했습니다."); history.back();</script>')
+    except Exception as e:
+        print(f"Error during search: {e}")
+        return Response('<script>alert("검색 중 오류가 발생했습니다."); history.back();</script>')
+    
+    return render_template('search_results.html',
+                           posts=posts,
+                           query=query,
+                           total_posts=total_posts,
+                           total_pages=total_pages,
+                           current_page=page, user=g.user)
 
 @app.errorhandler(413)
 def request_entity_too_large(error):

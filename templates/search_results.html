@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}log인곽 - {{ board.board_name if board else '게시판' }}{% endblock %}
+{% block title %}log인곽 - '{{ query }}' 검색 결과{% endblock %}
 
 {% block head %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/post_list.css') }}">
@@ -9,12 +9,13 @@
 {% block content %}
     <div class="container">
         <header class="board-header">
-            <div class="board-nav">
-                <h2>{{ board.board_name }}</h2>
+            <div class="board-nav" style="display: flex; align-items: center; gap: 15px;">
+                <a href="javascript:history.back()" class="btn btn-back" style="font-size: 24px; width: 38px; height: 38px; border-radius: 50%; display: inline-flex; justify-content: center; align-items: center;">‹</a>
+                <h2>'{{ query }}' 검색 결과 ({{ total_posts }}개)</h2>
             </div>
             <div class="board-actions">
                 <form method="GET" action="{{ url_for('search') }}">
-                    <input type="text" name="q" class="board-search" placeholder="게시판 내 검색...">
+                    <input type="text" name="q" class="board-search" placeholder="다시 검색..." value="{{ query }}">
                 </form>
                 <a href="{{ url_for('post_write') }}" class="btn btn-write">글쓰기</a>
             </div>
@@ -22,7 +23,7 @@
 
         <div class="board-card">
             <div class="list-header">
-                <span class="col-id">id</span>
+                <span class="col-id">게시판</span>
                 <span class="col-title">제목</span>
                 <span class="col-author">작성자</span>
                 <span class="col-date">작성일</span>
@@ -30,26 +31,10 @@
                 <span class="col-likes">추천</span>
             </div>
             <ul class="post-list">
-                {% if current_page == 1 and notices %}
-                    {% for notice in notices %}
-                    <li class="notice">
-                        <span class="col-id">공지</span>
-                        <span class="col-title">
-                            <a href="{{ url_for('post_detail', post_id=notice.id) }}">{{ notice.title }}</a>
-                        </span>
-                        <span class="col-author"><a href="{{ url_for('user_profile', nickname=notice.nickname) }}">{{ notice.nickname }}</a></span>
-                        <span class="col-date">{{ notice.updated_at|datetime }}</span> <span class="col-views">{{ notice.view_count }}</span>
-                        <span class="col-likes {% if notice.net_reactions > 0 %}score-plus{% elif notice.net_reactions < 0 %}score-minus{% endif %}">
-                            {{ notice.net_reactions if notice.net_reactions is not none else 0 }}
-                        </span>
-                    </li>
-                    {% endfor %}
-                {% endif %}
-
-                {% if posts or notices %}
+                {% if posts %}
                     {% for post in posts %}
                     <li>
-                        <span class="col-id">{{ post.id }}</span>
+                        <span class="col-id">{{ post.board_name }}</span>
                         <span class="col-title">
                             <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
                             {% if post.comment_count > 0 %}
@@ -66,7 +51,7 @@
                     {% endfor %}
                 {% else %}
                     <li style="text-align: center; display: block; padding: 50px 0; border: none;">
-                        작성된 게시글이 없습니다.
+                        검색 결과가 없습니다.
                     </li>
                 {% endif %}
             </ul>
@@ -75,18 +60,18 @@
         <nav class="pagination">
             {% if total_pages > 1 %}
                 {% if current_page > 1 %}
-                    <a href="{{ url_for('post_list', board_id=board_id, page=current_page-1) }}" class="nav-arrow">‹</a>
+                    <a href="{{ url_for('search', q=query, page=current_page-1) }}" class="nav-arrow">‹</a>
                 {% endif %}
 
                 {% for page_num in range(1, total_pages + 1) %}
-                    <a href="{{ url_for('post_list', board_id=board_id, page=page_num) }}"
+                    <a href="{{ url_for('search', q=query, page=page_num) }}"
                        class="{{ 'active' if page_num == current_page else '' }}">
                         {{ page_num }}
                     </a>
                 {% endfor %}
 
                 {% if current_page < total_pages %}
-                    <a href="{{ url_for('post_list', board_id=board_id, page=current_page+1) }}" class="nav-arrow">›</a>
+                    <a href="{{ url_for('search', q=query, page=current_page+1) }}" class="nav-arrow">›</a>
                 {% endif %}
             {% endif %}
         </nav>
