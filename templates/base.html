@@ -68,50 +68,61 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // --- UI 요소 변수 선언 ---
             const bell = document.getElementById('notification-bell');
             const dropdown = document.getElementById('notification-dropdown');
             const badge = document.getElementById('notification-badge');
             const list = document.getElementById('notification-list');
 
-            async function fetchUnreadCount() {
+            // --- 함수 정의 ---
+
+            /** 알림 메시지 문자열을 생성하는 헬퍼 함수 */
+            function createNotificationMessage(n) {
+                let message = '';
+                if (n.action === 'comment') {
+                    message = `<span class="actor">${n.actor_nickname}</span>님이 회원님의 게시글에 댓글을 남겼습니다.`;
+                } else if (n.action === 'reply') {
+                    message = `<span class="actor">${n.actor_nickname}</span>님이 회원님의 댓글에 답글을 남겼습니다.`;
+                } else if (n.action === 'hot_post') {
+                    message = `회원님의 게시글이 추천 10개를 받아 <strong>HOT 게시물</strong>이 되었습니다!`;
+                }
+                return message;
+            }
+
+            /** 서버에 알림을 읽음 상태로 변경하도록 요청하는 함수 */
+            async function markAsRead(notificationId) {
                 try {
-                    const response = await fetch('/notifications/unread-count');
-                    const data = await response.json();
-                    if (data.count > 0) {
-                        badge.textContent = data.count;
-                        badge.style.display = 'block';
-                    } else {
-                        badge.style.display = 'none';
-                    }
+                    await fetch(`/notifications/read/${notificationId}`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token() }}'
+                        }
+                    });
                 } catch (error) {
-                    console.error('Error fetching unread count:', error);
+                    console.error('Error marking as read:', error);
                 }
             }
 
+            /** 서버로부터 전체 알림 목록을 가져와 드롭다운을 채우는 함수 */
             async function fetchNotifications() {
                 try {
                     const response = await fetch('/notifications');
                     const notifications = await response.json();
-                    list.innerHTML = ''; // 기존 목록 비우기
+                    
+                    list.innerHTML = ''; // 1. 기존 목록을 깨끗하게 비웁니다.
+
                     if (notifications.length === 0) {
-                        // 수정: 'no-notifications' 클래스를 가진 li 요소를 생성
+                        // 2. 알림이 하나도 없으면, '알림 없음' 메시지를 표시합니다.
                         list.innerHTML = '<li class="no-notifications"><a href="#" style="cursor: default;">새로운 알림이 없습니다.</a></li>';
                     } else {
+                        // 3. 알림이 있으면 목록을 만듭니다.
                         notifications.forEach(n => {
                             const li = document.createElement('li');
                             if (n.is_read) {
                                 li.classList.add('is-read');
                             }
-                            let message = '';
-                            if (n.action === 'comment') {
-                                message = `<span class="actor">${n.actor_nickname}</span>님이 회원님의 게시글에 댓글을 남겼습니다.`;
-                            } else if (n.action === 'reply') {
-                                message = `<span class="actor">${n.actor_nickname}</span>님이 회원님의 댓글에 답글을 남겼습니다.`;
-                            }
-                            else if (n.action === 'hot_post') {
-                                message = `회원님의 게시글이 추천 10개를 받아 <strong>HOT 게시물</strong>이 되었습니다!`;
-                            }
                             
+                            const message = createNotificationMessage(n);
                             const link = document.createElement('a');
                             link.href = `/post/${n.post_id}`;
                             link.innerHTML = message;
@@ -126,39 +137,92 @@
                     }
                 } catch (error) {
                     console.error('Error fetching notifications:', error);
-                }
-            }
-            
-            async function markAsRead(notificationId) {
-                try {
-                    await fetch(`/notifications/read/${notificationId}`, { 
-                        method: 'POST',
-                        headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
-                    });
-                } catch (error) {
-                    console.error('Error marking as read:', error);
+                    // 에러 발생 시에도 '알림 없음'과 유사한 메시지를 표시해 사용자 혼란을 방지
+                    list.innerHTML = '<li class.no-notifications"><a href="#" style="cursor: default;">알림을 불러오지 못했습니다.</a></li>';
                 }
             }
 
+            /** 페이지 로드 시 읽지 않은 알림 개수를 가져와 뱃지에 표시하는 함수 */
+            async function fetchInitialUnreadCount() {
+                try {
+                    const response = await fetch('/notifications/unread-count');
+                    const data = await response.json();
+                    if (data.count > 0) {
+                        badge.textContent = data.count;
+                        badge.style.display = 'block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Error fetching initial unread count:', error);
+                }
+            }
+
+
+            // --- 실시간 알림 수신 로직 (Server-Sent Events) ---
+
+            /** SSE 연결을 설정하고 실시간으로 알림을 수신합니다. */
+            function setupEventSource() {
+                const eventSource = new EventSource("{{ url_for('stream') }}");
+
+                // 서버로부터 새로운 메시지(알림)가 도착했을 때 실행
+                eventSource.onmessage = function(event) {
+                    const notification = JSON.parse(event.data);
+
+                    // 1. 뱃지 숫자 업데이트
+                    badge.style.display = 'block';
+                    const currentCount = parseInt(badge.textContent || '0');
+                    badge.textContent = currentCount + 1;
+
+                    // 2. 드롭다운 목록에 새 알림 추가
+                    const noNotificationItem = list.querySelector('.no-notifications');
+                    if (noNotificationItem) {
+                        noNotificationItem.remove(); // '알림 없음' 메시지가 있었다면 제거
+                    }
+
+                    const li = document.createElement('li');
+                    const message = createNotificationMessage(notification);
+                    const link = document.createElement('a');
+                    link.href = `/post/${notification.post_id}`;
+                    link.innerHTML = message;
+                    link.onclick = async (e) => {
+                        e.preventDefault();
+                        if (!li.classList.contains('is-read')) {
+                        await markAsRead(notification.id);
+                        }
+                        window.location.href = link.href;
+                    };
+                    li.appendChild(link);
+                    list.prepend(li); // prepend를 사용해 목록의 맨 위에 추가
+                };
+
+                // SSE 연결에 에러가 발생했을 때 실행
+                eventSource.onerror = function(err) {
+                    console.error("EventSource failed:", err);
+                    eventSource.close(); // 에러 발생 시 연결 종료
+                };
+            }
+            
+            // --- 이벤트 리스너 및 초기화 ---
+            
+            // 알림 벨 아이콘 클릭 이벤트
             bell.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const isVisible = dropdown.style.display === 'block';
-                if (isVisible) {
-                    dropdown.style.display = 'none';
-                } else {
-                    dropdown.style.display = 'block';
-                    fetchNotifications();
-                }
+                dropdown.style.display = isVisible ? 'none' : 'block';
             });
 
+            // 드롭다운 외부 영역 클릭 시 드롭다운 닫기
             document.addEventListener('click', (e) => {
                 if (!bell.contains(e.target)) {
                     dropdown.style.display = 'none';
                 }
             });
-            
-            fetchUnreadCount();
-            setInterval(fetchUnreadCount, 30000); 
+
+            // --- 페이지 로드 시 실행될 초기화 함수들 ---
+            fetchInitialUnreadCount(); // 1. 최초 알림 뱃지 개수 설정
+            fetchNotifications();       // 2. 최초 드롭다운 목록 구성 ('알림 없음' 메시지 표시 포함)
+            setupEventSource();         // 3. 실시간 알림 수신 시작
         });
     </script>
 </body>

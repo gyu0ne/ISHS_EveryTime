@@ -63,6 +63,27 @@ def close_log_connection(exception):
     if db is not None:
         db.close()
 
+class NotificationChannel:
+    def __init__(self):
+        self.clients = {} # { 'user_id': Queue(), ... }
+
+    def subscribe(self, user_id):
+        # 사용자가 접속하면, 해당 사용자를 위한 큐(채널)를 생성
+        self.clients[user_id] = Queue()
+        return self.clients[user_id]
+
+    def unsubscribe(self, user_id):
+        # 사용자가 접속을 끊으면 채널 삭제
+        self.clients.pop(user_id, None)
+
+    def publish(self, user_id, message):
+        # 특정 사용자에게 메시지(알림)를 보냄
+        if user_id in self.clients:
+            self.clients[user_id].put_nowait(message)
+
+# 전역 변수로 알림 채널 객체 생성
+notification_channel = NotificationChannel()
+
 def create_notification(recipient_id, actor_id, action, target_type, target_id, post_id):
     """알림을 생성하고 DB에 저장하는 함수"""
     # 자기 자신에게는 알림을 보내지 않음
@@ -79,6 +100,21 @@ def create_notification(recipient_id, actor_id, action, target_type, target_id, 
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (recipient_id, actor_id, action, target_type, target_id, post_id, created_at))
     conn.commit()
+
+    cursor.execute("SELECT u.nickname FROM users u WHERE u.login_id = ?", (actor_id,))
+    actor = cursor.fetchone()
+    actor_nickname = actor['nickname'] if actor else '알 수 없음'
+
+    message = {
+        'action': action,
+        'actor_nickname': actor_nickname,
+        'post_id': post_id,
+        'is_read': 0, # 새 알림이므로 is_read는 0
+        'id': cursor.lastrowid # 방금 생성된 알림의 ID
+    }
+
+    # 3. 알림 채널을 통해 해당 사용자에게 메시지 발행(publish)
+    notification_channel.publish(recipient_id, message)
 
 # Add Log to log.db
 def add_log(action, user_id, details):
@@ -422,6 +458,26 @@ def login_required(f):
             return Response('<script> alert("로그인 사용자만 접근할 수 있습니다."); history.back(); </script>')
         return f(*args, **kwargs)
     return decorated_function
+
+@app.route('/stream')
+@login_required
+def stream():
+    def event_stream():
+        # 현재 로그인한 사용자를 위한 알림 채널을 구독
+        user_id = g.user['login_id']
+        messages = notification_channel.subscribe(user_id)
+        try:
+            while True:
+                # 큐에 새로운 메시지가 들어올 때까지 대기
+                message = messages.get()
+                # SSE 형식에 맞춰 "data: {json_string}\n\n" 형태로 전송
+                yield f"data: {json.dumps(message)}\n\n"
+        except GeneratorExit:
+            # 클라이언트 연결이 끊어지면 구독 해제
+            notification_channel.unsubscribe(user_id)
+
+    # text/event-stream MIME 타입으로 응답
+    return Response(event_stream(), mimetype='text/event-stream')
 
 # Riro Auth
 @app.route('/riro-auth', methods=['GET', 'POST'])

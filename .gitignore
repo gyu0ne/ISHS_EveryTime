@@ -1,6 +1,8 @@
 memo.txt
 *.hwpx
 
+debug_tool.py
+
 .env
 
 *.exe
