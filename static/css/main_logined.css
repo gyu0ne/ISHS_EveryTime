@@ -521,6 +521,9 @@ main {
     border-bottom: 1px solid #3a3a3a;
     padding: 10px 13px;
     margin: 10px 13px;
+    white-space: normal;      /* 텍스트가 자동으로 줄바꿈되도록 허용 */
+    word-wrap: break-word;    /* 긴 단어나 URL이 강제로 줄바꿈되도록 처리 */
+    line-height: 1.4;         /* 여러 줄일 때 가독성을 위한 줄 간격 설정 */
 }
 
 .notification-list li:last-child a {

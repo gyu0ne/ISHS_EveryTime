@@ -41,10 +41,11 @@
                     body: `reaction_type=${reactionType}`
                 });
 
-                if (!response.ok) throw new Error('서버 통신 실패');
+                // 서버로부터 받은 응답을 JSON 형태로 파싱합니다.
                 const data = await response.json();
 
-                if (data.status === 'success') {
+                // 서버 응답의 status가 'success'일 때만 UI를 업데이트합니다.
+                if (response.ok && data.status === 'success') {
                     document.getElementById(`${targetType}-likes-count-${targetId}`).innerText = data.likes;
                     document.getElementById(`${targetType}-dislikes-count-${targetId}`).innerText = data.dislikes;
                     
@@ -67,11 +68,14 @@
                         dislikeBtn.classList.add('active');
                     }
                 } else {
-                    alert(data.message || '오류 발생');
+                    // status가 'success'가 아니거나, 응답 코드가 2xx가 아닐 경우
+                    // 서버가 보낸 오류 메시지(data.message)를 경고창으로 띄웁니다.
+                    alert(data.message || '요청 처리 중 오류가 발생했습니다.');
                 }
             } catch (error) {
+                // 네트워크 오류 등 fetch 자체가 실패했을 경우
                 console.error('Error:', error);
-                alert('요청 처리 중 오류 발생');
+                alert('서버와 통신하는 중 오류가 발생했습니다.');
             }
         }
     </script>

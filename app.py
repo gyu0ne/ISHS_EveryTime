@@ -63,6 +63,65 @@ def close_log_connection(exception):
     if db is not None:
         db.close()
 
+@app.before_request
+def load_logged_in_user():
+    user_id = session.get('user_id')
+    if user_id is None:
+        g.user = None
+    else:
+        conn = get_db()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE login_id = ?", (user_id,))
+        g.user = cursor.fetchone()
+
+@app.before_request
+def check_ban_status():
+    """
+    모든 요청 전에 사용자의 제재 상태를 확인하고,
+    제재 기간이 만료되었다면 자동으로 상태를 'active'로 변경합니다.
+    """
+    if g.user and g.user['status'] == 'banned' and g.user['banned_until']:
+        try:
+            banned_until_date = datetime.strptime(g.user['banned_until'], '%Y-%m-%d %H:%M:%S')
+            if datetime.now() > banned_until_date:
+                # 제재 기간 만료, 상태를 active로 변경
+                conn = get_db()
+                cursor = conn.cursor()
+                cursor.execute("UPDATE users SET status = 'active', banned_until = NULL WHERE login_id = ?", (g.user['login_id'],))
+                conn.commit()
+                # g.user 객체도 실시간으로 갱신
+                g.user = conn.execute("SELECT * FROM users WHERE login_id = ?", (g.user['login_id'],)).fetchone()
+        except (ValueError, TypeError):
+            # 날짜 형식이 잘못되었거나 NULL인 경우
+            pass
+
+# --- 👇 [추가] 제재된 사용자의 활동을 제한하는 데코레이터 ---
+def check_banned(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if g.user and g.user['status'] == 'banned':
+            # 제재 메시지 생성
+            message = "활동이 정지된 계정입니다."
+            if g.user['banned_until']:
+                try:
+                    expiry_date = datetime.strptime(g.user['banned_until'], '%Y-%m-%d %H:%M:%S').strftime('%Y년 %m월 %d일 %H:%M')
+                    message += f" (만료일: {expiry_date})"
+                except ValueError:
+                    pass # 날짜 형식이 잘못된 경우 그냥 기본 메시지만 표시
+
+            # 요청 경로를 확인하여 JSON을 반환할지 결정
+            if request.path.startswith('/react/'):
+                # '/react/' 경로로 시작하는 AJAX 요청에는 JSON으로 응답
+                return jsonify({'status': 'error', 'message': message}), 403 # 403 Forbidden 상태 코드
+            else:
+                # 그 외의 모든 요청에는 기존 방식대로 스크립트 응답
+                return Response(f'<script> alert("{message}"); history.back(); </script>')
+                
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 class NotificationChannel:
     def __init__(self):
         self.clients = {} # { 'user_id': Queue(), ... }
@@ -178,18 +237,6 @@ def check_auto_login():
 
             session['user_id'] = user[0]
             session.permanent = True
-
-@app.before_request
-def load_logged_in_user():
-    user_id = session.get('user_id')
-    if user_id is None:
-        g.user = None
-    else:
-        conn = get_db()
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE login_id = ?", (user_id,))
-        g.user = cursor.fetchone()
 
 # Bob (School Meal Information)
 def get_bob():
@@ -818,6 +865,7 @@ def mypage():
 # Post Write
 @app.route('/post-write', methods=['GET', 'POST'])
 @login_required
+@check_banned
 def post_write():
     conn = get_db()
     cursor = conn.cursor()
@@ -1074,6 +1122,7 @@ def post_detail(post_id):
 # Post Edit
 @app.route('/post-edit/<int:post_id>', methods=['GET', 'POST'])
 @login_required
+@check_banned
 def post_edit(post_id):
     conn = get_db()
     conn.row_factory = sqlite3.Row
@@ -1140,6 +1189,7 @@ def post_edit(post_id):
 # Post Delete
 @app.route('/post-delete/<int:post_id>', methods=['POST'])
 @login_required
+@check_banned
 def post_delete(post_id):
     conn = get_db()
     cursor = conn.cursor()
@@ -1211,6 +1261,7 @@ def post_delete(post_id):
 # Comment Add
 @app.route('/comment/add/<int:post_id>', methods=['POST'])
 @login_required
+@check_banned
 def add_comment(post_id):
     content = request.form.get('comment_content')
     parent_comment_id = request.form.get('parent_comment_id', None)
@@ -1297,6 +1348,7 @@ def add_comment(post_id):
 # Comment Delete
 @app.route('/comment/delete/<int:comment_id>', methods=['POST'])
 @login_required
+@check_banned
 def delete_comment(comment_id):
     conn = get_db()
     conn.row_factory = sqlite3.Row
@@ -1347,6 +1399,7 @@ def delete_comment(comment_id):
 # Comment Edit
 @app.route('/comment/edit/<int:comment_id>', methods=['POST'])
 @login_required
+@check_banned
 def edit_comment(comment_id):
     conn = get_db()
     conn.row_factory = sqlite3.Row
@@ -1389,6 +1442,7 @@ def edit_comment(comment_id):
 # React (Like/Dislike) for Post and Comment
 @app.route('/react/<target_type>/<int:target_id>', methods=['POST'])
 @login_required
+@check_banned
 def react(target_type, target_id):
     reaction_type = request.form.get('reaction_type')
     user_id = session['user_id']
