@@ -32,6 +32,10 @@ csrf = CSRFProtect(app)
 
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
 DATABASE = 'data.db'
 LOG_DATABASE = 'log.db'
 
@@ -87,8 +91,8 @@ def check_ban_status():
     """
     if g.user and g.user['status'] == 'banned' and g.user['banned_until']:
         try:
-            banned_until_date = datetime.strptime(g.user['banned_until'], '%Y-%m-%d %H:%M:%S')
-            if datetime.now() > banned_until_date:
+            banned_until_date = datetime.datetime.strptime(g.user['banned_until'], '%Y-%m-%d %H:%M:%S')
+            if datetime.datetime.now() > banned_until_date:
                 # 제재 기간 만료, 상태를 active로 변경
                 conn = get_db()
                 cursor = conn.cursor()
@@ -155,7 +159,7 @@ def create_notification(recipient_id, actor_id, action, target_type, target_id, 
 
     conn = get_db()
     cursor = conn.cursor()
-    created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     cursor.execute("""
         INSERT INTO notifications 
@@ -703,9 +707,12 @@ def register():
         print(year, month, day)
 
         try:
-            datetime.datetime.date(int(year), int(month), int(day))
-        except:
+            datetime.date(int(year), int(month), int(day))
+        except ValueError:
             return Response('<script> alert("생년월일 형식을 다시 확인하세요. 1"); history.back(); </script>')
+        except Exception as e:
+            print(e)
+            return Response('<script> alert("생년월일 형식을 다시 확인하세요. 3"); history.back(); </script>')
 
         if len(birth) != 8:
             return Response('<script> alert("생년월일 형식을 다시 확인하세요. 2"); history.back(); </script>')
@@ -783,7 +790,7 @@ def login():
                 conn.commit()
 
                 resp = make_response(redirect("/"))
-                resp.set_cookie('remember_token', token, max_age=timedelta(days=90), httponly=True)
+                resp.set_cookie('remember_token', token, max_age=datetime.timedelta(days=90), httponly=True)
                 return resp
 
             return redirect("/")
