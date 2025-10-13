@@ -797,6 +797,7 @@ def login():
             session.pop('gen', None)
             session.pop('agree', None)
             
+            session.regenerate()
             session['user_id'] = user[0]
 
             if remember:
@@ -819,6 +820,13 @@ def login():
 # logout
 @app.route('/logout')
 def logout():
+    if 'user_id' in session: # 로그인 상태인지 확인
+        conn = get_db()
+        cursor = conn.cursor()
+        # DB에서 자동 로그인 토큰 무효화
+        cursor.execute('UPDATE users SET autologin_token = NULL WHERE login_id = ?', (session['user_id'],))
+        conn.commit()
+
     session.clear()
 
     resp = make_response(redirect("/"))
@@ -1502,6 +1510,20 @@ def react(target_type, target_id):
     cursor = conn.cursor()
 
     try:
+        # --- ▼ IDOR 방어 로직 추가 ▼ ---
+        table_name = ''
+        if target_type == 'post':
+            table_name = 'posts'
+        elif target_type == 'comment':
+            table_name = 'comments'
+        else:
+            return jsonify({'status': 'error', 'message': '잘못된 대상 타입입니다.'}), 400
+
+        cursor.execute(f"SELECT id FROM {table_name} WHERE id = ?", (target_id,))
+        target_obj = cursor.fetchone()
+        if not target_obj:
+            return jsonify({'status': 'error', 'message': '존재하지 않는 대상입니다.'}), 404
+
         cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = ? AND target_id = ?",
                        (user_id, target_type, target_id))
         existing_reaction = cursor.fetchone()
@@ -1763,12 +1785,15 @@ def change_password():
         hashed_pw = bcrypt.generate_password_hash(new_password).decode('utf-8')
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("UPDATE users SET pw = ? WHERE login_id = ?", (hashed_pw, session['user_id']))
+        cursor.execute("UPDATE users SET pw = ?, autologin_token = NULL WHERE login_id = ?", (hashed_pw, session['user_id']))
+
         conn.commit()
 
         add_log('CHANGE_PASSWORD', session['user_id'], "비밀번호를 변경했습니다.")
         
-        return Response('<script>alert("비밀번호가 성공적으로 변경되었습니다."); window.location.href = "/mypage";</script>')
+        resp = make_response('<script>alert("비밀번호가 성공적으로 변경되었습니다."); window.location.href = "/mypage";</script>')
+        resp.set_cookie('remember_token', '', max_age=0)
+        return resp
 
     return render_template('change_password.html', user=user)
 
