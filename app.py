@@ -1,4 +1,5 @@
 from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response, make_response
+from werkzeug.middleware.proxy_fix import ProxyFix
 from bleach.css_sanitizer import CSSSanitizer
 from werkzeug.utils import secure_filename
 from flask_sqlalchemy import SQLAlchemy
@@ -28,6 +29,8 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
 bcrypt = Bcrypt(app)
 csrf = CSRFProtect(app)
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 DATABASE = 'data.db'
 LOG_DATABASE = 'log.db'
@@ -1293,15 +1296,6 @@ def add_comment(post_id):
             # 부모 댓글이 최상위 댓글인지(parent_comment_id가 NULL인지) 확인
             cursor.execute("SELECT parent_comment_id FROM comments WHERE id = ?", (parent_comment_id,))
             parent_comment = cursor.fetchone()
-
-            create_notification(
-                recipient_id=parent_comment['author'],
-                actor_id=author_id,
-                action='reply',
-                target_type='comment',
-                target_id=parent_comment['id'],
-                post_id=post_id
-            )
             
             if not parent_comment:
                 return Response('<script>alert("답글을 작성할 원본 댓글이 존재하지 않습니다."); history.back();</script>')
@@ -1317,6 +1311,15 @@ def add_comment(post_id):
                 VALUES (?, ?, ?, ?, ?, ?)
             """
             cursor.execute(query, (post_id, author_id, sanitized_content, created_at, created_at, parent_comment_id))
+
+            create_notification(
+                recipient_id=parent_comment['author'],
+                actor_id=author_id,
+                action='reply',
+                target_type='comment',
+                target_id=parent_comment['id'],
+                post_id=post_id
+            )
         else:
             cursor.execute("SELECT author FROM posts WHERE id = ?", (post_id,))
             post = cursor.fetchone()
@@ -1733,18 +1736,21 @@ def delete_account():
     cursor = conn.cursor()
 
     try:
-        # --- 👇 수정된 부분 시작 ---
-        
-        # 재가입이 가능하도록 기존 고유 정보를 변경합니다.
-        # 타임스탬프를 사용하여 혹시 모를 중복을 방지합니다.
+        # 1. 재가입이 가능하도록 고유 정보를 변경할 값을 준비합니다.
         timestamp_suffix = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         original_login_id = session['user_id']
         
         deleted_login_id = f"deleted_{original_login_id}_{timestamp_suffix}"
         deleted_hakbun = f"deleted_{user['hakbun']}_{timestamp_suffix}"
-        deleted_nickname = f"탈퇴한사용자_{str(uuid.uuid4())[:8]}"
+        deleted_nickname = f"탈퇴한 사용자_{str(uuid.uuid4())[:8]}"
+
+        # 2. 탈퇴할 사용자가 작성한 게시글의 author를 새로운 deleted_login_id로 업데이트합니다.
+        cursor.execute("UPDATE posts SET author = ? WHERE author = ?", (deleted_login_id, original_login_id))
+
+        # 3. 탈퇴할 사용자가 작성한 댓글의 author를 새로운 deleted_login_id로 업데이트합니다.
+        cursor.execute("UPDATE comments SET author = ? WHERE author = ?", (deleted_login_id, original_login_id))
         
-        # 사용자 정보 비활성화 (Soft Delete)
+        # 4. 사용자 정보 비활성화 (Soft Delete)
         cursor.execute("""
             UPDATE users 
             SET 
@@ -1762,9 +1768,7 @@ def delete_account():
                 status = 'deleted'
             WHERE login_id = ?
         """, (deleted_login_id, deleted_hakbun, deleted_nickname, str(uuid.uuid4()), original_login_id))
-        
-        # --- 👆 수정된 부분 끝 ---
-        
+
         conn.commit()
 
         add_log('DELETE_ACCOUNT', original_login_id, f"사용자({original_login_id})가 계정을 삭제했습니다.")
