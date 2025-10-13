@@ -29,53 +29,60 @@
         }
     
         async function handleReaction(targetType, targetId, reactionType) {
-            const csrfToken = "{{ csrf_token() }}";
+            // 폼 데이터 생성
+            const formData = new FormData();
+            formData.append('reaction_type', reactionType);
             
+            // CSRF 토큰 추가 (Flask-WTF 사용 시)
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
             try {
                 const response = await fetch(`/react/${targetType}/${targetId}`, {
                     method: 'POST',
+                    body: formData,
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
                         'X-CSRFToken': csrfToken
-                    },
-                    body: `reaction_type=${reactionType}`
+                    }
                 });
 
-                // 서버로부터 받은 응답을 JSON 형태로 파싱합니다.
+                if (!response.ok) {
+                    // 서버에서 에러 응답을 보냈을 때
+                    const errorData = await response.json();
+                    alert(errorData.message || '요청 처리 중 오류가 발생했습니다.');
+                    return;
+                }
+
                 const data = await response.json();
 
-                // 서버 응답의 status가 'success'일 때만 UI를 업데이트합니다.
-                if (response.ok && data.status === 'success') {
-                    document.getElementById(`${targetType}-likes-count-${targetId}`).innerText = data.likes;
-                    document.getElementById(`${targetType}-dislikes-count-${targetId}`).innerText = data.dislikes;
-                    
-                    const scoreEl = document.getElementById(`${targetType}-score-${targetId}`);
-                    if (scoreEl) {
-                        const score = data.likes - data.dislikes;
-                        scoreEl.querySelector('.score-text').innerText = score;
-                        scoreEl.className = 'reaction-score';
-                        if (score > 0) scoreEl.classList.add('score-plus');
-                        if (score < 0) scoreEl.classList.add('score-minus');
-                    }
+                //--- ▼ [핵심 수정] ID 선택 로직 수정 ---
 
-                    const likeBtn = document.getElementById(`${targetType}-like-btn-${targetId}`);
-                    const dislikeBtn = document.getElementById(`${targetType}-dislike-btn-${targetId}`);
-                    likeBtn.classList.remove('active');
-                    dislikeBtn.classList.remove('active');
-                    if (data.user_reaction === 'like') {
-                        likeBtn.classList.add('active');
-                    } else if (data.user_reaction === 'dislike') {
-                        dislikeBtn.classList.add('active');
-                    }
-                } else {
-                    // status가 'success'가 아니거나, 응답 코드가 2xx가 아닐 경우
-                    // 서버가 보낸 오류 메시지(data.message)를 경고창으로 띄웁니다.
-                    alert(data.message || '요청 처리 중 오류가 발생했습니다.');
+                // targetType에 따라 id 접두사를 다르게 설정
+                const idPrefix = targetType === 'post' ? 'post' : 'comment';
+
+                // 올바른 ID로 좋아요/싫어요 숫자 요소를 선택
+                const likesCountElem = document.getElementById(`${idPrefix}-likes-count-${targetId}`);
+                const dislikesCountElem = document.getElementById(`${idPrefix}-dislikes-count-${targetId}`);
+                
+                // 올바른 ID로 버튼 요소를 선택
+                const likeBtn = document.getElementById(`${idPrefix}-like-btn-${targetId}`);
+                const dislikeBtn = document.getElementById(`${idPrefix}-dislike-btn-${targetId}`);
+
+                //--- ▲ [핵심 수정] ID 선택 로직 수정 끝 ---
+
+                // 요소가 존재하는지 반드시 확인 (오류 방지)
+                if (likesCountElem && dislikesCountElem && likeBtn && dislikeBtn) {
+                    // 숫자 업데이트
+                    likesCountElem.textContent = data.likes;
+                    dislikesCountElem.textContent = data.dislikes;
+
+                    // 버튼 활성화 스타일 업데이트
+                    likeBtn.classList.toggle('active', data.user_reaction === 'like');
+                    dislikeBtn.classList.toggle('active', data.user_reaction === 'dislike');
                 }
+
             } catch (error) {
-                // 네트워크 오류 등 fetch 자체가 실패했을 경우
                 console.error('Error:', error);
-                alert('서버와 통신하는 중 오류가 발생했습니다.');
+                alert('요청 중 네트워크 오류가 발생했습니다.');
             }
         }
     </script>
@@ -100,13 +107,15 @@
             <div class="comment-meta">
                 <span class="comment-date">{{ comment.updated_at|datetime }}</span>
                 <div class="comment-actions">
-                    <button type="button" 
+                    <button type="button"
+                            id="comment-like-btn-{{ comment.id }}"
                             class="btn-reaction {% if comment.user_reaction == 'like' %}active{% endif %}"
                             onclick="handleReaction('comment', {{ comment.id }}, 'like')">
                         👍 <span id="comment-likes-count-{{ comment.id }}">{{ comment.likes }}</span>
                     </button>
                     
                     <button type="button" 
+                            id="comment-dislike-btn-{{ comment.id }}"
                             class="btn-reaction {% if comment.user_reaction == 'dislike' %}active{% endif %}"
                             onclick="handleReaction('comment', {{ comment.id }}, 'dislike')">
                         👎 <span id="comment-dislikes-count-{{ comment.id }}">{{ comment.dislikes }}</span>

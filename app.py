@@ -4,6 +4,7 @@ from bleach.css_sanitizer import CSSSanitizer
 from werkzeug.utils import secure_filename
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
+from gevent.queue import Queue, Empty
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from functools import wraps
@@ -518,20 +519,28 @@ def login_required(f):
 @login_required
 def stream():
     def event_stream():
-        # 현재 로그인한 사용자를 위한 알림 채널을 구독
         user_id = g.user['login_id']
         messages = notification_channel.subscribe(user_id)
+        
         try:
             while True:
-                # 큐에 새로운 메시지가 들어올 때까지 대기
-                message = messages.get()
-                # SSE 형식에 맞춰 "data: {json_string}\n\n" 형태로 전송
-                yield f"data: {json.dumps(message)}\n\n"
+                try:
+                    # [수정] 큐에서 메시지를 최대 20초 동안 기다립니다.
+                    message = messages.get(timeout=20)
+                    yield f"data: {json.dumps(message)}\n\n"
+                except Empty:
+                    # [수정] 20초 동안 메시지가 없으면, 연결 유지를 위한 heartbeat(주석)를 보냅니다.
+                    yield ":heartbeat\n\n"
         except GeneratorExit:
-            # 클라이언트 연결이 끊어지면 구독 해제
+            # 클라이언트 연결이 끊어지면 정상적으로 구독 해제
+            pass
+        except Exception as e:
+            # 스트림에서 다른 예외가 발생할 경우 로그를 남깁니다.
+            print(f"An error occurred in the event stream for user {user_id}: {e}")
+        finally:
+            # 연결이 어떤 이유로든 종료될 때 항상 구독을 해제합니다.
             notification_channel.unsubscribe(user_id)
 
-    # text/event-stream MIME 타입으로 응답
     return Response(event_stream(), mimetype='text/event-stream')
 
 # Riro Auth
@@ -1518,6 +1527,15 @@ def react(target_type, target_id):
                 cursor.execute("SELECT COUNT(*) FROM notifications WHERE action = 'hot_post' AND target_type = 'post' AND target_id = ?", (target_id,))
                 already_notified = cursor.fetchone()[0]
 
+                # 24시간 이내에 작성된 게시글에 대해서만 알림
+                cursor.execute("SELECT created_at FROM posts WHERE id = ?", (target_id,))
+                post = cursor.fetchone()
+                if post:
+                    post_created_at = datetime.datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
+                    time_diff = datetime.datetime.now() - post_created_at
+                    if time_diff.total_seconds() > 86400: # 24시간 = 86400초
+                        already_notified = 1 # 24시간 초과 시 알림 보내지 않음
+
                 if already_notified == 0:
                     # 5. 게시글 작성자 정보를 가져와서 알림 생성
                     cursor.execute("SELECT author FROM posts WHERE id = ?", (target_id,))
@@ -1930,5 +1948,10 @@ def page_not_found(error):
 
 # Server Drive Unit
 if __name__ == '__main__':
-    init_log_db()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    from gevent.pywsgi import WSGIServer
+    
+    init_log_db()    
+    
+    http_server = WSGIServer(('0.0.0.0', 5000), app)
+    print("Starting server on http://0.0.0.0:5000")
+    http_server.serve_forever()
