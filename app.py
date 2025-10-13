@@ -1667,7 +1667,7 @@ def update_profile_image():
         if old_image_path_tuple:
             old_image_path = old_image_path_tuple[0]
             # 2. 기본 이미지가 아닐 경우에만 파일을 삭제합니다.
-            if old_image_path and 'default' not in old_image_path:
+            if old_image_path and 'defualt_images.jpeg' not in old_image_path:
                 try:
                     # 'static'을 경로에 포함시켜야 합니다.
                     full_old_path = os.path.join('static', old_image_path)
@@ -1837,6 +1837,20 @@ def delete_account():
     cursor = conn.cursor()
 
     try:
+        old_image_path = user['profile_image']
+        print(f"Old image path: {old_image_path}")  # 디버그 출력
+
+        if old_image_path and 'defualt_images' not in old_image_path:
+            try:
+                # 'static/'을 포함한 전체 경로 생성
+                full_path_to_delete = os.path.join('static', old_image_path)
+                print(f"Full path to delete: {full_path_to_delete}")  # 디버그 출력
+                if os.path.exists(full_path_to_delete):
+                    os.remove(full_path_to_delete)
+            except Exception as e:
+                # 파일 삭제에 실패해도 전체 프로세스에 영향을 주지 않도록 로그만 남김
+                print(f"Warning: 프로필 이미지 파일 삭제 실패: {e}")
+                add_log('WARNING', original_login_id, f"프로필 이미지 파일 삭제 실패({old_image_path}): {e}")
         # 1. 재가입이 가능하도록 고유 정보를 변경할 값을 준비합니다.
         timestamp_suffix = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         original_login_id = session['user_id']
