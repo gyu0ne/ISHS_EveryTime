@@ -10,17 +10,36 @@
             <ul>
                 <li><a href="/board/1">자유게시판</a></li>
                 <li><a href="/board/2">정보게시판</a></li>
-                <li><a href="#">지식iN곽</a></li>
-                <li><a href="#">??게시판</a></li>
-                <li><a href="#">??게시판</a></li>
+                <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">지식iN곽</a></li>
+                <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">면불 신청</a></li>
+                <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">동아리</a></li>
+                <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">학교 생활</a></li>
             </ul>
         </div>
-         <div class="widget user-info-widget">
-            <h3 class="user-name">{{ user.nickname }}</h3>
-            <ul class="user-details">
-                <li><span>학번</span><span>{{ user.hakbun }}</span></li>
-                <li><span>아이디</span><span>{{ user.login_id }}</span></li>
-            </ul>
+        
+        <div class="widget profile-card-widget">
+            <a href="{{ url_for('mypage') }}">
+                <div class="profile-picture">
+                    <img src="{{ url_for('static', filename=user.profile_image) }}" alt="프로필 사진">
+                </div>
+                <h4 class="nickname">{{ user.nickname }}</h4>
+            </a>
+            <div class="level-info">
+                <span>Lv. {{ user.level }}</span>
+                <div class="exp-bar">
+                    <div class="exp-gauge" style="width: {{ user.exp/10 }}%;"></div>
+                </div>
+            </div>
+            <div class="stats-info">
+                <div>
+                    <p class="stat-title">게시글</p>
+                    <p class="stat-count">{{ user.post_count }}</p>
+                </div>
+                <div>
+                    <p class="stat-title">댓글</p>
+                    <p class="stat-count">{{ user.comment_count }}</p>
+                </div>
+            </div>
         </div>
     </aside>
 

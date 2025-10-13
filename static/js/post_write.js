@@ -4,6 +4,20 @@ $(document).ready(function() {
     const MAX_CHARS = 5000;
     const MAX_IMAGES = 5; // 이미지 개수 제한 설정
 
+    const postTitleInput = $('#post-title');
+    const titleCounter = $('#current-title-chars');
+
+    // 페이지 로드 시 현재 제목 글자 수 계산 (글 수정 페이지용)
+    if (postTitleInput.val()) {
+        titleCounter.text(postTitleInput.val().length);
+    }
+
+    // 제목 입력 시마다 글자 수 업데이트
+    postTitleInput.on('keyup', function() {
+        const currentLength = $(this).val().length;
+        titleCounter.text(currentLength);
+    });
+
     $('#summernote-editor').summernote({
         lang: 'ko-KR',
         height: 500,
@@ -61,6 +75,20 @@ $(document).ready(function() {
     $('.btn-register').on('click', function(e) {
         e.preventDefault();
 
+        const title = $('#post-title').val();
+
+        // --- ▼ 추가/수정할 유효성 검사 ▼ ---
+        if (!title.trim()) {
+            alert('제목을 입력해주세요.');
+            $('#post-title').focus();
+            return;
+        }
+
+        if (title.length > 100) {
+            alert('제목은 100자를 초과할 수 없습니다.');
+            return;
+        }
+
         // 1. 게시판 선택 유효성 검사
         const boardId = $('#board-select').val();
         if (!boardId) {
@@ -69,7 +97,6 @@ $(document).ready(function() {
             return;
         }
 
-        const title = $('#post-title').val();
         if (!title.trim()) {
             alert('제목을 입력해주세요.');
             $('#post-title').focus();

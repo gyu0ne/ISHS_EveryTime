@@ -1,6 +1,8 @@
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
-/* 기본 스타일 초기화 */
+/* =================================
+   기본 스타일 (Reset & Common)
+================================= */
 * {
     margin: 0;
     padding: 0;
@@ -25,29 +27,51 @@ ul {
     list-style: none;
 }
 
+/* =================================
+   레이아웃 (Layout)
+================================= */
 .container {
     width: 1400px;
     margin: 0 auto;
 }
 
-/* 헤더 스타일 */
+main {
+    display: flex;
+    padding: 20px 0;
+    gap: 20px;
+}
+
+.sidebar {
+    flex-basis: 200px;
+    flex-shrink: 0;
+}
+
+.main-content {
+    flex-grow: 1;
+}
+
+/* =================================
+   헤더 (Header)
+================================= */
 .base-header {
     padding: 10px 0;
     border-bottom: 1px solid #333;
     position: relative;
 }
 
-.base-header::before {
+.base-header::before,
+.base-footer::before {
     content: '';
     position: absolute;
-    top: 0;
-    bottom: 0;
     left: 50%;
     transform: translateX(-50%);
     width: 100vw;
     background-color: #212121;
     z-index: -1;
 }
+.base-header::before { top: 0; bottom: 0; }
+.base-footer::before { top: 0; bottom: 0; }
+
 
 .top-bar {
     display: flex;
@@ -75,315 +99,18 @@ ul {
     color: #d9534f;
 }
 
-/* ▼▼▼▼▼ 최종 수정된 부분 ▼▼▼▼▼ */
 .user-menu {
-    width: 180px; /* 로그인/회원가입 버튼이 차지하는 너비로 고정 */
+    width: 180px;
     display: flex;
-    justify-content: flex-end; /* 내부 아이템을 오른쪽으로 정렬 */
+    justify-content: flex-end;
     align-items: center;
 }
 
 .user-menu a {
-    margin-left: 15px;
-    padding: 8px 12px;
-    border: 1px solid #555;
-    border-radius: 5px;
-    background-color: #3e3e3e;
-    color: #e0e0e0;
-    white-space: nowrap; /* 버튼 내 줄바꿈 방지 */
-}
-/* ▲▲▲▲▲ 최종 수정된 부분 ▲▲▲▲▲ */
-
-.user-menu a:hover {
-    background-color: #4f4f4f;
-}
-
-/* 메인 콘텐츠 레이아웃 */
-main {
-    display: flex;
-    padding: 20px 0;
-    gap: 20px;
-}
-
-.sidebar {
-    flex-basis: 200px;
-    flex-shrink: 0;
-}
-
-.main-content {
-    flex-grow: 1;
-}
-
-/* 위젯 공통 스타일 */
-.widget {
-    background-color: #2e2e2e;
-    border: 1px solid #3a3a3a;
-    padding: 15px;
-    margin-bottom: 20px;
-    border-radius: 8px;
-}
-
-.widget h3 {
-    font-size: 16px;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #444;
-    color: #f1f1f1;
-}
-
-.widget ul li {
-    padding: 7px 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px;
-}
-.widget ul li a {
-    color: #cccccc;
-}
-.widget ul li a:hover {
-    color: #d9534f;
-}
-.widget ul li span {
-    float: right;
-    color: #888;
-    font-size: 11px;
 }
 
-/* 왼쪽 사이드바 로그인 위젯 */
-.login-widget-side p {
-    margin-bottom: 10px;
-    font-size: 13px;
-    color: #aaa;
-}
-
-.login-widget-side button {
-    width: 100%;
-    padding: 10px;
-    border: none;
-    border-radius: 4px;
-    margin-top: 5px;
-    cursor: pointer;
-    font-weight: bold;
-}
-
-.login-btn {
-    background-color: #d9534f;
-    color: white;
-}
-.login-btn:hover {
-    background-color: #c9302c;
-}
-.register-btn {
-    background-color: #4f4f4f;
-    color: #e0e0e0;
-}
-.register-btn:hover {
-    background-color: #5f5f5f;
-}
-
-/* 식단표 및 시간표 위젯 */
-.daily-meal {
-    background-color: transparent;
-    border: none;
-    padding: 10px 0;
-    margin-bottom: 20px;
-    display: flex;
-    justify-content: space-around;
-    align-items: stretch;
-    gap: 20px;
-    border-radius: 8px;
-}
-
-.meal-item {
-    flex: 6;
-    text-align: center;
-    background-color: #2e2e2e;
-    border: 1px solid #3a3a3a;
-    border-radius: 8px;
-    padding: 25px 20px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    transition: transform 0.2s ease-in-out, border-color 0.2s ease-in-out;
-    display: flex;
-    flex-direction: column;
-}
-
-.timetable-widget {
-    flex: 6;
-}
-
-
-.meal-item:hover {
-    transform: translateY(-5px);
-    border-color: #d9534f;
-}
-
-.meal-item h4 {
-    font-size: 20px;
-    font-weight: 600;
-    color: #f1f1f1;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    position: relative;
-    padding-bottom: 15px;
-    flex-shrink: 0;
-}
-
-.meal-item h4::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 30%;
-    height: 3px;
-    background-color: #d9534f;
-    border-radius: 2px;
-}
-
-.meal-menu {
-    font-size: 15px;
-    line-height: 1.8;
-    color: #cccccc;
-    white-space: pre-wrap;
-    text-align: center;
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-
-.timetable-list {
-    list-style: none;
-    padding: 0;
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-around;
-}
-
-.timetable-list li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 6px 5px;
-    border-bottom: 1px solid #3e3e3e;
-}
-
-.timetable-list li:last-child {
-    border-bottom: none;
-}
-
-.timetable-list .period {
-    font-size: 13px;
-    color: #aaa;
-}
-
-.timetable-list .subject {
-    font-size: 15px;
-    font-weight: 500;
-    color: #e0e0e0;
-}
-
-.board-preview {
-    display: flex;
-    gap: 20px;
-}
-
-.board-column {
-    flex: 1;
-    background-color: #2e2e2e;
-    border: 1px solid #3a3a3a;
-    padding: 15px;
-    border-radius: 8px;
-}
-
-.board-column h3 {
-    font-size: 16px;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #444;
-    color: #f1f1f1;
-}
-
-.board-column ul li {
-    padding: 7px 0;
-    display: flex;
-    justify-content: space-between;
-    font-size: 13px;
-}
-.board-column ul li a {
-    color: #cccccc;
-}
-.board-column ul li a:hover {
-    color: #d9534f;
-}
-.board-column ul li span {
-    color: #888;
-    font-size: 11px;
-}
-
-/* 오른쪽 사이드바 검색 위젯 */
-.search-widget input {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #555;
-    border-radius: 4px;
-    background-color: #3e3e3e;
-    color: #e0e0e0;
-}
-.search-widget input::placeholder {
-    color: #aaa;
-}
-.search-widget input:focus {
-    outline: none;
-    border-color: #d9534f;
-}
-
-/* 푸터 스타일 */
-.base-footer {
-    position: relative;
-    border-top: 1px solid #333;
-    padding: 20px;
-    text-align: center;
-    color: #777;
-    font-size: 12px;
-    background-color: #212121;
-    margin-top: 20px;
-}
-
-.base-footer nav {
-    margin-top: 10px;
-}
-
-.base-footer nav a {
-    margin: 0 10px;
-    color: #999;
-}
-
-.base-footer nav a:hover {
-    color: #d9534f;
-}
-
-.base-footer::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 100vw;
-    background-color: #212121;
-    z-index: -1;
-}
-
-/* ▼▼▼▼▼ 로그인 후 상태를 위한 CSS ▼▼▼▼▼ */
-/* 이 코드는 main_logined.css에만 있어도 되고, 공통 css에 있어도 무방합니다. */
-
-/* 헤더 드롭다운 메뉴 */
+/* 헤더 드롭다운 & 알림 */
 .user-menu .dropdown {
     position: relative;
     display: inline-block;
@@ -396,9 +123,6 @@ main {
     padding: 8px 12px;
     border-radius: 5px;
     cursor: pointer;
-    /* margin-left는 부모인 .user-menu가 제어하므로 여기서는 0으로 처리 */
-    margin-left: 0; 
-    white-space: nowrap;
 }
 
 .user-menu .dropdown-menu {
@@ -435,43 +159,11 @@ main {
     display: block;
 }
 
-/* 왼쪽 사이드바 사용자 정보 위젯 */
-.user-info-widget .user-name {
-    text-align: center;
-    font-size: 18px;
-}
-
-.user-info-widget .user-details {
-    margin-top: 10px;
-}
-
-.user-info-widget .user-details li {
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 0;
-    font-size: 13px;
-    border-bottom: 1px solid #3e3e3e;
-}
-
-.user-info-widget .user-details li:last-child {
-    border-bottom: none;
-}
-
-.user-info-widget .user-details li span:first-child {
-    color: #aaa;
-}
-
-.user-info-widget .user-details li span:last-child {
-    color: #e0e0e0;
-    font-weight: 500;
-}
-
-/* === [추가] 알림 관련 스타일 === */
 .user-menu .notification-bell {
     position: relative;
     font-size: 20px;
     color: #e0e0e0;
-    margin-right: 20px; /* 드롭다운 메뉴와의 간격 */
+    margin-right: 20px;
     cursor: pointer;
 }
 
@@ -485,14 +177,14 @@ main {
     color: white;
     font-size: 10px;
     font-weight: bold;
-    display: none; /* 평소엔 숨김 */
+    display: none;
 }
 
 .notification-dropdown {
     display: none;
     position: absolute;
     right: 0;
-    top: 120%; /* 아이콘 아래에 위치 */
+    top: 120%;
     width: 350px;
     background-color: #2e2e2e;
     border: 1px solid #3a3a3a;
@@ -519,11 +211,10 @@ main {
     color: #ccc;
     font-size: 14px;
     border-bottom: 1px solid #3a3a3a;
-    padding: 10px 13px;
-    margin: 10px 13px;
-    white-space: normal;      /* 텍스트가 자동으로 줄바꿈되도록 허용 */
-    word-wrap: break-word;    /* 긴 단어나 URL이 강제로 줄바꿈되도록 처리 */
-    line-height: 1.4;         /* 여러 줄일 때 가독성을 위한 줄 간격 설정 */
+    padding: 15px;
+    white-space: normal;
+    word-wrap: break-word;
+    line-height: 1.4;
 }
 
 .notification-list li:last-child a {
@@ -544,16 +235,291 @@ main {
 }
 
 .notification-list .no-notifications {
-    align-items: center;
     text-align: center;
     color: #ccc;
-    font-size: 14px;
-    padding: 10px 13px; /* li에 직접 패딩을 줌 */
+    padding: 20px 15px;
 }
 
-/* '알림 없음' 메시지의 a 태그는 기본 스타일을 제거 */
-.notification-list .no-notifications a {
-    padding: 10px 13px;
-    margin: 0;
+/* =================================
+   위젯 (Widget)
+================================= */
+.widget {
+    background-color: #2e2e2e;
+    border: 1px solid #3a3a3a;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+}
+
+.widget h3 {
+    font-size: 16px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #444;
+    color: #f1f1f1;
+}
+
+.widget ul li {
+    padding: 7px 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.widget ul li a {
+    color: #cccccc;
+}
+.widget ul li a:hover {
+    color: #d9534f;
+}
+.widget ul li span {
+    float: right;
+    color: #888;
+    font-size: 11px;
+}
+
+/* =================================
+   왼쪽 사이드바 프로필 위젯
+================================= */
+.profile-card-widget {
+    padding: 20px 15px;
+    text-align: center;
+}
+
+.profile-card-widget .profile-picture {
+    width: 70px;
+    height: 70px;
+    margin: 0 auto 10px;
+}
+
+.profile-card-widget .profile-picture img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 2px solid #555;
+}
+
+.profile-card-widget .nickname {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.profile-card-widget .level-info {
+    margin-top: 10px;
+}
+
+.profile-card-widget .exp-bar {
+    width: 100%;
+    height: 6px;
+    background-color: #444;
+    border-radius: 3px;
+    margin: 5px 0;
+    overflow: hidden;
+}
+
+.profile-card-widget .exp-gauge {
+    height: 100%;
+    background-color: #d9534f;
+    border-radius: 3px;
+}
+
+.profile-card-widget .level-info span {
+    font-size: 12px;
+    color: #aaa;
+}
+
+.profile-card-widget .stats-info {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #444;
+}
+
+.profile-card-widget .stat-title {
+    font-size: 13px;
+    color: #aaa;
+}
+
+.profile-card-widget .stat-count {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* =================================
+   메인 콘텐츠 (Main Content)
+================================= */
+/* 식단표 & 시간표 */
+.daily-meal {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+    align-items: stretch;
+}
+
+.meal-item {
+    flex: 1;
+    text-align: center;
+    background-color: #2e2e2e;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 25px 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.meal-item:hover {
+    transform: translateY(-5px);
+    border-color: #d9534f;
+}
+
+.meal-item h4 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #f1f1f1;
+    margin-bottom: 20px;
+    position: relative;
+    padding-bottom: 15px;
+    flex-shrink: 0;
+}
+
+.meal-item h4::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 30%;
+    height: 3px;
+    background-color: #d9534f;
+    border-radius: 2px;
+}
+
+.meal-menu {
+    font-size: 15px;
+    line-height: 1.8;
+    color: #cccccc;
+    white-space: pre-wrap;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* 시간표 */
+.timetable-list {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+}
+
+.timetable-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 5px;
+    border-bottom: 1px solid #3e3e3e;
+}
+
+.timetable-list li:last-child {
     border-bottom: none;
+}
+
+.timetable-list .period {
+    font-size: 13px;
+    color: #aaa;
+}
+
+.timetable-list .subject {
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.board-preview {
+    display: flex;
+    gap: 20px;
+}
+
+.board-column {
+    flex: 1;
+    background-color: #2e2e2e; /* 다크 테마 배경 */
+    border: 1px solid #3a3a3a; /* 다크 테마 테두리 */
+    padding: 15px;
+    border-radius: 8px; /* 모서리 둥글게 */
+}
+
+.board-column h3 {
+    font-size: 16px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #444; /* 다크 테마 구분선 */
+    color: #f1f1f1;
+}
+
+.board-column ul li {
+    padding: 7px 0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+}
+.board-column ul li a {
+    color: #cccccc;
+}
+.board-column ul li a:hover {
+    color: #d9534f;
+}
+.board-column ul li span {
+    color: #888;
+    font-size: 11px;
+}
+
+
+/* =================================
+   오른쪽 사이드바 (Right Sidebar)
+================================= */
+.search-widget input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background-color: #3e3e3e;
+    color: #e0e0e0;
+}
+.search-widget input::placeholder {
+    color: #aaa;
+}
+.search-widget input:focus {
+    outline: none;
+    border-color: #d9534f;
+}
+
+/* =================================
+   푸터 (Footer)
+================================= */
+.base-footer {
+    position: relative;
+    border-top: 1px solid #333;
+    padding: 20px;
+    text-align: center;
+    color: #777;
+    font-size: 12px;
+    margin-top: 20px;
+}
+
+.base-footer nav {
+    margin-top: 10px;
+}
+
+.base-footer nav a {
+    margin: 0 10px;
+    color: #999;
+}
+
+.base-footer nav a:hover {
+    color: #d9534f;
 }

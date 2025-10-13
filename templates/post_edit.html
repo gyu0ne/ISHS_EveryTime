@@ -46,7 +46,10 @@
             </div>
 
             <div class="title-input-wrapper">
-                <input type="text" name="title" id="post-title" class="form-control" placeholder="제목을 입력하세요" value="{{ post.title }}" required>
+                <input type="text" name="title" id="post-title" class="form-control" placeholder="제목을 입력하세요" value="{{ post.title }}" required maxlength="50">
+                <div class="title-char-counter">
+                    <span id="current-title-chars">0</span> / 50
+                </div>
             </div>
             {% if g.user and g.user.role == 'admin' %}
             <div class="custom-control custom-checkbox my-2">

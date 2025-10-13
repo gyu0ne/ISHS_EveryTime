@@ -205,3 +205,23 @@ body {
     background-color: var(--accent-color);
     color: white;
 }
+
+/* --- ▼ 추가할 스타일 ▼ --- */
+.title-input-wrapper {
+    position: relative;
+    margin-bottom: 15px; /* Summernote 에디터와의 간격 */
+}
+
+.title-input-wrapper .form-control {
+    padding-right: 70px; /* 글자 수 카운터 공간 확보 */
+}
+
+.title-char-counter {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    color: var(--text-secondary-color);
+}
+/* --- ▲ 추가할 스타일 ▲ --- */

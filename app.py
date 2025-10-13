@@ -450,8 +450,7 @@ def main_page():
         hot_posts = get_hot_posts()
         trending_posts = get_trending_posts()
         
-        cursor.execute("SELECT nickname, hakbun, login_id FROM users WHERE login_id = ?", (session['user_id'],))
-        user_data = cursor.fetchone()
+        user_data = g.user
 
         bob_data = get_bob()
 
@@ -462,7 +461,20 @@ def main_page():
                                    free_posts=free_board_posts, 
                                    info_posts=info_board_posts,
                                    hot_posts=hot_posts,
-                                   trending_posts=trending_posts)
+                                   trending_posts=trending_posts, # g.user 객체를 템플릿에 전달
+                           hakbun=user_data['hakbun'], 
+                           name=user_data['name'], 
+                           gen=user_data['gen'], 
+                           nickname=user_data['nickname'], 
+                           profile_image=user_data['profile_image'],
+                           level=user_data['level'], 
+                           exp=user_data['exp'], 
+                           post_count=user_data['post_count'], 
+                           comment_count=user_data['comment_count'], 
+                           point=user_data['point'], 
+                           academic_clubs=ACADEMIC_CLUBS,
+                           hobby_clubs=HOBBY_CLUBS,
+                           career_clubs=CAREER_CLUBS)
         else:
             # 혹시 모를 예외 처리 (세션은 있는데 DB에 유저가 없는 경우)
             session.clear()
@@ -754,6 +766,11 @@ def register():
         if pw_check != pw:
             return Response('<script> alert("비밀번호가 일치하지 않습니다."); history.back(); </script>')
         
+        if len(name) <= 2 or len(name) >= 20:
+            return Response('<script> alert("이름은 2자 이상 20자 이하로 입력해야 합니다."); history.back(); </script>')
+        if len(id) <= 2 or len(id) >= 20:
+            return Response('<script> alert("아이디는 2자 이상 20자 이하로 입력해야 합니다."); history.back(); </script>')
+        
         hashed_pw = bcrypt.generate_password_hash(pw).decode('utf-8')
         join_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         default_profile = 'images/profiles/defualt_images.jpeg'
@@ -797,7 +814,7 @@ def login():
             session.pop('gen', None)
             session.pop('agree', None)
             
-            session.regenerate()
+            session.clear()
             session['user_id'] = user[0]
 
             if remember:
@@ -923,6 +940,9 @@ def post_write():
         board_id = request.form.get('board_id') # board_id 수신
         author_id = session['user_id']
 
+        if len(title) > 50:
+            return Response('<script>alert("제목은 50자를 초과할 수 없습니다."); history.back();</script>')
+
         is_notice = 0
         if g.user and g.user['role'] == 'admin':
             is_notice = 1 if request.form.get('is_notice') == 'on' else 0
@@ -934,6 +954,8 @@ def post_write():
         plain_text_content = bleach.clean(content, tags=[], strip=True)
         if len(plain_text_content) > 5000:
             return Response('<script>alert("글자 수는 5,000자를 초과할 수 없습니다."); history.back();</script>')
+        if len(title) > 50:
+            return Response('<script>alert("제목은 50자를 초과할 수 없습니다."); history.back();</script>')
         if len(plain_text_content) == 0:
             return Response('<script>alert("내용을 입력해주세요."); history.back();</script>')
 
@@ -1191,6 +1213,9 @@ def post_edit(post_id):
         if not title or not content or not board_id:
             return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
         
+        if len(title) > 50:
+            return Response('<script>alert("제목은 50자를 초과할 수 없습니다."); history.back();</script>')
+
         is_notice = 0
         if g.user and g.user['role'] == 'admin':
             is_notice = 1 if request.form.get('is_notice') == 'on' else 0
@@ -1207,6 +1232,8 @@ def post_edit(post_id):
         plain_text_content = bleach.clean(content, tags=[], strip=True)
         if len(plain_text_content) > 5000:
             return Response('<script>alert("글자 수는 5,000자를 초과할 수 없습니다."); history.back();</script>')
+        if len(title) > 50:
+            return Response('<script>alert("제목은 50자를 초과할 수 없습니다."); history.back();</script>')
         if len(plain_text_content) == 0:
             return Response('<script>alert("내용을 입력해주세요."); history.back();</script>')
 
