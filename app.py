@@ -1,7 +1,6 @@
 from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response, make_response
 from bleach.css_sanitizer import CSSSanitizer
 from werkzeug.utils import secure_filename
-from datetime import datetime, timedelta
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
 from flask_bcrypt import Bcrypt
@@ -9,6 +8,7 @@ from dotenv import load_dotenv
 from functools import wraps
 from flask import jsonify
 from PIL import Image
+import datetime
 import requests
 import hashlib
 import secrets
@@ -16,6 +16,7 @@ import sqlite3
 import bleach
 import socket
 import uuid
+import json
 import math
 import html
 import os
@@ -186,7 +187,7 @@ def add_log(action, user_id, details):
     try:
         conn = get_log_db()
         cursor = conn.cursor()
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         ip_address = request.remote_addr
 
         cursor.execute(
@@ -240,7 +241,7 @@ def check_auto_login():
 
 # Bob (School Meal Information)
 def get_bob():
-        date = (datetime.now()).strftime('%Y%m%d')
+        date = (datetime.datetime.now()).strftime('%Y%m%d')
 
         conn = get_db()
         cursor = conn.cursor()
@@ -329,8 +330,8 @@ def update_exp_level(user_id, exp_change):
 # Jinja2 Filter for Datetime Formatting
 def format_datetime(value):
     # DB에서 가져온 날짜/시간 문자열을 datetime 객체로 변환
-    post_time = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
-    now = datetime.now()
+    post_time = datetime.datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+    now = datetime.datetime.now()
     
     # 시간 차이 계산
     delta = now - post_time
@@ -386,7 +387,7 @@ def get_hot_posts():
     cursor = conn.cursor()
     
     # 7일 전 날짜 계산
-    seven_days_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
+    seven_days_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
     
     query = """
         SELECT p.id, p.title, COUNT(r.id) as like_count
@@ -410,7 +411,7 @@ def get_trending_posts():
     cursor = conn.cursor()
     
     # 24시간 전 날짜 계산
-    one_day_ago = (datetime.now() - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
+    one_day_ago = (datetime.datetime.now() - datetime.timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
     
     # 수정: WHERE 절에 view_count >= 10 조건 추가
     query = """
@@ -682,19 +683,29 @@ def register():
         pw_check = request.form['password_confirm']
         id = request.form['login_id']
         nick = request.form['nickname']
-        birth = request.form['birth']
+        birth = str(request.form['birth'])
+        print(birth)
 
-        year = birth[0:4]
-        month = birth[4:6]
-        day = birth[6:8]
+        if not isinstance(birth, str):
+            birth = str(birth)
+
+        # 1. 입력값 길이 확인
+        if len(birth) != 8:
+            return Response('<script> alert("생년월일은 8자리로 입력해야 합니다."); history.back(); </script>')
+
+        year = int(birth[0:4])
+        month = int(birth[4:6])
+        day = int(birth[6:8])
+
+        print(year, month, day)
 
         try:
-            datetime.date(int(year), int(month), int(day))
+            datetime.datetime.date(int(year), int(month), int(day))
         except:
-            return Response('<script> alert("생년월일 형식을 다시 확인하세요."); history.back(); </script>')
+            return Response('<script> alert("생년월일 형식을 다시 확인하세요. 1"); history.back(); </script>')
 
         if len(birth) != 8:
-            return Response('<script> alert("생년월일 형식을 다시 확인하세요."); history.back(); </script>')
+            return Response('<script> alert("생년월일 형식을 다시 확인하세요. 2"); history.back(); </script>')
 
         cursor = conn.cursor()
 
@@ -838,7 +849,7 @@ def mypage():
     formatted_birth = f'{birth_year}.{birth_month}.{birth_day}'
 
     join_date = user_data['join_date']
-    datetime_obj = datetime.strptime(join_date, '%Y-%m-%d %H:%M:%S')
+    datetime_obj = datetime.datetime.strptime(join_date, '%Y-%m-%d %H:%M:%S')
     formatted_join_date = datetime_obj.strftime('%Y.%m.%d')
 
     return render_template('my_page.html', 
@@ -919,7 +930,7 @@ def post_write():
 
         # 4. 데이터베이스에 저장
         try:
-            created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             query = """
                 INSERT INTO posts
@@ -1053,8 +1064,8 @@ def post_detail(post_id):
             return Response('<script>alert("존재하지 않거나 삭제된 게시글입니다."); history.back();</script>')
     
         post = dict(post_data)
-        post['created_at_datetime'] = datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
-        post['updated_at_datetime'] = datetime.strptime(post['updated_at'], '%Y-%m-%d %H:%M:%S')
+        post['created_at_datetime'] = datetime.datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
+        post['updated_at_datetime'] = datetime.datetime.strptime(post['updated_at'], '%Y-%m-%d %H:%M:%S')
 
         cursor.execute("SELECT reaction_type, COUNT(*) as count FROM reactions WHERE target_type = 'post' AND target_id = ? GROUP BY reaction_type", (post_id,))
         reactions = {r['reaction_type']: r['count'] for r in cursor.fetchall()}
@@ -1172,7 +1183,7 @@ def post_edit(post_id):
         }
         sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'])
 
-        updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        updated_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         query = "UPDATE posts SET board_id = ?, title = ?, content = ?, updated_at = ?, is_notice = ? WHERE id = ?"
         cursor.execute(query, (board_id, title, sanitized_content, updated_at, is_notice, post_id))
 
@@ -1274,7 +1285,7 @@ def add_comment(post_id):
 
     try:
         author_id = session['user_id']
-        created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sanitized_content = bleach.clean(content)
         
         if parent_comment_id:
@@ -1423,7 +1434,7 @@ def edit_comment(comment_id):
     
     try:
         # 4. 데이터베이스 업데이트
-        updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        updated_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sanitized_content = bleach.clean(new_content)
         
         query = "UPDATE comments SET content = ?, updated_at = ? WHERE id = ?"
@@ -1470,7 +1481,7 @@ def react(target_type, target_id):
                 add_log('CHANGE_REACTION', user_id, f"{target_type} (id: {target_id})에 대한 반응을 '{existing_reaction['reaction_type']}'에서 '{reaction_type}'(으)로 변경했습니다.")
         else:
             cursor.execute("INSERT INTO reactions (user_id, target_type, target_id, reaction_type, created_at) VALUES (?, ?, ?, ?, ?)",
-                           (user_id, target_type, target_id, reaction_type, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+                           (user_id, target_type, target_id, reaction_type, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
             add_log('ADD_REACTION', user_id, f"{target_type} (id: {target_id})에 '{reaction_type}' 반응을 추가했습니다.")
 
         conn.commit()
@@ -1715,7 +1726,7 @@ def delete_account():
     password = request.form.get('password')
     user = g.user
 
-    if not user or 'pw' not in user or not bcrypt.check_password_hash(user['pw'], password):
+    if not bcrypt.check_password_hash(user['pw'], password):
         return Response('<script>alert("비밀번호가 일치하지 않아 계정을 삭제할 수 없습니다."); history.back();</script>')
 
     conn = get_db()
@@ -1726,7 +1737,7 @@ def delete_account():
         
         # 재가입이 가능하도록 기존 고유 정보를 변경합니다.
         # 타임스탬프를 사용하여 혹시 모를 중복을 방지합니다.
-        timestamp_suffix = datetime.now().strftime('%Y%m%d%H%M%S')
+        timestamp_suffix = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         original_login_id = session['user_id']
         
         deleted_login_id = f"deleted_{original_login_id}_{timestamp_suffix}"
