@@ -1163,6 +1163,15 @@ def post_edit(post_id):
         if g.user and g.user['role'] == 'admin':
             is_notice = 1 if request.form.get('is_notice') == 'on' else 0
         
+        # --- ▼ [수정] 서버 사이드 유효성 검사 강화 ---
+        if not title or not content or not board_id:
+            return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
+        
+        # board_id가 실제 DB에 존재하는지 확인
+        cursor.execute("SELECT COUNT(*) FROM board WHERE board_id = ?", (board_id,))
+        if cursor.fetchone()[0] == 0:
+            return Response('<script>alert("존재하지 않는 게시판입니다."); history.back();</script>')
+
         plain_text_content = bleach.clean(content, tags=[], strip=True)
         if len(plain_text_content) > 5000:
             return Response('<script>alert("글자 수는 5,000자를 초과할 수 없습니다."); history.back();</script>')
@@ -1665,6 +1674,13 @@ def update_profile_info():
     club2 = request.form.get('club2')
     club3 = request.form.get('club3')
     profile_public = request.form.get('profile_public')
+
+    if club1 and club1 not in ACADEMIC_CLUBS:
+        return Response('<script>alert("유효하지 않은 동아리 이름입니다."); history.back();</script>')
+    if club2 and club2 not in HOBBY_CLUBS:
+        return Response('<script>alert("유효하지 않은 동아리 이름입니다."); history.back();</script>')
+    if club3 and club3 not in CAREER_CLUBS:
+        return Response('<script>alert("유효하지 않은 동아리 이름입니다."); history.back();</script>')
 
     # profile_public 값 보정 (체크박스가 체크되지 않으면 값이 전송되지 않음)
     is_public = 1 if profile_public == 'on' else 0
