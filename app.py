@@ -169,20 +169,25 @@ def create_notification(recipient_id, actor_id, action, target_type, target_id, 
     """, (recipient_id, actor_id, action, target_type, target_id, post_id, created_at))
     conn.commit()
 
-    cursor.execute("SELECT u.nickname FROM users u WHERE u.login_id = ?", (actor_id,))
+    # 1. 알림 행위자(actor)의 닉네임을 조회합니다.
+    cursor.execute("SELECT nickname FROM users WHERE login_id = ?", (actor_id,))
     actor = cursor.fetchone()
-    actor_nickname = actor['nickname'] if actor else '알 수 없음'
+    
+    # 2. 만약의 경우를 대비해 actor가 없을 경우를 처리합니다.
+    actor_nickname = actor['nickname'] if actor else '알 수 없는 사용자'
 
-    message = {
+    # 3. 클라이언트(브라우저)로 보낼 메시지 객체를 생성합니다.
+    #    - 이 객체에는 ID 대신 사용자에게 보여줄 닉네임만 포함합니다.
+    message_to_send = {
         'action': action,
         'actor_nickname': actor_nickname,
         'post_id': post_id,
-        'is_read': 0, # 새 알림이므로 is_read는 0
-        'id': cursor.lastrowid # 방금 생성된 알림의 ID
+        'is_read': 0, 
+        'id': cursor.lastrowid 
     }
 
     # 3. 알림 채널을 통해 해당 사용자에게 메시지 발행(publish)
-    notification_channel.publish(recipient_id, message)
+    notification_channel.publish(recipient_id, message_to_send)
 
 # Add Log to log.db
 def add_log(action, user_id, details):
@@ -518,28 +523,31 @@ def login_required(f):
 @app.route('/stream')
 @login_required
 def stream():
+    # --- ▼ [핵심 수정] ---
+    # 제너레이터가 실행되기 전, 즉 컨텍스트가 살아있을 때 user_id를 미리 변수에 저장합니다.
+    current_user_id = g.user['login_id']
+
     def event_stream():
-        user_id = g.user['login_id']
-        messages = notification_channel.subscribe(user_id)
+        # 이제 제너레이터는 컨텍스트가 사라져도 안전한 'current_user_id' 변수를 사용합니다.
+        messages = notification_channel.subscribe(current_user_id)
         
         try:
             while True:
                 try:
-                    # [수정] 큐에서 메시지를 최대 20초 동안 기다립니다.
                     message = messages.get(timeout=20)
                     yield f"data: {json.dumps(message)}\n\n"
                 except Empty:
-                    # [수정] 20초 동안 메시지가 없으면, 연결 유지를 위한 heartbeat(주석)를 보냅니다.
                     yield ":heartbeat\n\n"
         except GeneratorExit:
             # 클라이언트 연결이 끊어지면 정상적으로 구독 해제
             pass
         except Exception as e:
             # 스트림에서 다른 예외가 발생할 경우 로그를 남깁니다.
-            print(f"An error occurred in the event stream for user {user_id}: {e}")
+            print(f"An error occurred in the event stream for user {current_user_id}: {e}")
         finally:
             # 연결이 어떤 이유로든 종료될 때 항상 구독을 해제합니다.
-            notification_channel.unsubscribe(user_id)
+            notification_channel.unsubscribe(current_user_id)
+    # --- ▲ [핵심 수정] ---
 
     return Response(event_stream(), mimetype='text/event-stream')
 
