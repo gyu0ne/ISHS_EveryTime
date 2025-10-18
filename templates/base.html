@@ -13,6 +13,7 @@
     <meta name="keywords" content="log인곽">
     <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -24,10 +25,10 @@
                     <ul>
                         <li><a href="/board/1">자유게시판</a></li>
                         <li><a href="/board/2">정보게시판</a></li>
+                        <li><a href="/board/3">익명게시판</a></li>
                         <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">지식iN곽</a></li>
                         <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">면불 신청</a></li>
                         <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">동아리</a></li>
-                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">학교 생활</a></li>
                     </ul>
                 </nav>
                 <div class="user-menu" style="display: flex; align-items: center;">
@@ -225,5 +226,62 @@
             setupEventSource();         // 3. 실시간 알림 수신 시작
         });
     </script>
+
+    {% if g.user and g.user.role == 'admin' %}
+    <script>
+    document.addEventListener('click', async function(e) {
+        if (e.target.classList.contains('btn-admin-check')) {
+            const btn = e.target;
+            const { targetType, targetId } = btn.dataset;
+
+            // 대상 author-display 요소를 찾습니다.
+            const displaySpan = document.getElementById(`${targetType}-author-${targetId}`);
+            if (!displaySpan) return;
+
+            // 이미 활성화된 상태(실명 노출)인지 확인
+            if (btn.classList.contains('active')) {
+                // 원래 닉네임으로 복구
+                displaySpan.innerHTML = btn.dataset.originalHtml;
+                btn.textContent = '검사';
+                btn.classList.remove('active');
+            } else {
+                // 서버에 실명 정보 요청
+                try {
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                    const response = await fetch('/admin/check-author', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({ target_type: targetType, target_id: targetId })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        alert(errorData.message || '정보 조회에 실패했습니다.');
+                        return;
+                    }
+
+                    const data = await response.json();
+                    if (data.status === 'success') {
+                        // 원래 닉네임 HTML을 버튼에 저장
+                        btn.dataset.originalHtml = displaySpan.innerHTML;
+                        // 실명으로 교체
+                        displaySpan.innerHTML = `<strong style="color: #FFC107;">[${data.name}/${data.hakbun}]</strong>`;
+                        btn.textContent = '숨김';
+                        btn.classList.add('active');
+                    } else {
+                        alert(data.message);
+                    }
+                } catch (error) {
+                    console.error('Error checking author:', error);
+                    alert('요청 중 오류가 발생했습니다.');
+                }
+            }
+        }
+    });
+    </script>
+    {% endif %}
 </body>
 </html>

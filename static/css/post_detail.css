@@ -497,3 +497,54 @@ body {
     padding-left: 36px;
     margin-top: 15px;
 }
+
+/* --- [추가] 관리자 검사 버튼 스타일 --- */
+.btn-admin-check {
+    background-color: #555;
+    color: #eee;
+    border: none;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+.btn-admin-check:hover {
+    background-color: #777;
+}
+.btn-admin-check.active {
+    background-color: #FFC107; /* 노란색 */
+    color: #121212;
+    font-weight: bold;
+}
+
+/* [수정] 상세 페이지 본문 작성자 버튼 위치 조정을 위해 */
+.post-title-section {
+    display: flex; /* Flexbox로 변경 */
+    flex-wrap: wrap; /* 줄바꿈 허용 */
+    align-items: center; /* 세로 중앙 정렬 */
+    margin-bottom: 15px;
+}
+.post-title-section h2 {
+    width: 100%; /* 제목은 항상 전체 너비 차지 */
+    margin-bottom: 15px;
+}
+.post-title-section .author-display {
+    display: inline-block;
+}
+
+/* [수정] 댓글 작성자 버튼 위치 조정을 위해 */
+.comment-view {
+    display: flex;
+    flex-wrap: wrap; /* 줄바꿈 허용 */
+    align-items: center; /* 세로 중앙 정렬 */
+    gap: 5px; /* 버튼과의 간격 */
+}
+.comment-view .author-display {
+    display: inline-block;
+}
+.comment-body {
+    width: 100%; /* 댓글 내용은 항상 전체 너비 차지 */
+    padding-left: 36px; 
+}

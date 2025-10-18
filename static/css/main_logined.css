@@ -523,3 +523,24 @@ main {
 .base-footer nav a:hover {
     color: #d9534f;
 }
+
+/* --- [추가] 관리자 검사 버튼 스타일 --- */
+.btn-admin-check {
+    background-color: #555;
+    color: #eee;
+    border: none;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+.btn-admin-check:hover {
+    background-color: #777;
+}
+.btn-admin-check.active {
+    background-color: #FFC107; /* 노란색 */
+    color: #121212;
+    font-weight: bold;
+}

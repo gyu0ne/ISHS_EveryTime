@@ -56,7 +56,20 @@
                                 <strong class="comment-count">[{{ post.comment_count }}]</strong>
                             {% endif %}
                         </span>
-                        <span class="col-author"><a href="{{ url_for('user_profile', nickname=post.nickname) }}">{{ post.nickname }}</a></span>
+                        <span class="col-author">
+                            <span class="author-display" id="post-author-{{ post.id }}">
+                                {% if board_id == 3 %}
+                                    익명
+                                {% else %}
+                                    <a href="{{ url_for('user_profile', nickname=post.nickname) }}">{{ post.nickname }}</a>
+                                {% endif %}
+                            </span>
+                            {% if g.user and g.user.role == 'admin' %}
+                                <button class="btn-admin-check" 
+                                        data-target-type="post" 
+                                        data-target-id="{{ post.id }}">검사</button>
+                            {% endif %}
+                        </span>
                         <span class="col-date">{{ post.updated_at|datetime }}</span>
                         <span class="col-views">{{ post.view_count }}</span>
                         <span class="col-likes {% if post.net_reactions > 0 %}score-plus{% elif post.net_reactions < 0 %}score-minus{% endif %}">

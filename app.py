@@ -532,6 +532,18 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# For Admin Required Page
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not g.user or g.user['role'] != 'admin':
+            # API 요청인 경우 JSON으로, 아닌 경우 스크립트로 응답
+            if request.path.startswith('/admin/'):
+                return jsonify({'status': 'error', 'message': '관리자만 접근 가능합니다.'}), 403
+            return Response('<script> alert("관리자만 접근 가능합니다."); history.back(); </script>')
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.route('/stream')
 @login_required
 def stream():
@@ -787,7 +799,7 @@ def register():
 
         add_log('CREATE_USER', id, f"'{nick}'({id})님이 가입했습니다.({hakbun}, {name})")
 
-        return Response('<script> alert("회원가입이 완료되었습니다."); window.location.href = "/"; </script>') # After Register
+        return Response('<script> alert("회원가입이 완료되었습니다."); window.location.href = "/login"; </script>') # After Register
     
     return render_template('register_form.html', hakbun=hakbun, name=name, gen=gen) # GET
 
@@ -2019,6 +2031,56 @@ def request_entity_too_large(error):
 def page_not_found(error):
     user_data = g.user if 'user' in g else None
     return render_template('404.html', user=user_data), 404
+
+@app.route('/admin/check-author', methods=['POST'])
+@login_required
+@admin_required
+def check_author_info():
+    data = request.get_json()
+    target_type = data.get('target_type')
+    target_id = data.get('target_id')
+
+    if not target_type or not target_id or target_type not in ['post', 'comment']:
+        return jsonify({'status': 'error', 'message': '잘못된 요청입니다.'}), 400
+
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    author_login_id = None
+    try:
+        if target_type == 'post':
+            cursor.execute("SELECT author FROM posts WHERE id = ?", (target_id,))
+        elif target_type == 'comment':
+            cursor.execute("SELECT author FROM comments WHERE id = ?", (target_id,))
+
+        result = cursor.fetchone()
+        if result:
+            author_login_id = result['author']
+
+        if author_login_id:
+            # 'deleted_'로 시작하는 탈퇴한 사용자인지 확인
+            if author_login_id.startswith('deleted_'):
+                 return jsonify({
+                    'status': 'success', 
+                    'name': '탈퇴한 사용자', 
+                    'hakbun': 'N/A'
+                })
+
+            cursor.execute("SELECT name, hakbun FROM users WHERE login_id = ?", (author_login_id,))
+            user_info = cursor.fetchone()
+            if user_info:
+                return jsonify({
+                    'status': 'success', 
+                    'name': user_info['name'], 
+                    'hakbun': user_info['hakbun']
+                })
+
+        return jsonify({'status': 'error', 'message': '작성자 정보를 찾을 수 없습니다.'}), 404
+
+    except Exception as e:
+        add_log('ERROR', g.user['login_id'], f"Error checking author info: {e}")
+        return jsonify({'status': 'error', 'message': '서버 오류가 발생했습니다.'}), 500
 
 # Server Drive Unit
 if __name__ == '__main__':
