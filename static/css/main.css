@@ -560,25 +560,21 @@ footer::before {
  * - [재수정] .main-content가 flex container임을 명시하여 order가 확실히 적용되도록 함
  */
 @media (max-width: 800px) {
-    
-    /* ▼▼▼ [수정] .main-content가 flex 컨테이너임을 명시적 선언 ▼▼▼ */
-    .main-content {
+.main-content {
         display: flex;
         flex-direction: column;
     }
-    /* ▲▲▲ [수정] ▲▲▲ */
 
     .daily-meal {
         flex-direction: column; /* 급식/시간표 위젯 세로로 쌓기 */
-        order: 3; /* 2순위 (게시판 뒤) */
+        order: 2; /* 2순위 (게시판 뒤) */
     }
     .board-preview {
         flex-direction: column; /* 게시판 미리보기 세로로 쌓기 */
-        order: 2; /* 1순위 (최상단) */
-    }
-
-    .login-widget-side {
-        order: 1; /* 사이드바 로그인 위젯은 맨 아래로 */
+        order: 1; /* 1순위 (최상단) */
+        
+        /* ▼▼▼ [수정] 1순위 요소 하단에 20px 여백 추가 ▼▼▼ */
+        margin-bottom: 20px; 
     }
 
     /* 로고, 폰트 크기 등 미세 조정 */

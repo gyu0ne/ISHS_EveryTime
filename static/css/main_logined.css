@@ -544,3 +544,236 @@ main {
     color: #121212;
     font-weight: bold;
 }
+
+/* ======================================== */
+/* ▼▼▼ [수정] 반응형 미디어 쿼리 추가 ▼▼▼ */
+/* ======================================== */
+
+/*
+ * 1. 유동형 레이아웃으로 변경 (기존 고정 너비 수정)
+ */
+.container {
+    /* [수정] 화면이 1400px보다 작아질 때를 대비해 유동적으로 변경 */
+    width: 95%;
+    max-width: 1400px; /* 1400px 이상 커지지 않도록 함 */
+}
+
+
+/*
+ * 2. 태블릿 사이즈 (1200px 이하)
+ * - 1단(본문 100%) + 2단(사이드바 50%씩) 레이아웃
+ */
+@media (max-width: 1200px) {
+    main {
+        flex-wrap: wrap; /* 줄바꿈 허용 */
+    }
+    .main-content {
+        flex-basis: 100%; /* 본문은 100% 너비 */
+        order: 1;        /* 1순위로 배치 */
+    }
+    .left-sidebar {
+        flex-basis: 50%; /* 왼쪽 사이드바는 50% 너비 */
+        flex-grow: 1;    /* 남는 공간을 채움 */
+        order: 2;        /* 2순위로 배치 */
+    }
+    .right-sidebar {
+        flex-basis: 50%; /* 오른쪽 사이드바도 50% 너비 */
+        flex-grow: 1;    /* 남는 공간을 채움 */
+        order: 3;        /* 3순위로 배치 */
+    }
+}
+
+
+/*
+ * 3. 태블릿/모바일 (900px 이하)
+ * - 1단 레이아웃 (본문, 사이드바 모두 세로로 쌓기)
+ * - (헤더 메뉴는 다음 단계에서 base.html과 함께 수정합니다)
+ */
+@media (max-width: 920px) {
+    main {
+        flex-direction: column; /* 모든 요소를 세로로 쌓음 */
+    }
+    .main-content {
+        order: 1;
+    }
+    .left-sidebar { 
+        order: 2; 
+        flex-basis: auto; /* 너비 자동 */
+    }
+    .right-sidebar { 
+        order: 3; 
+        flex-basis: auto; /* 너비 자동 */
+    }
+}
+
+
+/*
+ * 4. 모바일 사이즈 (600px 이하)
+ * - 게시판(order: 1)이 급식(order: 2)보다 먼저 오도록 순서 변경
+ */
+@media (max-width: 800px) {
+.main-content {
+        display: flex;
+        flex-direction: column;
+    }
+    .daily-meal {
+        flex-direction: column; /* 급식/시간표 위젯 세로로 쌓기 */
+        order: 2; /* 2순위 (게시판 뒤) */
+    }
+    .board-preview {
+        flex-direction: column; /* 게시판 미리보기 세로로 쌓기 */
+        order: 1; /* 1순위 (최상단) */
+        
+        /* ▼▼▼ [수정] 1순위 요소 하단에 20px 여백 추가 ▼▼▼ */
+        margin-bottom: 20px; 
+    }
+
+    /* 폰트 크기 등 미세 조정 */
+    .widget h3, .board-column h3 {
+        font-size: 15px;
+    }
+    .meal-item h4 {
+        font-size: 18px;
+    }
+    .profile-card-widget .nickname {
+        font-size: 15px;
+    }
+}
+
+/* ======================================== */
+/* ▼▼▼ [수정] 햄버거/모바일 메뉴 스타일 ▼▼▼ */
+/* ======================================== */
+
+/*
+ * 1. 햄버거 메뉴 아이콘 스타일
+ */
+.hamburger-menu {
+    display: none; /* 평소(데스크톱)에는 숨김 */
+    width: 30px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    position: relative; /* 아이콘 배치를 위함 */
+    z-index: 1001; /* 모바일 메뉴보다 위에 있도록 */
+    margin-left: 15px; /* 알림 아이콘과의 간격 */
+}
+.hamburger-icon {
+    display: block;
+    width: 100%;
+    height: 3px;
+    background-color: #e0e0e0; /* 기본 텍스트 색상 */
+    border-radius: 2px;
+    position: absolute;
+    left: 0;
+    transition: all 0.3s ease;
+}
+.hamburger-icon:nth-child(1) { top: 0; }
+.hamburger-icon:nth-child(2) { top: 50%; transform: translateY(-50%); }
+.hamburger-icon:nth-child(3) { bottom: 0; }
+
+/* 햄버거 메뉴 'active' 상태 (X 모양으로 변경) */
+.hamburger-menu.active .hamburger-icon:nth-child(1) {
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+}
+.hamburger-menu.active .hamburger-icon:nth-child(2) {
+    opacity: 0;
+}
+.hamburger-menu.active .hamburger-icon:nth-child(3) {
+    bottom: 50%;
+    transform: translateY(50%) rotate(-45deg);
+}
+
+
+/*
+ * 2. 모바일 네비게이션 메뉴 스타일
+ */
+.mobile-nav {
+    display: none; /* 평소(데스크톱)에는 숨김 */
+    position: fixed; /* 화면에 고정 */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh; /* 화면 전체 높이 */
+    background-color: #212121; /* 헤더와 동일한 배경색 */
+    z-index: 1000; /* 헤더보다 위, 햄버거 버튼보다 아래 */
+    padding: 80px 20px 20px 20px; /* 헤더 높이만큼 여백 */
+    overflow-y: auto; /* 내용이 많으면 스크롤 */
+    
+    /* 부드럽게 나타나도록 */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-20px);
+    transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+}
+
+.mobile-nav.active {
+    display: block; /* 햄버거 클릭 시 보이도록 */
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.mobile-main-nav ul li {
+    padding: 15px 0;
+    font-size: 18px;
+    font-weight: bold;
+    border-bottom: 1px solid #3a3a3a;
+}
+.mobile-main-nav ul li a {
+    display: block;
+    color: #e0e0e0;
+}
+.mobile-main-nav ul li a:hover {
+    color: #d9534f; /* 호버 시 강조색 */
+}
+
+/* 모바일용 마이페이지/로그아웃 링크 */
+.mobile-user-links {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #333;
+}
+.mobile-user-links a {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    border: 1px solid #555;
+    border-radius: 5px;
+    background-color: #3e3e3e;
+    color: #e0e0e0;
+    font-weight: bold;
+}
+.mobile-user-links a:hover {
+    background-color: #4f4f4f;
+}
+
+/*
+ * 3. 헤더 반응형 미디어 쿼리 (900px)
+ * (main_logined.css 맨 아래 미디어쿼리 부분에 추가하거나,
+ * 별도로 맨 아래에 추가해도 됩니다.)
+ */
+@media (max-width: 920px) {
+    /* 데스크톱 메뉴 숨기기 */
+    .main-nav {
+        display: none; 
+    }
+    /* 닉네임 드롭다운만 숨기기 */
+    .user-menu .dropdown {
+        display: none;
+    }
+    
+    /* 햄버거 메뉴 보이기 */
+    .hamburger-menu {
+        display: block; 
+    }
+
+    /* 알림벨+햄버거만 남도록 너비 자동 조절 */
+    .user-menu {
+        width: auto; 
+    }
+}
