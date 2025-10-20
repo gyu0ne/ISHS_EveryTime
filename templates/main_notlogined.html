@@ -15,10 +15,40 @@
     </head>
 <body>
     <div class="container">
-        <header>
-            <div class="top-bar">
-                <div class="logo">ISHS</div>
-                <nav class="main-nav">
+            <header>
+                <div class="top-bar">
+                    <div class="logo">ISHS</div>
+                    <nav class="main-nav">
+                        <ul>
+                            <li><a href="/board/1">자유게시판</a></li>
+                            <li><a href="/board/2">정보게시판</a></li>
+                            <li><a href="/board/3">익명게시판</a></li>
+                            <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">지식iN곽</a></li>
+                            <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">면불 신청</a></li>
+                            <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">동아리</a></li>
+                        </ul>
+                    </nav>
+                    <div class="user-menu">
+                        <a href="/login">로그인</a>
+                        <a href="/register">회원가입</a>
+                    </div>
+
+                    <button class="hamburger-menu" aria-label="메뉴 열기">
+                        <span class="hamburger-icon"></span>
+                        <span class="hamburger-icon"></span>
+                        <span class="hamburger-icon"></span>
+                    </button>
+                    </div>
+                <div class="sub-nav-bar">
+                    </div>
+            </header>
+
+            <div class="mobile-nav">
+                <div class="mobile-user-menu">
+                    <a href="/login">로그인</a>
+                    <a href="/register">회원가입</a>
+                </div>
+                <nav class="mobile-main-nav">
                     <ul>
                         <li><a href="/board/1">자유게시판</a></li>
                         <li><a href="/board/2">정보게시판</a></li>
@@ -28,13 +58,7 @@
                         <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">동아리</a></li>
                     </ul>
                 </nav>
-                <div class="user-menu">
-                    <a href="/login">로그인</a>
-                    <a href="/register">회원가입</a>
-                </div>
             </div>
-            <div class="sub-nav-bar">
-                </div>
         </header>
         <main>
             <aside class="sidebar left-sidebar">
@@ -137,5 +161,19 @@
             </nav>
         </footer>
     </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const hamburger = document.querySelector('.hamburger-menu');
+            const mobileNav = document.querySelector('.mobile-nav');
+
+            if (hamburger && mobileNav) {
+                hamburger.addEventListener('click', function() {
+                    // 햄버거 버튼과 모바일 메뉴에 'active' 클래스를 토글(toggle)
+                    hamburger.classList.toggle('active');
+                    mobileNav.classList.toggle('active');
+                });
+            }
+        });
+    </script>
 </body>
 </html>

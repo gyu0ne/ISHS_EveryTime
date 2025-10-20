@@ -1,0 +1,41 @@
+/* static/css/base.css */
+
+/*
+ * 1. 모든 요소의 box-sizing을 border-box로 변경
+ * - padding과 border가 width/height 계산에 포함되어 
+ * % 기반의 유동형 레이아웃 관리가 매우 쉬워집니다.
+ */
+html {
+  box-sizing: border-box;
+}
+*, *:before, *:after {
+  box-sizing: inherit; /* 모든 요소가 html의 box-sizing을 상속받음 */
+}
+
+/*
+ * 2. 기본 margin, padding 초기화
+ * - 브라우저별 기본 스타일을 제거하여 일관된 디자인을 보장합니다.
+ */
+body, h1, h2, h3, p, ul, ol {
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * 3. 유연한 미디어 (Flexible Media)
+ * - 이미지, 비디오 등이 부모 컨테이너의 너비보다 
+ * 커지지 않도록 하여 모바일에서 가로 스크롤이 생기는 것을 방지합니다.
+ */
+img, video, iframe {
+  max-width: 100%;
+  height: auto; /* 원본 비율 유지 */
+}
+
+/*
+ * 4. (선택) 기본 폰트 설정
+ * - 기존 디자인의 폰트 설정을 이곳으로 옮겨와도 좋습니다.
+ */
+body {
+  /* 예: font-family: 'Arial', sans-serif; */
+  /* line-height: 1.5; */
+}
