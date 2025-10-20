@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="kr">
 <head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
     <meta charset="utf-8">
     <title>{% block title %}log인곽{% endblock %}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
@@ -15,7 +16,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -248,23 +248,23 @@
             fetchNotifications();       // 2. 최초 드롭다운 목록 구성 ('알림 없음' 메시지 표시 포함)
             setupEventSource();         // 3. 실시간 알림 수신 시작
         });
+        
+            document.addEventListener('DOMContentLoaded', function() {
+            const hamburger = document.querySelector('.hamburger-menu');
+            const mobileNav = document.querySelector('.mobile-nav');
+
+            if (hamburger && mobileNav) {
+                hamburger.addEventListener('click', function() {
+                    // 햄버거 버튼과 모바일 메뉴에 'active' 클래스를 토글(toggle)
+                    hamburger.classList.toggle('active');
+                    mobileNav.classList.toggle('active');
+                });
+            }
+        });
     </script>
 
     {% if g.user and g.user.role == 'admin' %}
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const hamburger = document.querySelector('.hamburger-menu');
-        const mobileNav = document.querySelector('.mobile-nav');
-
-        if (hamburger && mobileNav) {
-            hamburger.addEventListener('click', function() {
-                // 햄버거 버튼과 모바일 메뉴에 'active' 클래스를 토글(toggle)
-                hamburger.classList.toggle('active');
-                mobileNav.classList.toggle('active');
-            });
-        }
-    });
-
     document.addEventListener('click', async function(e) {
         if (e.target.classList.contains('btn-admin-check')) {
             const btn = e.target;

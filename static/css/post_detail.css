@@ -548,3 +548,122 @@ body {
     width: 100%; /* 댓글 내용은 항상 전체 너비 차지 */
     padding-left: 36px; 
 }
+
+/* ======================================== */
+/* ▼▼▼ [추가] 반응형 미디어 쿼리 ▼▼▼ */
+/* ======================================== */
+
+/* 1. 기본 container 유동적으로 변경 */
+.container {
+    width: 95%;
+    max-width: 900px; /* 데스크톱 최대 너비는 900px 유지 */
+}
+
+/* 2. 태블릿 (900px 이하) 
+ * (특별히 변경할 사항 없음, 900px 너비 유지가 잘 됨)
+ */
+
+/* 3. 모바일 (600px 이하) */
+@media (max-width: 800px) {
+    
+    /* 게시판 헤더 제목/버튼 크기 축소 */
+    .board-nav h2 {
+        font-size: 20px;
+    }
+    .btn-back {
+        width: 32px;
+        height: 32px;
+        font-size: 20px;
+    }
+
+    /* 카드 패딩 축소 */
+    .post-header {
+        padding: 20px 15px;
+    }
+    .post-content {
+        padding: 20px 15px;
+        font-size: 15px; /* 본문 폰트 약간 줄임 */
+        line-height: 1.7;
+    }
+    .post-actions {
+        padding: 15px;
+    }
+    .comments-card {
+        padding: 20px 15px;
+    }
+    .author-actions {
+        padding: 0 15px 20px; /* 본문 수정/삭제 버튼 패딩 */
+    }
+
+    /* 게시글 제목 축소 */
+    .post-title-section h2 {
+        font-size: 22px;
+    }
+    
+    /* 게시글 추천/비추천 버튼 */
+    .post-actions .btn {
+        padding: 8px 12px;
+        font-size: 13px;
+        /* "도파민", "아폽토시스" 텍스트가 너무 길 경우 */
+        /* display: flex; align-items: center; justify-content: center; */
+        /* min-width: 60px; */
+    }
+    .reaction-score {
+        font-size: 16px;
+    }
+    
+    /* 댓글 입력창 (세로로 쌓기) */
+    .comment-form {
+        flex-direction: column;
+        gap: 10px;
+    }
+    .comment-form textarea {
+        min-height: 60px; /* 높이 약간 줄임 */
+    }
+    .comment-form button {
+        padding: 12px; /* 세로로 길게 */
+        width: 100%; /* 너비 100% */
+    }
+    
+    /* 댓글 목록: 프로필 사진/들여쓰기 축소 */
+    .comment-author img {
+        width: 24px;
+        height: 24px;
+    }
+    .comment-body {
+        /* (24px + 8px gap) */
+        padding-left: 32px;
+    }
+    
+    /* 답글 목록: 들여쓰기 축소 */
+    .reply-list {
+        padding-left: 32px;
+    }
+    
+    /* 답글 입력창: 패딩/버튼 수정 */
+    .reply-form-wrapper {
+        padding-left: 32px; /* 들여쓰기 동일하게 */
+    }
+    .reply-form-wrapper .comment-form {
+        /* 세로 쌓기는 상속됨 */
+        gap: 8px;
+    }
+    .reply-form-wrapper .comment-form textarea {
+        min-height: 50px;
+        font-size: 14px;
+    }
+    .reply-form-wrapper .comment-form button {
+        /* width: 100%; 상속됨 */
+        padding: 10px;
+    }
+    
+    /* 목록가기 버튼 */
+    .list-navigation {
+        margin-top: 0; /* 댓글 카드와의 여백은 이미 있음 */
+    }
+    .list-navigation .btn-list {
+        width: 100%;
+        text-align: center;
+    }
+}
+/* ▲▲▲ [추가] 반응형 미디어 쿼리 끝 ▲▲▲ */
