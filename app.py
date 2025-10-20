@@ -84,26 +84,21 @@ def load_logged_in_user():
         cursor.execute("SELECT * FROM users WHERE login_id = ?", (user_id,))
         g.user = cursor.fetchone()
 
-@app.before_request
-def check_ban_status():
-    """
-    모든 요청 전에 사용자의 제재 상태를 확인하고,
-    제재 기간이 만료되었다면 자동으로 상태를 'active'로 변경합니다.
-    """
-    if g.user and g.user['status'] == 'banned' and g.user['banned_until']:
-        try:
-            banned_until_date = datetime.datetime.strptime(g.user['banned_until'], '%Y-%m-%d %H:%M:%S')
-            if datetime.datetime.now() > banned_until_date:
-                # 제재 기간 만료, 상태를 active로 변경
-                conn = get_db()
-                cursor = conn.cursor()
-                cursor.execute("UPDATE users SET status = 'active', banned_until = NULL WHERE login_id = ?", (g.user['login_id'],))
-                conn.commit()
-                # g.user 객체도 실시간으로 갱신
-                g.user = conn.execute("SELECT * FROM users WHERE login_id = ?", (g.user['login_id'],)).fetchone()
-        except (ValueError, TypeError):
-            # 날짜 형식이 잘못되었거나 NULL인 경우
-            pass
+        # --- ▼ [수정] 제재 상태 확인 로직 통합 ---
+        if g.user and g.user['status'] == 'banned' and g.user['banned_until']:
+            try:
+                banned_until_date = datetime.datetime.strptime(g.user['banned_until'], '%Y-%m-%d %H:%M:%S')
+                if datetime.datetime.now() > banned_until_date:
+                    # 제재 기간 만료, 상태를 active로 변경
+                    cursor.execute("UPDATE users SET status = 'active', banned_until = NULL WHERE login_id = ?", (g.user['login_id'],))
+                    conn.commit()
+                    # g.user 객체를 다시 로드하여 갱신
+                    cursor.execute("SELECT * FROM users WHERE login_id = ?", (user_id,))
+                    g.user = cursor.fetchone()
+            except (ValueError, TypeError):
+                # 날짜 형식이 잘못되었거나 NULL인 경우
+                pass
+        # --- ▲ [수정] ---
 
 # --- 👇 [추가] 제재된 사용자의 활동을 제한하는 데코레이터 ---
 def check_banned(f):
@@ -484,50 +479,68 @@ def main_page():
         bob_data = get_bob()
         return render_template('main_notlogined.html', bob=bob_data)
 
+googlebot_ip_cache = {}
+
 # Googlebot Verification Logic
 def is_googlebot():
-    """요청이 실제 구글 봇으로부터 왔는지 DNS 조회를 통해 확인합니다."""
-    # 로컬 환경 테스트 등을 위해 User-Agent를 먼저 확인 (선택 사항)
+    """
+    User-Agent와 DNS 양방향 조회를 통해 Googlebot을 검증합니다. (캐시 사용)
+    User-Agent 스푸핑을 방지하기 위함입니다.
+    """
     user_agent = request.user_agent.string
-    if "Googlebot" not in user_agent:
+    # 1. User-Agent로 1차 필터링 (가장 빠름)
+    if not user_agent or "Googlebot" not in user_agent:
         return False
 
-    # 1. 요청 IP 확인
     ip = request.remote_addr
-    # 로컬호스트에서 테스트하는 경우 예외 처리
+    
+    # 2. 로컬 IP는 봇으로 간주하지 않음
     if ip == '127.0.0.1':
-        return False # 혹은 테스트 목적에 맞게 True로 설정
+        return False
+
+    # 3. 캐시 확인 (가장 빈번한 케이스)
+    if ip in googlebot_ip_cache:
+        return googlebot_ip_cache[ip]
 
     try:
-        # 2. IP 주소로 역방향 DNS 조회 (IP -> Hostname)
+        # 4. 역방향 DNS 조회 (IP -> Hostname)
         hostname, _, _ = socket.gethostbyaddr(ip)
 
-        # 3. Hostname이 구글 소유인지 확인
+        # 5. Hostname 검증
         if not (hostname.endswith('.googlebot.com') or hostname.endswith('.google.com')):
+            googlebot_ip_cache[ip] = False # 캐시에 '실패' 기록
             return False
 
-        # 4. Hostname으로 순방향 DNS 조회 (Hostname -> IP)
+        # 6. 순방향 DNS 조회 (Hostname -> IP)
         resolved_ip = socket.gethostbyname(hostname)
 
-        # 5. 원래 IP와 조회된 IP가 일치하는지 확인
+        # 7. IP 일치 확인 (최종 검증)
         if ip == resolved_ip:
+            googlebot_ip_cache[ip] = True # 캐시에 '성공' 기록
             return True
+        else:
+            googlebot_ip_cache[ip] = False # 캐시에 '실패' 기록
+            return False
 
-    except socket.herror:
-        # DNS 조회 실패 시
+    except (socket.herror, socket.gaierror):
+        # DNS 조회 실패 (일시적 오류일 수 있으나, 일단 봇이 아닌 것으로 간주)
+        googlebot_ip_cache[ip] = False
         return False
     except Exception as e:
-        add_log('ERROR', 'SYSTEM', f"Error during Googlebot verification: {e}")
+        # 기타 예외 로깅
+        # add_log 함수가 g.user를 필요로 할 수 있으므로, 여기서는 print를 사용합니다.
+        print(f"Error during Googlebot verification for IP {ip}: {e}")
+        googlebot_ip_cache[ip] = False
         return False
-
-    return False
 
 # For Login Required Page
 # @login_required under @app.route
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session and not is_googlebot():
+        g.is_googlebot = is_googlebot() 
+        
+        if 'user_id' not in session and not g.is_googlebot:
             return Response('<script> alert("로그인 사용자만 접근할 수 있습니다."); history.back(); </script>')
         return f(*args, **kwargs)
     return decorated_function
@@ -785,7 +798,7 @@ def register():
         
         hashed_pw = bcrypt.generate_password_hash(pw).decode('utf-8')
         join_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        default_profile = 'images/profiles/defualt_images.jpeg'
+        default_profile = 'images/profiles/default_image.jpeg'
         
         # DATA INSERT to DB
         cursor = conn.cursor()
@@ -1042,8 +1055,9 @@ def post_list(board_id, page):
 
     user_data = g.user
 
-    if not user_data:
-        # 혹시 모를 예외 처리 (세션은 있는데 DB에 유저가 없는 경우)
+    is_bot = getattr(g, 'is_googlebot', False)
+
+    if not user_data and not is_bot:
         session.clear()
         return redirect('/login')
 
@@ -1093,7 +1107,9 @@ def post_list(board_id, page):
 
     except Exception as e:
         print(f"Error fetching post list: {e}")
-        add_log('ERROR', user_data['login_id'], f"Error fetching post list for board_id {board_id}, page {page}: {e}")
+        user_id_for_log = user_data['login_id'] if user_data else 'Googlebot'
+
+        add_log('ERROR', user_id_for_log, f"Error fetching post list for board_id {board_id}, page {page}: {e}")
         return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
 
     return render_template('post_list.html', user=user_data,
@@ -1113,7 +1129,10 @@ def post_detail(post_id):
     cursor = conn.cursor()
 
     user_data = g.user
-    if not user_data:
+    
+    is_bot = getattr(g, 'is_googlebot', False)
+
+    if not user_data and not is_bot:
         session.clear()
         return redirect('/login')
 
@@ -1148,8 +1167,12 @@ def post_detail(post_id):
             if user_reaction_row:
                 post['user_reaction'] = user_reaction_row['reaction_type']
 
-        cursor.execute("UPDATE posts SET view_count = view_count + 1 WHERE id = ?", (post_id,))
-        conn.commit()
+        viewed_posts = session.get('viewed_posts', [])
+        if post_id not in viewed_posts:
+            cursor.execute("UPDATE posts SET view_count = view_count + 1 WHERE id = ?", (post_id,))
+            conn.commit()
+            viewed_posts.append(post_id)
+            session['viewed_posts'] = viewed_posts
 
         # --- 👇 댓글 로직 수정 시작 ---
         comment_query = """
@@ -1195,6 +1218,8 @@ def post_detail(post_id):
 
     except Exception as e:
         print(f"Error fetching post detail: {e}")
+        user_id_for_log = user_data['login_id'] if user_data else 'Googlebot'
+        add_log('ERROR', user_id_for_log, f"Error fetching post detail for post_id {post_id}: {e}")
         return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
 
     return render_template('post_detail.html', user=user_data, post=post, comments=comments_tree)
@@ -1679,7 +1704,7 @@ def update_profile_image():
         if old_image_path_tuple:
             old_image_path = old_image_path_tuple[0]
             # 2. 기본 이미지가 아닐 경우에만 파일을 삭제합니다.
-            if old_image_path and 'defualt_images.jpeg' not in old_image_path:
+            if old_image_path and 'default_image.jpeg' not in old_image_path:
                 try:
                     # 'static'을 경로에 포함시켜야 합니다.
                     full_old_path = os.path.join('static', old_image_path)
@@ -1852,7 +1877,7 @@ def delete_account():
         old_image_path = user['profile_image']
         print(f"Old image path: {old_image_path}")  # 디버그 출력
 
-        if old_image_path and 'defualt_images' not in old_image_path:
+        if old_image_path and 'default_image' not in old_image_path:
             try:
                 # 'static/'을 포함한 전체 경로 생성
                 full_path_to_delete = os.path.join('static', old_image_path)
@@ -1885,7 +1910,7 @@ def delete_account():
                 hakbun = ?,
                 nickname = ?, 
                 pw = ?, 
-                profile_image = 'images/profiles/defualt_images.jpeg',
+                profile_image = 'images/profiles/default_image.jpeg',
                 profile_message = '탈퇴한 사용자의 프로필입니다.',
                 clubhak = NULL,
                 clubchi = NULL,
