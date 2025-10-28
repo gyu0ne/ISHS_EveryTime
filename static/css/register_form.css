@@ -123,3 +123,33 @@ footer span {
     margin-left: 8px;
     color: #888;
 }
+
+/* static/css/register_form.css */
+
+/* ... (기존 코드) ... */
+
+.register-container {
+    width: 90%; /* 기존 400px 고정 너비 대신 90%로 변경 */
+    max-width: 400px; /* 최대 너비는 400px로 유지 */
+    text-align: center;
+    padding: 0 10px; /* 화면 좌우에 최소 여백 보장 */
+}
+
+/* ... (기존 코드) ... */
+
+.user-info-row {
+    display: flex;
+    flex-wrap: wrap; /* 좁은 화면에서 줄바꿈 허용 */
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+/* ... (기존 코드) ... */
+
+/* --- ▼ [추가] 350px 이하 (매우 좁은 화면) 대응 --- */
+@media (max-width: 420px) {
+    .user-info-row .like-input {
+        /* 학번, 이름, 기수 버튼이 세로로 쌓이도록 */
+        flex-basis: 100%; 
+    }
+}

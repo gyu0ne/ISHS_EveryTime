@@ -461,3 +461,45 @@ input:checked + .slider:before {
 .slider.round:before {
     border-radius: 50%;
 }
+
+/* static/css/my_page.css */
+
+/* --- ▼ [수정] 반응형 레이아웃 적용 --- */
+
+/* 1. 기본 컨테이너를 유동적으로 변경 */
+.mypage-container {
+    width: 95%; /* 기존 1100px 고정 너비 대신 95%로 변경 */
+    max-width: 1100px; /* 최대 너비는 1100px로 유지 */
+    margin: 40px auto;
+}
+
+/* 2. 900px 이하 (태블릿/모바일) 에서 1단 레이아웃으로 변경 */
+@media (max-width: 920px) {
+    .content-wrapper {
+        flex-direction: column; /* 세로로 쌓기 */
+        gap: 20px; /* 사이드바와 본문 사이 간격 */
+    }
+
+    .profile-sidebar {
+        flex: 0 0 auto; /* flex-basis 고정값 해제 */
+        width: 100%; /* 너비 100%로 설정 */
+    }
+    
+    .mypage-container {
+        margin-top: 20px; /* 모바일에서 상단 여백 줄임 */
+    }
+}
+
+/* 3. 600px 이하 (작은 모바일) 에서 카드 패딩 줄이기 */
+@media (max-width: 800px) {
+    .card {
+        padding: 20px 15px; /* 패딩 축소 */
+    }
+    .activity-list ul li {
+        padding: 15px 5px; /* 목록 패딩 축소 */
+    }
+    .post-title, .comment-content {
+        font-size: 15px;
+    }
+}
+/* --- ▲ [수정] --- */

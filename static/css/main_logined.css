@@ -751,6 +751,9 @@ main {
 .mobile-user-links a:hover {
     background-color: #4f4f4f;
 }
+.mobile-user-links a:clicked {
+    background-color: #4f4f4f;
+}
 
 /*
  * 3. 헤더 반응형 미디어 쿼리 (900px)
