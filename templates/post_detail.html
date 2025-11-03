@@ -214,28 +214,62 @@
                                 </div>
                             </a>
                         {% endif %}
+</span>
+        
+        {% if g.user and g.user.role == 'admin' %}
+            <button class="btn-admin-check" 
+                    data-target-type="comment" 
+                    data-target-id="{{ comment.id }}">검사</button>
+        {% endif %}
+        <div class="comment-body">
+            <div class="comment-meta">
+                <span class="comment-date">{{ comment.updated_at|datetime }}</span>
+                <div class="comment-actions">
+                    {% if not comment.parent_comment_id %}
+                    <a href="#" onclick="toggleReplyForm('{{ comment.id }}'); return false;">답글</a>
+                    {% endif %}
+                    
+                    {% if g.user and (g.user.login_id == comment.author or g.user.role == 'admin') %}
+                    <a href="#" onclick="toggleEdit('{{ comment.id }}'); return false;">수정</a>
+                    <form method="POST" action="{{ url_for('delete_comment', comment_id=comment.id) }}" onsubmit="return confirm('정말로 삭제하시겠습니까?');" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit">삭제</button>
+                    </form>
+                    {% endif %}
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    {% if g.user and g.user.login_id == comment.author %}
+    <div class="comment-edit" style="display: none;">
+        </div>
+    {% endif %}
+    </li>
+{% endmacro %}
+
+
+{% block content %}
+    <div class="container">
+        <div class="post-view-card">
+            <header class="post-header">
+                <div class="post-title-section">
+                    <span class="author-display" id="post-author-{{ post.id }}">
                         </span>
+
                     {% if g.user and g.user.role == 'admin' %}
                         <button class="btn-admin-check" 
                                 data-target-type="post" 
                                 data-target-id="{{ post.id }}">검사</button>
                     {% endif %}
-                </div>
-                <div class="post-meta">
-                    {% if (post.updated_at_datetime - post.created_at_datetime).total_seconds() < 2 %}
-                        <span>작성일: {{ post.created_at|datetime }}</span>
-                    {% else %}
-                        <span>수정일: {{ post.updated_at|datetime }}</span>
-                    {% endif %}
-                    <span>조회수: {{ post.view_count }}</span> 
-                </div>
-            </header>
+                    </div>
+                </header>
 
             <div class="post-content">
                 {{ post.content|safe }}
             </div>
 
-            {% if session['user_id'] == post.author or g.user.role == 'admin' %}
+            {% if g.user and (g.user.login_id == post.author or g.user.role == 'admin') %}
             <div class="author-actions">
                 <a href="{{ url_for('post_edit', post_id=post.id) }}" class="btn btn-edit">수정</a>
                 <form action="{{ url_for('post_delete', post_id=post.id) }}" method="POST" onsubmit="return confirm('정말로 삭제하시겠습니까?');" style="display: inline;">
@@ -244,51 +278,25 @@
                 </form>
             </div>
             {% endif %}
-            <footer class="post-actions">
-                <button type="button" 
-                        class="btn btn-like {% if post.user_reaction == 'like' %}active{% endif %}" 
-                        id="post-like-btn-{{ post.id }}"
-                        onclick="handleReaction('post', {{ post.id }}, 'like')">
-                    도파민 <span id="post-likes-count-{{ post.id }}">{{ post.likes }}</span>
-                </button>
-                
-                <div class="reaction-score {% if (post.likes - post.dislikes) > 0 %}score-plus{% elif (post.likes - post.dislikes) < 0 %}score-minus{% endif %}" 
-                     id="post-score-{{ post.id }}">
-                    <p class="score-text">
-                    {{ post.likes - post.dislikes }}
-                    </p>
-                </div>
-
-                <button type="button" 
-                        class="btn btn-dislike {% if post.user_reaction == 'dislike' %}active{% endif %}"
-                        id="post-dislike-btn-{{ post.id }}"
-                        onclick="handleReaction('post', {{ post.id }}, 'dislike')">
-                    아폽토시스 <span id="post-dislikes-count-{{ post.id }}">{{ post.dislikes }}</span>
-                </button>
-            </footer>
-        </div>
+            </div>
 
         <div class="comments-card">
             <h3>댓글 {{ post.comment_count }}개</h3>
             
-            <form class="comment-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <textarea name="comment_content" placeholder="댓글을 입력하세요..." required minlength="1"></textarea>
-                <button type="submit">등록</button>
-            </form>
+            {% if g.user %}
+                <form class="comment-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <textarea name="comment_content" placeholder="댓글을 입력하세요..." required minlength="1"></textarea>
+                    <button type="submit">등록</button>
+                </form>
+            {% else %}
+                <div class="comment-form-login-prompt">
+                    <p style="text-align: center; padding: 20px; color: #aaa;">댓글을 작성하려면 <a href="{{ url_for('login') }}" style="color: #d9534f; font-weight: bold;">로그인</a>이 필요합니다.</p>
+                </div>
+            {% endif %}
             <ul class="comment-list">
-                {% if comments %}
-                    {% for comment in comments %}
-                        {{ render_comment(comment, post) }}
-                    {% endfor %}
-                {% else %}
-                    <li style="text-align: center; padding: 30px 0; border: none;">작성된 댓글이 없습니다.</li>
-                {% endif %}
-            </ul>
+                </ul>
         </div>
         
-        <div class="list-navigation">
-            <a href="{{ url_for('post_list', board_id=post.board_id) }}" class="btn btn-list">목록으로</a>
         </div>
-    </div>
 {% endblock %}

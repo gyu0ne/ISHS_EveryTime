@@ -1045,7 +1045,6 @@ def post_write():
 # Post List with Pagination
 @app.route('/board/<int:board_id>', defaults={'page': 1})
 @app.route('/board/<int:board_id>/<int:page>')
-@login_required
 def post_list(board_id, page):
     conn = get_db()
     conn.row_factory = sqlite3.Row
@@ -1057,16 +1056,18 @@ def post_list(board_id, page):
 
     is_bot = getattr(g, 'is_googlebot', False)
 
-    if not user_data and not is_bot:
-        session.clear()
-        return redirect('/login')
-
     try:
-        cursor.execute("SELECT board_name FROM board WHERE board_id = ?", (board_id,))
+        # ▼▼▼ [수정] board_name 대신 is_public을 포함한 모든 정보를 가져옵니다. ▼▼▼
+        cursor.execute("SELECT board_name, is_public FROM board WHERE board_id = ?", (board_id,))
         board = cursor.fetchone()
 
         if not board:
             return Response('<script>alert("존재하지 않는 게시판입니다."); history.back();</script>')
+
+        # ▼▼▼ [추가] 공개 게시판이 아닐 경우에만 로그인을 확인합니다. ▼▼▼
+        if not board['is_public'] and not user_data and not is_bot:
+            return Response('<script> alert("로그인 사용자만 접근할 수 있습니다."); history.back(); </script>')
+        # ▲▲▲ [추가] ▲▲▲
 
         # 2. 공지사항 목록 조회 (is_notice = 1) - 쿼리 수정
         notice_query = """
@@ -1122,7 +1123,6 @@ def post_list(board_id, page):
 
 # Post Detail
 @app.route('/post/<int:post_id>')
-@login_required
 def post_detail(post_id):
     conn = get_db()
     conn.row_factory = sqlite3.Row
@@ -1132,25 +1132,27 @@ def post_detail(post_id):
     
     is_bot = getattr(g, 'is_googlebot', False)
 
-    if not user_data and not is_bot:
-        session.clear()
-        return redirect('/login')
-
     try:
-        # --- 게시글 정보 조회 ---
+        # --- ▼▼▼ [수정] 게시글 정보 조회 시 board의 is_public 컬럼도 함께 조회합니다. ▼▼▼ ---
         query = """
-            SELECT p.*, u.nickname, u.profile_image, b.board_name
+            SELECT p.*, u.nickname, u.profile_image, b.board_name, b.is_public
             FROM posts p
             JOIN users u ON p.author = u.login_id
             JOIN board b ON p.board_id = b.board_id
             WHERE p.id = ?
         """
+        # --- ▲▲▲ [수정] ---
         cursor.execute(query, (post_id,))
         post_data = cursor.fetchone()
 
         if not post_data:
             return Response('<script>alert("존재하지 않거나 삭제된 게시글입니다."); history.back();</script>')
     
+        # ▼▼▼ [추가] 공개 게시판이 아닐 경우에만 로그인을 확인합니다. ▼▼▼
+        if not post_data['is_public'] and not user_data and not is_bot:
+            return Response('<script> alert("로그인 사용자만 접근할 수 있습니다."); history.back(); </script>')
+        # ▲▲▲ [추가] ▲▲▲
+
         post = dict(post_data)
         
         # --- ▼ [수정] 익명 게시판 처리를 위해 원본 작성자 ID와 게시판 ID 저장 ---
