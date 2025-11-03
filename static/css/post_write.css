@@ -225,3 +225,40 @@ body {
     color: var(--text-secondary-color);
 }
 /* --- ▲ 추가할 스타일 ▲ --- */
+
+/* static/css/post_write.css */
+
+/* ... (기존 코드 상단) ... */
+
+.editor-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh; /* height -> min-height로 변경 */
+    height: auto; /* auto로 설정 */
+    width: 100%; /* 너비를 100%로 설정 */
+}
+
+/* ... (기존 코드 중략) ... */
+
+/* --- ▼ 파일 맨 아래에 이 코드 추가 ▼ --- */
+@media (max-width: 600px) {
+    .editor-container {
+        padding: 10px; /* 모바일 패딩 축소 */
+    }
+    .editor-header {
+        padding-bottom: 10px;
+    }
+    .note-editable {
+        min-height: 300px; /* 모바일에서 에디터 최소 높이 줄임 */
+    }
+    .editor-footer {
+        padding-top: 10px;
+    }
+    .action-buttons button {
+        padding: 8px 15px;
+        font-size: 14px;
+    }
+}

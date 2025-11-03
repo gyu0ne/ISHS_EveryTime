@@ -69,3 +69,41 @@
 .error-actions .btn-primary:hover {
     background-color: #c9302c;
 }
+
+/* static/css/404.css */
+
+/* ... (기존 코드 상단) ... */
+
+.error-card {
+    background-color: #2e2e2e;
+    border: 1px solid #3a3a3a;
+    border-radius: 12px;
+    padding: 50px 60px;
+    max-width: 600px;
+    width: 90%; /* 좁은 화면을 위해 width 추가 */
+}
+
+/* ... (기존 코드 중략) ... */
+
+/* --- ▼ 파일 맨 아래에 이 코드 추가 ▼ --- */
+@media (max-width: 600px) {
+    .error-container {
+        padding: 40px 10px; /* 컨테이너 패딩 축소 */
+    }
+    .error-card {
+        padding: 30px 20px; /* 카드 내부 패딩 축소 */
+    }
+    .error-code {
+        font-size: 60px; /* 404 폰트 축소 */
+    }
+    .error-message {
+        font-size: 18px;
+    }
+    .error-description {
+        font-size: 14px;
+    }
+    .error-actions {
+        flex-direction: column; /* 버튼 세로로 쌓기 */
+        gap: 10px;
+    }
+}

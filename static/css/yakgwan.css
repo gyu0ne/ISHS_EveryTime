@@ -159,3 +159,37 @@ body {
     cursor: pointer;
     margin-top: 10px;
 }
+
+/* static/css/yakgwan.css */
+
+/* ... (기존 코드 상단) ... */
+
+/* 전체 컨테이너 */
+.terms-container {
+    width: 95%; /* 640px 고정 너비 대신 95%로 변경 */
+    max-width: 640px; /* 최대 너비는 640px로 유지 */
+    background-color: #2e2e2e;
+    border: 1px solid #444;
+    border-radius: 12px;
+    padding: 30px; 
+    text-align: center;
+}
+
+/* ... (기존 코드 중략) ... */
+
+/* --- ▼ 파일 맨 아래에 이 코드 추가 ▼ --- */
+@media (max-width: 600px) {
+    body {
+        padding: 10px; /* body의 기본 패딩을 줄임 */
+    }
+    .terms-container {
+        padding: 20px 15px; /* 컨테이너 내부 패딩 축소 */
+    }
+    .terms-container h1 {
+        font-size: 22px; /* 제목 폰트 축소 */
+    }
+    .terms-box {
+        height: 200px; /* 모바일에서 약관 박스 높이 확보 */
+        padding: 15px;
+    }
+}
