@@ -88,17 +88,25 @@
     </script>
 {% endblock %}
 
-{% macro render_comment(comment, post_id) %}
+{% macro render_comment(comment, post) %}
 <li class="comment-item" id="comment-{{ comment.id }}">
     <div class="comment-view">
         <span class="author-display" id="comment-author-{{ comment.id }}">
-            <a href="{{ url_for('user_profile', nickname=comment.nickname) }}" class="author-info-link">
+            
+            {% if post.board_id == 3 %}
                 <div class="comment-author">
                     <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진">
                     <span class="author-name">{{ comment.nickname }}</span>
                 </div>
-            </a>
-        </span>
+            {% else %}
+                <a href="{{ url_for('user_profile', nickname=comment.nickname) }}" class="author-info-link">
+                    <div class="comment-author">
+                        <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진">
+                        <span class="author-name">{{ comment.nickname }}</span>
+                    </div>
+                </a>
+            {% endif %}
+            </span>
         {% if g.user and g.user.role == 'admin' %}
             <button class="btn-admin-check" 
                     data-target-type="comment" 
@@ -158,7 +166,7 @@
     {% endif %}
 
     <div class="reply-form-wrapper" id="reply-form-{{ comment.id }}">
-        <form class="comment-form" method="POST" action="{{ url_for('add_comment', post_id=post_id) }}">
+        <form class="comment-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <input type="hidden" name="parent_comment_id" value="{{ comment.id }}">
             <textarea name="comment_content" placeholder="{{ comment.nickname }}님에게 답글 남기기..." required minlength="1"></textarea>
@@ -169,7 +177,7 @@
     {% if comment.replies %}
         <ul class="reply-list">
             {% for reply in comment.replies %}
-                {{ render_comment(reply, post_id) }}
+                {{ render_comment(reply, post) }}
             {% endfor %}
         </ul>
     {% endif %}
@@ -192,13 +200,21 @@
                 <div class="post-title-section">
                     <h2>{{ post.title }}</h2>
                     <span class="author-display" id="post-author-{{ post.id }}">
-                        <a href="{{ url_for('user_profile', nickname=post.nickname) }}" class="author-info-link">
+
+                        {% if post.board_id == 3 %}
                             <div class="author-info">
                                 <img src="{{ url_for('static', filename=post.profile_image) }}" alt="프로필 사진">
                                 <span class="author-name">{{ post.nickname }}</span>
                             </div>
-                        </a>
-                    </span>
+                        {% else %}
+                            <a href="{{ url_for('user_profile', nickname=post.nickname) }}" class="author-info-link">
+                                <div class="author-info">
+                                    <img src="{{ url_for('static', filename=post.profile_image) }}" alt="프로필 사진">
+                                    <span class="author-name">{{ post.nickname }}</span>
+                                </div>
+                            </a>
+                        {% endif %}
+                        </span>
                     {% if g.user and g.user.role == 'admin' %}
                         <button class="btn-admin-check" 
                                 data-target-type="post" 
@@ -263,7 +279,7 @@
             <ul class="comment-list">
                 {% if comments %}
                     {% for comment in comments %}
-                        {{ render_comment(comment, post.id) }}
+                        {{ render_comment(comment, post) }}
                     {% endfor %}
                 {% else %}
                     <li style="text-align: center; padding: 30px 0; border: none;">작성된 댓글이 없습니다.</li>

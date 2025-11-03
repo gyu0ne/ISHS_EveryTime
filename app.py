@@ -1137,7 +1137,7 @@ def post_detail(post_id):
         return redirect('/login')
 
     try:
-        # --- 게시글 정보 조회 (기존과 동일) ---
+        # --- 게시글 정보 조회 ---
         query = """
             SELECT p.*, u.nickname, u.profile_image, b.board_name
             FROM posts p
@@ -1152,9 +1152,20 @@ def post_detail(post_id):
             return Response('<script>alert("존재하지 않거나 삭제된 게시글입니다."); history.back();</script>')
     
         post = dict(post_data)
+        
+        # --- ▼ [수정] 익명 게시판 처리를 위해 원본 작성자 ID와 게시판 ID 저장 ---
+        post_author_id = post['author'] 
+        board_id = post['board_id']
+
+        if board_id == 3:
+            post['nickname'] = '익명'
+            post['profile_image'] = 'images/profiles/default_image.jpeg'
+        # --- ▲ [수정] ---
+
         post['created_at_datetime'] = datetime.datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
         post['updated_at_datetime'] = datetime.datetime.strptime(post['updated_at'], '%Y-%m-%d %H:%M:%S')
 
+        # ... (중략: 게시글 추천/조회수 로직은 동일) ...
         cursor.execute("SELECT reaction_type, COUNT(*) as count FROM reactions WHERE target_type = 'post' AND target_id = ? GROUP BY reaction_type", (post_id,))
         reactions = {r['reaction_type']: r['count'] for r in cursor.fetchall()}
         post['likes'] = reactions.get('like', 0)
@@ -1174,22 +1185,48 @@ def post_detail(post_id):
             viewed_posts.append(post_id)
             session['viewed_posts'] = viewed_posts
 
-        # --- 👇 댓글 로직 수정 시작 ---
+        # --- ▼ [수정] 댓글 로직 수정 (정렬 순서 변경 및 익명 처리) ---
         comment_query = """
             SELECT c.*, u.nickname, u.profile_image
             FROM comments c
             JOIN users u ON c.author = u.login_id
             WHERE c.post_id = ?
-            ORDER BY c.created_at DESC
+            ORDER BY c.created_at ASC
         """
         cursor.execute(comment_query, (post_id,))
         all_comments = cursor.fetchall()
         
         comments_dict = {}
+        
+        # --- ▼ [추가] 익명 댓글 처리를 위한 변수 ---
+        anonymous_map = {}  # key: author_id, value: "익명N"
+        anonymous_count = 1
+        # --- ▲ [추가] ---
+
         # 1. 모든 댓글을 딕셔너리로 변환하고, 'replies' 리스트와 reaction 정보를 초기화합니다.
         for comment_row in all_comments:
             comment = dict(comment_row)
             comment['replies'] = []
+
+            # --- ▼ [추가] 익명 게시판 댓글 처리 로직 ---
+            if board_id == 3:
+                comment_author_id = comment['author']
+                
+                if comment_author_id == post_author_id:
+                    # 댓글 작성자가 게시글 작성자인 경우
+                    comment['nickname'] = '익명 (작성자)'
+                else:
+                    # 댓글 작성자가 게시글 작성자가 아닌 경우
+                    if comment_author_id not in anonymous_map:
+                        # 이 작성자가 처음 댓글을 단 경우, 새 익명 번호 할당
+                        anonymous_map[comment_author_id] = f'익명{anonymous_count}'
+                        anonymous_count += 1
+                    # 맵에서 할당된 익명 번호 사용
+                    comment['nickname'] = anonymous_map[comment_author_id]
+                
+                # 프로필 이미지는 모두 기본값으로 변경
+                comment['profile_image'] = 'images/profiles/default_image.jpeg'
+            # --- ▲ [추가] ---
 
             cursor.execute("SELECT reaction_type, COUNT(*) as count FROM reactions WHERE target_type = 'comment' AND target_id = ? GROUP BY reaction_type", (comment['id'],))
             comment_reactions = {r['reaction_type']: r['count'] for r in cursor.fetchall()}
