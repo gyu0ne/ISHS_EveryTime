@@ -43,6 +43,7 @@ LOG_DATABASE = 'log.db'
 ACADEMIC_CLUBS = ["WIN", "TNT", "PLUTONIUM", "LOGIC", "LOTTOL", "RAIBIT", "QUASAR"]
 HOBBY_CLUBS = ["책톡", "픽쳐스", "메카", "퓨전", "차랑", "스포츠문화부", "체력단련부", "I-FLOW", "아마빌레"]
 CAREER_CLUBS = ["TIP", "필로캠", "천수동", "씽크빅", "WIZARD", "METEOR", "엔진"]
+GUEST_USER_ID = '__guest__'
 
 # DB connect (first line of all route)
 def get_db():
@@ -952,7 +953,6 @@ def mypage():
 
 # Post Write
 @app.route('/post-write', methods=['GET', 'POST'])
-@login_required
 @check_banned
 def post_write():
     conn = get_db()
@@ -963,7 +963,24 @@ def post_write():
         title = request.form.get('title')
         content = request.form.get('content')
         board_id = request.form.get('board_id') # board_id 수신
-        author_id = session['user_id']
+
+        if not board_id:
+             return Response('<script>alert("게시판을 선택해주세요."); history.back();</script>')
+        
+        cursor.execute("SELECT is_public FROM board WHERE board_id = ?", (board_id,))
+        board = cursor.fetchone()
+
+        if not board:
+            return Response('<script>alert("존재하지 않는 게시판입니다."); history.back();</script>')
+
+        is_public_board = board[0] == 1
+
+        # 비회원이 비공개 게시판에 쓰려고 할 때 차단
+        if not g.user and not is_public_board:
+            return Response('<script>alert("로그인이 필요한 게시판입니다."); history.back();</script>')
+        
+        # 작성자 ID 설정 (로그인 시: 사용자 ID, 비로그인 시: 게스트 ID)
+        author_id = g.user['login_id'] if g.user else GUEST_USER_ID
 
         if len(title) > 50:
             return Response('<script>alert("제목은 50자를 초과할 수 없습니다."); history.back();</script>')
@@ -1167,6 +1184,12 @@ def post_detail(post_id):
         post['created_at_datetime'] = datetime.datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
         post['updated_at_datetime'] = datetime.datetime.strptime(post['updated_at'], '%Y-%m-%d %H:%M:%S')
 
+        user_id_for_reaction = None
+        if g.user:
+            user_id_for_reaction = g.user['login_id']
+        elif is_public_board:
+            user_id_for_reaction = session.get('guest_session_id')
+
         # ... (중략: 게시글 추천/조회수 로직은 동일) ...
         cursor.execute("SELECT reaction_type, COUNT(*) as count FROM reactions WHERE target_type = 'post' AND target_id = ? GROUP BY reaction_type", (post_id,))
         reactions = {r['reaction_type']: r['count'] for r in cursor.fetchall()}
@@ -1174,8 +1197,8 @@ def post_detail(post_id):
         post['dislikes'] = reactions.get('dislike', 0)
 
         post['user_reaction'] = None
-        if g.user:
-            cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = 'post' AND target_id = ?", (g.user['login_id'], post_id,))
+        if user_id_for_reaction:
+            cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = 'post' AND target_id = ?", (user_id_for_reaction, post_id,))
             user_reaction_row = cursor.fetchone()
             if user_reaction_row:
                 post['user_reaction'] = user_reaction_row['reaction_type']
@@ -1235,9 +1258,8 @@ def post_detail(post_id):
             comment['likes'] = comment_reactions.get('like', 0)
             comment['dislikes'] = comment_reactions.get('dislike', 0)
             
-            comment['user_reaction'] = None
-            if g.user:
-                cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = 'comment' AND target_id = ?", (g.user['login_id'], comment['id']))
+            if user_id_for_reaction:
+                cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = 'comment' AND target_id = ?", (user_id_for_reaction, comment['id']))
                 user_reaction_row = cursor.fetchone()
                 if user_reaction_row:
                     comment['user_reaction'] = user_reaction_row['reaction_type']
@@ -1431,7 +1453,19 @@ def add_comment(post_id):
     cursor = conn.cursor()
 
     try:
-        author_id = session['user_id']
+        cursor.execute("SELECT b.is_public FROM posts p JOIN board b ON p.board_id = b.board_id WHERE p.id = ?", (post_id,))
+        board = cursor.fetchone()
+
+        if not board:
+            return Response('<script>alert("원본 게시글이 존재하지 않습니다."); history.back();</script>')
+
+        is_public_board = board[0] == 1
+
+        if not g.user and not is_public_board:
+            return Response('<script>alert("로그인이 필요한 게시판입니다."); history.back();</script>')
+
+        author_id = g.user['login_id'] if g.user else GUEST_USER_ID
+
         created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sanitized_content = bleach.clean(content)
         
@@ -1599,7 +1633,6 @@ def edit_comment(comment_id):
 
 # React (Like/Dislike) for Post and Comment
 @app.route('/react/<target_type>/<int:target_id>', methods=['POST'])
-@login_required
 @check_banned
 def react(target_type, target_id):
     reaction_type = request.form.get('reaction_type')
@@ -1613,6 +1646,35 @@ def react(target_type, target_id):
     cursor = conn.cursor()
 
     try:
+        is_public_board = False
+        if target_type == 'post':
+            cursor.execute("SELECT b.is_public FROM posts p JOIN board b ON p.board_id = b.board_id WHERE p.id = ?", (target_id,))
+            board = cursor.fetchone()
+            if board: is_public_board = board['is_public'] == 1
+        
+        elif target_type == 'comment':
+            cursor.execute("""
+                SELECT b.is_public FROM comments c 
+                JOIN posts p ON c.post_id = p.id 
+                JOIN board b ON p.board_id = b.board_id 
+                WHERE c.id = ?
+            """, (target_id,))
+            board = cursor.fetchone()
+            if board: is_public_board = board['is_public'] == 1
+
+        user_id_for_reaction = None
+        if g.user:
+            user_id_for_reaction = g.user['login_id']
+        elif is_public_board:
+            if 'guest_session_id' not in session:
+                session['guest_session_id'] = str(uuid.uuid4())
+            user_id_for_reaction = session['guest_session_id']
+        else:
+            return jsonify({'status': 'error', 'message': '로그인이 필요합니다.'}), 403
+        
+        if not user_id_for_reaction:
+             return jsonify({'status': 'error', 'message': '세션 오류. 다시 시도해주세요.'}), 500
+
         # --- ▼ IDOR 방어 로직 추가 ▼ ---
         table_name = ''
         if target_type == 'post':
@@ -1628,28 +1690,28 @@ def react(target_type, target_id):
             return jsonify({'status': 'error', 'message': '존재하지 않는 대상입니다.'}), 404
 
         cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = ? AND target_id = ?",
-                       (user_id, target_type, target_id))
+                       (user_id_for_reaction, target_type, target_id))
         existing_reaction = cursor.fetchone()
 
         if existing_reaction:
             if existing_reaction['reaction_type'] == reaction_type:
                 cursor.execute("DELETE FROM reactions WHERE user_id = ? AND target_type = ? AND target_id = ?",
-                               (user_id, target_type, target_id))
-                add_log('CANCEL_REACTION', user_id, f"{target_type} (id: {target_id})에 대한 '{reaction_type}' 반응을 취소했습니다.")
+                               (user_id_for_reaction, target_type, target_id))
+                add_log('CANCEL_REACTION', user_id_for_reaction, f"{target_type} (id: {target_id})에 대한 '{reaction_type}' 반응을 취소했습니다.")
             else:
                 cursor.execute("UPDATE reactions SET reaction_type = ? WHERE user_id = ? AND target_type = ? AND target_id = ?",
-                               (reaction_type, user_id, target_type, target_id))
-                add_log('CHANGE_REACTION', user_id, f"{target_type} (id: {target_id})에 대한 반응을 '{existing_reaction['reaction_type']}'에서 '{reaction_type}'(으)로 변경했습니다.")
+                               (reaction_type, user_id_for_reaction, target_type, target_id))
+                add_log('CHANGE_REACTION', user_id_for_reaction, f"{target_type} (id: {target_id})에 대한 반응을 '{existing_reaction['reaction_type']}'에서 '{reaction_type}'(으)로 변경했습니다.")
         else:
             cursor.execute("INSERT INTO reactions (user_id, target_type, target_id, reaction_type, created_at) VALUES (?, ?, ?, ?, ?)",
-                           (user_id, target_type, target_id, reaction_type, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-            add_log('ADD_REACTION', user_id, f"{target_type} (id: {target_id})에 '{reaction_type}' 반응을 추가했습니다.")
+                           (user_id_for_reaction, target_type, target_id, reaction_type, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+            add_log('ADD_REACTION', user_id_for_reaction, f"{target_type} (id: {target_id})에 '{reaction_type}' 반응을 추가했습니다.")
 
         conn.commit()
 
         # --- 👇 HOT 게시물 알림 로직 시작 ---
         # 1. '게시글'에 '좋아요'를 눌렀을 경우에만 확인
-        if target_type == 'post' and reaction_type == 'like':
+        if g.user and target_type == 'post' and reaction_type == 'like':
             # 2. 현재 '좋아요' 개수를 다시 계산
             cursor.execute("SELECT COUNT(*) FROM reactions WHERE target_type = 'post' AND target_id = ? AND reaction_type = 'like'", (target_id,))
             likes = cursor.fetchone()[0]
@@ -1692,7 +1754,7 @@ def react(target_type, target_id):
         dislikes = reactions.get('dislike', 0)
 
         cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = ? AND target_id = ?",
-                       (user_id, target_type, target_id))
+                       (user_id_for_reaction, target_type, target_id))
         final_reaction_row = cursor.fetchone()
         user_reaction = final_reaction_row['reaction_type'] if final_reaction_row else None
 
