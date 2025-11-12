@@ -262,8 +262,8 @@ def get_bob():
             return [meal_data[0], meal_data[1], meal_data[2]]
         else:
             url = (
-                "https://open.neis.go.kr/hub/mealServiceDietInfo"
-                "?KEY=75f40bb14ddd41d1b5ecda3389258cb1"
+                f"https://open.neis.go.kr/hub/mealServiceDietInfo"
+                f"?KEY={os.getenv('NEIS_API_KEY')}"
                 "&TYPE=JSON"
                 "&ATPT_OFCDC_SC_CODE=E10"
                 "&SD_SCHUL_CODE=7310058"
@@ -625,13 +625,10 @@ def riro_auth():
 
             cursor = conn.cursor()
 
-            cursor.execute('SELECT COUNT(*) FROM users WHERE name = ? AND status = "active"', (api_result['name'],))
-            count_name = cursor.fetchone()[0]
-
             cursor.execute('SELECT COUNT(*) FROM users WHERE hakbun = ? AND status = "active"', (api_result['student_number'],))
             count_hakbun = cursor.fetchone()[0]
 
-            if count_name > 0 and count_hakbun > 0:
+            if count_hakbun > 0:
                 return Response(f'''
         <script>
             alert("이미 가입된 계정이 있습니다.");
@@ -739,6 +736,7 @@ def register():
         return redirect('yakgwan')
     
     conn = get_db()
+    cursor = conn.cursor()
 
     if request.method == 'POST': # POST : return Form
         pw = request.form['password']
@@ -746,74 +744,75 @@ def register():
         id = request.form['login_id']
         nick = request.form['nickname']
         birth = str(request.form['birth'])
-        print(birth)
 
-        if not isinstance(birth, str):
-            birth = str(birth)
+        # --- ▼ [수정] 입력값 유효성 검사 강화 ---
+        if not all([pw, pw_check, id, nick, birth]):
+            return Response('<script> alert("모든 필드를 입력해주세요."); history.back(); </script>')
 
-        # 1. 입력값 길이 확인
         if len(birth) != 8:
-            return Response('<script> alert("생년월일은 8자리로 입력해야 합니다."); history.back(); </script>')
-
-        year = int(birth[0:4])
-        month = int(birth[4:6])
-        day = int(birth[6:8])
-
-        print(year, month, day)
+            return Response('<script> alert("생년월일은 8자리로 입력해야 합니다. (YYYYMMDD)"); history.back(); </script>')
 
         try:
-            datetime.date(int(year), int(month), int(day))
+            year = int(birth[0:4])
+            month = int(birth[4:6])
+            day = int(birth[6:8])
+            datetime.date(year, month, day)
         except ValueError:
-            return Response('<script> alert("생년월일 형식을 다시 확인하세요. 1"); history.back(); </script>')
-        except Exception as e:
-            print(e)
-            return Response('<script> alert("생년월일 형식을 다시 확인하세요. 3"); history.back(); </script>')
-
-        if len(birth) != 8:
-            return Response('<script> alert("생년월일 형식을 다시 확인하세요. 2"); history.back(); </script>')
-
-        cursor = conn.cursor()
-
-        cursor.execute('SELECT COUNT(*) FROM users WHERE login_id = ?', (id,))
-        count_id = cursor.fetchone()[0]
-
-        cursor.execute('SELECT COUNT(*) FROM users WHERE nickname = ?', (nick,))
-        count_nickname = cursor.fetchone()[0]
-
-        if count_id > 0:
-            return Response('<script> alert("이미 존재하는 아이디입니다."); history.back(); </script>')
-
-        if count_nickname > 0:
-            return Response('<script> alert("이미 존재하는 닉네임입니다."); history.back(); </script>')
+            return Response('<script> alert("유효하지 않은 생년월일입니다."); history.back(); </script>')
 
         if len(pw) < 6:
             return Response('<script> alert("비밀번호는 최소 6자 이상이어야 합니다."); history.back(); </script>')
-        
         if pw_check != pw:
             return Response('<script> alert("비밀번호가 일치하지 않습니다."); history.back(); </script>')
-        
-        if len(name) <= 2 or len(name) >= 20:
+        if not (2 <= len(name) <= 20):
             return Response('<script> alert("이름은 2자 이상 20자 이하로 입력해야 합니다."); history.back(); </script>')
-        if len(id) <= 2 or len(id) >= 20:
+        if not (2 <= len(id) <= 20):
             return Response('<script> alert("아이디는 2자 이상 20자 이하로 입력해야 합니다."); history.back(); </script>')
-        
-        hashed_pw = bcrypt.generate_password_hash(pw).decode('utf-8')
-        join_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        default_profile = 'images/profiles/default_image.jpeg'
-        
-        # DATA INSERT to DB
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (hakbun, gen, name, pw, login_id, nickname, birth, profile_image, join_date, role, is_autologin, autologin_token, level, exp, post_count, comment_count, point) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'student', 0, '', 1, 0, 0, 0, 0)", (hakbun, gen, name, hashed_pw, id, nick, birth, default_profile, join_date))
-        conn.commit()
+        if not (2 <= len(nick) <= 20):
+             return Response('<script> alert("닉네임은 2자 이상 20자 이하로 입력해야 합니다."); history.back(); </script>')
+        # --- ▲ [수정] ---
 
-        session.pop('hakbun', None)
-        session.pop('name', None)
-        session.pop('gen', None)
-        session.pop('agree', None)
+        try:
+            # --- ▼ [추가] Race Condition 방지를 위한 EXCLUSIVE TRANSACTION ---
+            cursor.execute('BEGIN EXCLUSIVE')
 
-        add_log('CREATE_USER', id, f"'{nick}'({id})님이 가입했습니다.({hakbun}, {name})")
+            cursor.execute('SELECT COUNT(*) FROM users WHERE login_id = ?', (id,))
+            if cursor.fetchone()[0] > 0:
+                conn.rollback()
+                return Response('<script> alert("이미 존재하는 아이디입니다."); history.back(); </script>')
 
-        return Response('<script> alert("회원가입이 완료되었습니다."); window.location.href = "/login"; </script>') # After Register
+            cursor.execute('SELECT COUNT(*) FROM users WHERE nickname = ?', (nick,))
+            if cursor.fetchone()[0] > 0:
+                conn.rollback()
+                return Response('<script> alert("이미 존재하는 닉네임입니다."); history.back(); </script>')
+
+            hashed_pw = bcrypt.generate_password_hash(pw).decode('utf-8')
+            join_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            default_profile = 'images/profiles/default_image.jpeg'
+
+            cursor.execute("""
+                INSERT INTO users
+                (hakbun, gen, name, pw, login_id, nickname, birth, profile_image, join_date,
+                role, is_autologin, autologin_token, level, exp, post_count, comment_count, point, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'student', 0, '', 1, 0, 0, 0, 0, 'active')
+            """, (hakbun, gen, name, hashed_pw, id, nick, birth, default_profile, join_date))
+
+            conn.commit()
+            # --- ▲ [추가] ---
+
+            session.pop('hakbun', None)
+            session.pop('name', None)
+            session.pop('gen', None)
+            session.pop('agree', None)
+
+            add_log('CREATE_USER', id, f"'{nick}'({id})님이 가입했습니다.({hakbun}, {name})")
+
+            return Response('<script> alert("회원가입이 완료되었습니다."); window.location.href = "/login"; </script>')
+
+        except sqlite3.Error as e:
+            conn.rollback()
+            add_log('ERROR', 'SYSTEM', f"Error during user registration: {e}")
+            return Response('<script>alert("회원가입 중 데이터베이스 오류가 발생했습니다. 다시 시도해주세요."); history.back();</script>')
     
     return render_template('register_form.html', hakbun=hakbun, name=name, gen=gen) # GET
 
@@ -1689,6 +1688,9 @@ def react(target_type, target_id):
         if not target_obj:
             return jsonify({'status': 'error', 'message': '존재하지 않는 대상입니다.'}), 404
 
+        # --- ▼ [수정] 반응(좋아요/싫어요) 로직을 하나의 트랜잭션으로 묶음 ---
+        cursor.execute('BEGIN EXCLUSIVE')
+
         cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = ? AND target_id = ?",
                        (user_id_for_reaction, target_type, target_id))
         existing_reaction = cursor.fetchone()
@@ -1707,43 +1709,32 @@ def react(target_type, target_id):
                            (user_id_for_reaction, target_type, target_id, reaction_type, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
             add_log('ADD_REACTION', user_id_for_reaction, f"{target_type} (id: {target_id})에 '{reaction_type}' 반응을 추가했습니다.")
 
-        conn.commit()
-
-        # --- 👇 HOT 게시물 알림 로직 시작 ---
-        # 1. '게시글'에 '좋아요'를 눌렀을 경우에만 확인
+        # --- ▼ [수정] HOT 게시물 알림 로직도 동일 트랜잭션 내에서 처리 ---
         if g.user and target_type == 'post' and reaction_type == 'like':
-            # 2. 현재 '좋아요' 개수를 다시 계산
             cursor.execute("SELECT COUNT(*) FROM reactions WHERE target_type = 'post' AND target_id = ? AND reaction_type = 'like'", (target_id,))
             likes = cursor.fetchone()[0]
 
-            # 3. '좋아요'가 정확히 10개가 되었는지 확인
             if likes == 10:
-                # 4. 이 게시글에 대해 'hot_post' 알림이 이미 보내졌는지 확인 (중복 방지)
                 cursor.execute("SELECT COUNT(*) FROM notifications WHERE action = 'hot_post' AND target_type = 'post' AND target_id = ?", (target_id,))
                 already_notified = cursor.fetchone()[0]
 
-                # 24시간 이내에 작성된 게시글에 대해서만 알림
-                cursor.execute("SELECT created_at FROM posts WHERE id = ?", (target_id,))
-                post = cursor.fetchone()
-                if post:
-                    post_created_at = datetime.datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
-                    time_diff = datetime.datetime.now() - post_created_at
-                    if time_diff.total_seconds() > 86400: # 24시간 = 86400초
-                        already_notified = 1 # 24시간 초과 시 알림 보내지 않음
-
                 if already_notified == 0:
-                    # 5. 게시글 작성자 정보를 가져와서 알림 생성
-                    cursor.execute("SELECT author FROM posts WHERE id = ?", (target_id,))
+                    cursor.execute("SELECT author, created_at FROM posts WHERE id = ?", (target_id,))
                     post = cursor.fetchone()
                     if post:
-                        create_notification(
-                            recipient_id=post['author'],
-                            actor_id=user_id, # 10번째 좋아요를 누른 사람
-                            action='hot_post',
-                            target_type='post',
-                            target_id=target_id,
-                            post_id=target_id
-                        )
+                        post_created_at = datetime.datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
+                        if (datetime.datetime.now() - post_created_at).total_seconds() <= 86400:
+                            create_notification(
+                                recipient_id=post['author'],
+                                actor_id=user_id,
+                                action='hot_post',
+                                target_type='post',
+                                target_id=target_id,
+                                post_id=target_id
+                            )
+
+        conn.commit()
+        # --- ▲ [수정] ---
         # --- 👆 HOT 게시물 알림 로직 끝 ---
 
 
