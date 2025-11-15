@@ -41,7 +41,15 @@
                                 <strong class="comment-count">[{{ post.comment_count }}]</strong>
                             {% endif %}
                         </span>
-                        <span class="col-author"><a href="{{ url_for('user_profile', nickname=post.nickname) }}">{{ post.nickname }}</a></span>
+                        
+                        <span class="col-author">
+                            {% if post.author == GUEST_USER_ID %}
+                                <span class="guest-author">{{ post.guest_nickname }}</span>
+                            {% else %}
+                                <a href="{{ url_for('user_profile', nickname=post.nickname) }}">{{ post.nickname }}</a>
+                            {% endif %}
+                        </span>
+                        
                         <span class="col-date">{{ post.updated_at|datetime }}</span>
                         <span class="col-views">{{ post.view_count }}</span>
                         <span class="col-likes {% if post.net_reactions > 0 %}score-plus{% elif post.net_reactions < 0 %}score-minus{% endif %}">

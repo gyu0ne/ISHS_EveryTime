@@ -16,7 +16,7 @@
                 <form method="GET" action="{{ url_for('search') }}">
                     <input type="text" name="q" class="board-search" placeholder="게시판 내 검색...">
                 </form>
-                <a href="{{ url_for('post_write') }}" class="btn btn-write">글쓰기</a>
+                <a href="{{ url_for('post_write', board_id=board_id) }}" class="btn btn-write">글쓰기</a>
             </div>
         </header>
 
@@ -37,7 +37,13 @@
                         <span class="col-title">
                             <a href="{{ url_for('post_detail', post_id=notice.id) }}">{{ notice.title }}</a>
                         </span>
-                        <span class="col-author"><a href="{{ url_for('user_profile', nickname=notice.nickname) }}">{{ notice.nickname }}</a></span>
+                        <span class="col-author">
+                            {% if notice.author == GUEST_USER_ID %}
+                                <span class="guest-author">{{ notice.guest_nickname }}</span>
+                            {% else %}
+                                <a href="{{ url_for('user_profile', nickname=notice.nickname) }}">{{ notice.nickname }}</a>
+                            {% endif %}
+                        </span>
                         <span class="col-date">{{ notice.updated_at|datetime }}</span> <span class="col-views">{{ notice.view_count }}</span>
                         <span class="col-likes {% if notice.net_reactions > 0 %}score-plus{% elif notice.net_reactions < 0 %}score-minus{% endif %}">
                             {{ notice.net_reactions if notice.net_reactions is not none else 0 }}
@@ -46,7 +52,7 @@
                     {% endfor %}
                 {% endif %}
 
-                {% if posts or notices %}
+                {% if posts or (current_page == 1 and notices) %} {# [수정] 조건문 수정 #}
                     {% for post in posts %}
                     <li>
                         <span class="col-id">{{ post.id }}</span>
@@ -58,11 +64,17 @@
                         </span>
                         <span class="col-author">
                             <span class="author-display" id="post-author-{{ post.id }}">
-                                {% if board_id == 3 %}
+                                
+                                {# --- ▼▼▼ [핵심 수정] 닉네임 분기 처리 --- #}
+                                {% if post.author == GUEST_USER_ID %}
+                                    <span class="guest-author">{{ post.guest_nickname }}</span>
+                                {% elif board_id == 3 %}
                                     익명
                                 {% else %}
                                     <a href="{{ url_for('user_profile', nickname=post.nickname) }}">{{ post.nickname }}</a>
                                 {% endif %}
+                                {# --- ▲▲▲ [핵심 수정] --- #}
+                                
                             </span>
                             
                             {% if g.user and g.user.role == 'admin' %}

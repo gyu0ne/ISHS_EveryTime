@@ -959,6 +959,8 @@ def post_write():
     cursor = conn.cursor()
 
     if request.method == 'POST':
+        if not g.user:
+            return Response('<script>alert("로그인이 필요합니다."); location.href="/login";</script>')
         # 1. 폼 데이터 수신
         title = request.form.get('title')
         content = request.form.get('content')
@@ -1054,10 +1056,127 @@ def post_write():
             add_log('ERROR', author_id, f"Error saving post: {e}")
             return Response('<script>alert("게시글 저장 중 오류가 발생했습니다."); history.back();</script>')
 
-    # GET 요청 시: DB에서 게시판 목록을 가져와 템플릿으로 전달
-    cursor.execute("SELECT board_id, board_name FROM board ORDER BY board_id")
-    boards = cursor.fetchall() # (board_id, board_name) 튜플의 리스트
-    return render_template('post_write.html', boards=boards)
+    else:
+        # GET 요청 시, 쿼리 파라미터에서 board_id를 가져오려고 시도
+        requested_board_id = request.args.get('board_id')
+
+        if not g.user: # 비회원인 경우
+            if not requested_board_id:
+                # 비회원이 board_id 없이 /post-write에 접근하면 로그인 페이지로
+                return redirect(url_for('login'))
+                
+            cursor.execute("SELECT board_name, is_public FROM board WHERE board_id = ?", (requested_board_id,))
+            board = cursor.fetchone()
+            
+            if not board:
+                return Response('<script>alert("존재하지 않는 게시판입니다."); history.back();</script>')
+                
+            if board['is_public'] == 1:
+                # 비회원 + 공개 게시판 -> 비회원 글쓰기 페이지로
+                return render_template('post_write_guest.html', board_id=requested_board_id, board_name=board['board_name'])
+            else:
+                # 비회원 + 비공개 게시판 -> 로그인 필요
+                return Response('<script>alert("로그인이 필요한 게시판입니다."); location.href="/login";</script>')
+
+        else: # 로그인한 회원인 경우
+            # 기존 로직대로 게시판 목록을 전달
+            cursor.execute("SELECT board_id, board_name FROM board ORDER BY board_id")
+            boards = cursor.fetchall()
+            return render_template('post_write.html', boards=boards)
+
+@app.route('/post-write-guest/<int:board_id>', methods=['GET', 'POST'])
+def post_write_guest(board_id):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # 1. 해당 게시판 정보 확인
+    cursor.execute("SELECT board_name, is_public FROM board WHERE board_id = ?", (board_id,))
+    board = cursor.fetchone()
+
+    if not board:
+        return Response('<script>alert("존재하지 않는 게시판입니다."); history.back();</script>')
+    
+    # 2. 공개 게시판이 아니면 차단
+    if board['is_public'] != 1:
+        return Response('<script>alert("비회원은 이 게시판에 글을 쓸 수 없습니다."); history.back();</script>')
+        
+    # 3. 로그인한 유저가 이 URL로 접근하면 정식 글쓰기 페이지로 리디렉션
+    if g.user:
+        return redirect(url_for('post_write'))
+
+    if request.method == 'POST':
+        # 4. 폼 데이터 수신
+        title = request.form.get('title')
+        content = request.form.get('content')
+        guest_nickname = request.form.get('guest_nickname')
+        guest_password = request.form.get('guest_password')
+
+        # 5. 유효성 검사
+        if not all([title, content, guest_nickname, guest_password]):
+            return Response('<script>alert("닉네임, 비밀번호, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
+        
+        if len(guest_nickname) > 20:
+            return Response('<script>alert("닉네임은 20자를 초과할 수 없습니다."); history.back();</script>')
+        if len(guest_password) < 4:
+            return Response('<script>alert("비밀번호는 4자 이상이어야 합니다."); history.back();</script>')
+
+        plain_text_content = bleach.clean(content, tags=[], strip=True)
+        if len(plain_text_content) > 5000 or len(title) > 50 or len(plain_text_content) == 0:
+            return Response('<script>alert("제목(50자) 또는 내용(5000자) 길이를 확인해주세요."); history.back();</script>')
+
+        # 6. 비밀번호 해시
+        hashed_pw = bcrypt.generate_password_hash(guest_password).decode('utf-8')
+
+        # 7. HTML 정제 (기존 post_write와 동일)
+        allowed_tags = [
+            'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3',
+            'img', 'a', 'video', 'source', 'iframe',
+            'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
+            'ol', 'ul', 'li', 'blockquote', 'span', 'font'
+        ]
+        allowed_attrs = {
+            '*': ['class', 'style'],
+            'a': ['href', 'target'],
+            'img': ['src', 'alt', 'width', 'height'],
+            'video': ['src', 'width', 'height', 'controls'],
+            'source': ['src', 'type'],
+            'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+            'font': ['color', 'face']
+        }
+        allowed_css_properties = [
+        'color', 'background-color', 'font-family', 'font-size', 
+        'font-weight', 'text-align', 'text-decoration'
+        ]
+        css_sanitizer = CSSSanitizer(allowed_css_properties=allowed_css_properties)
+        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'], css_sanitizer=css_sanitizer)
+
+        # 8. DB에 저장
+        try:
+            created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            query = """
+                INSERT INTO posts
+                (board_id, title, content, author, created_at, updated_at, view_count, comment_count, is_notice,
+                 guest_nickname, guest_password)
+                VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
+            """
+            cursor.execute(query, (
+                board_id, title, sanitized_content, GUEST_USER_ID, created_at, created_at,
+                guest_nickname, hashed_pw
+            ))
+            conn.commit()
+
+            post_id = cursor.lastrowid
+            add_log('CREATE_GUEST_POST', session.get('guest_session_id', 'Guest'), f"'{title}' 글 작성(id : {post_id}) by {guest_nickname}")
+
+            return redirect(url_for('post_list', board_id=board_id))
+        except Exception as e:
+            print(f"Database error: {e}")
+            add_log('ERROR', session.get('guest_session_id', 'Guest'), f"Error saving guest post: {e}")
+            return Response('<script>alert("게시글 저장 중 오류가 발생했습니다."); history.back();</script>')
+
+    # GET 요청 시
+    return render_template('post_write_guest.html', board_id=board_id, board_name=board['board_name'])
 
 # Post List with Pagination
 @app.route('/board/<int:board_id>', defaults={'page': 1})
@@ -1136,7 +1255,8 @@ def post_list(board_id, page):
                            posts=posts,
                            total_pages=total_pages,
                            current_page=page,
-                           board_id=board_id)
+                           board_id=board_id,
+                           GUEST_USER_ID=GUEST_USER_ID)
 
 # Post Detail
 @app.route('/post/<int:post_id>')
@@ -1165,6 +1285,8 @@ def post_detail(post_id):
         if not post_data:
             return Response('<script>alert("존재하지 않거나 삭제된 게시글입니다."); history.back();</script>')
     
+        is_public_board = post_data['is_public'] == 1
+
         # ▼▼▼ [추가] 공개 게시판이 아닐 경우에만 로그인을 확인합니다. ▼▼▼
         if not post_data['is_public'] and not user_data and not is_bot:
             return Response('<script> alert("로그인 사용자만 접근할 수 있습니다."); history.back(); </script>')
@@ -1180,6 +1302,9 @@ def post_detail(post_id):
             post['nickname'] = '익명'
             post['profile_image'] = 'images/profiles/default_image.jpeg'
         # --- ▲ [수정] ---
+        elif post['author'] == GUEST_USER_ID: # 게스트
+            post['nickname'] = post['guest_nickname'] # 게스트 닉네임 사용
+            post['profile_image'] = 'images/profiles/default_image.jpeg'
 
         post['created_at_datetime'] = datetime.datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
         post['updated_at_datetime'] = datetime.datetime.strptime(post['updated_at'], '%Y-%m-%d %H:%M:%S')
@@ -1188,7 +1313,9 @@ def post_detail(post_id):
         if g.user:
             user_id_for_reaction = g.user['login_id']
         elif is_public_board:
-            user_id_for_reaction = session.get('guest_session_id')
+            if 'guest_session_id' not in session:
+                session['guest_session_id'] = str(uuid.uuid4())
+                user_id_for_reaction = session['guest_session_id']
 
         # ... (중략: 게시글 추천/조회수 로직은 동일) ...
         cursor.execute("SELECT reaction_type, COUNT(*) as count FROM reactions WHERE target_type = 'post' AND target_id = ? GROUP BY reaction_type", (post_id,))
@@ -1197,6 +1324,7 @@ def post_detail(post_id):
         post['dislikes'] = reactions.get('dislike', 0)
 
         post['user_reaction'] = None
+
         if user_id_for_reaction:
             cursor.execute("SELECT reaction_type FROM reactions WHERE user_id = ? AND target_type = 'post' AND target_id = ?", (user_id_for_reaction, post_id,))
             user_reaction_row = cursor.fetchone()
@@ -1440,7 +1568,6 @@ def post_delete(post_id):
 
 # Comment Add
 @app.route('/comment/add/<int:post_id>', methods=['POST'])
-@login_required
 @check_banned
 def add_comment(post_id):
     content = request.form.get('comment_content')
@@ -1453,55 +1580,87 @@ def add_comment(post_id):
     cursor = conn.cursor()
 
     try:
-        cursor.execute("SELECT b.is_public FROM posts p JOIN board b ON p.board_id = b.board_id WHERE p.id = ?", (post_id,))
-        board = cursor.fetchone()
-
-        if not board:
+        # [수정] 원본 게시글의 is_public과 author 정보 조회
+        cursor.execute("SELECT author, board_id FROM posts WHERE id = ?", (post_id,))
+        post = cursor.fetchone()
+        if not post:
             return Response('<script>alert("원본 게시글이 존재하지 않습니다."); history.back();</script>')
+            
+        cursor.execute("SELECT is_public FROM board WHERE board_id = ?", (post['board_id'],))
+        board = cursor.fetchone()
+        is_public_board = board['is_public'] == 1
 
-        is_public_board = board[0] == 1
+        author_id = None
+        guest_nickname = None
+        hashed_pw = None
+        log_user_id = 'Guest'
 
-        if not g.user and not is_public_board:
+        if g.user:
+            # 1. 로그인 사용자
+            author_id = g.user['login_id']
+            log_user_id = g.user['login_id']
+        elif is_public_board:
+            # 2. 비회원 + 공개 게시판
+            guest_nickname = request.form.get('guest_nickname')
+            guest_password = request.form.get('guest_password')
+            
+            if not guest_nickname or not guest_password:
+                return Response('<script>alert("비회원 댓글은 닉네임과 비밀번호가 필요합니다."); history.back();</script>')
+            if len(guest_password) < 4:
+                return Response('<script>alert("비밀번호는 4자 이상이어야 합니다."); history.back();</script>')
+
+            author_id = GUEST_USER_ID
+            hashed_pw = bcrypt.generate_password_hash(guest_password).decode('utf-8')
+            log_user_id = session.get('guest_session_id', 'Guest')
+        else:
+            # 3. 비회원 + 비공개 게시판
             return Response('<script>alert("로그인이 필요한 게시판입니다."); history.back();</script>')
 
-        author_id = g.user['login_id'] if g.user else GUEST_USER_ID
 
         created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sanitized_content = bleach.clean(content)
         
+        query = """
+            INSERT INTO comments 
+            (post_id, author, content, created_at, updated_at, parent_comment_id,
+             guest_nickname, guest_password)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        
         if parent_comment_id:
-            # --- 👇 추가된 검증 로직 시작 ---
-            # 부모 댓글이 최상위 댓글인지(parent_comment_id가 NULL인지) 확인
-            cursor.execute("SELECT parent_comment_id FROM comments WHERE id = ?", (parent_comment_id,))
+            # --- 답글 로직 ---
+            cursor.execute("SELECT parent_comment_id, author FROM comments WHERE id = ?", (parent_comment_id,))
             parent_comment = cursor.fetchone()
             
             if not parent_comment:
                 return Response('<script>alert("답글을 작성할 원본 댓글이 존재하지 않습니다."); history.back();</script>')
-            
             if parent_comment[0] is not None:
-                # 부모 댓글의 parent_comment_id가 NULL이 아니라면, 그것은 이미 대댓글임.
                 return Response('<script>alert("대댓글에는 답글을 작성할 수 없습니다."); history.back();</script>')
-            # --- 👆 추가된 검증 로직 끝 ---
+            
+            cursor.execute(query, (
+                post_id, author_id, sanitized_content, created_at, created_at, parent_comment_id,
+                guest_nickname, hashed_pw
+            ))
 
-            query = """
-                INSERT INTO comments 
-                (post_id, author, content, created_at, updated_at, parent_comment_id)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """
-            cursor.execute(query, (post_id, author_id, sanitized_content, created_at, created_at, parent_comment_id))
-
-            create_notification(
-                recipient_id=parent_comment['author'],
-                actor_id=author_id,
-                action='reply',
-                target_type='comment',
-                target_id=parent_comment['id'],
-                post_id=post_id
-            )
+            # [수정] guest_nickname이 없는 (로그인한) 사용자에게만 알림
+            if parent_comment['author'] != GUEST_USER_ID:
+                create_notification(
+                    recipient_id=parent_comment['author'],
+                    actor_id=author_id, # 알림 행위자는 게스트일 수도, 회원일 수도 있음
+                    action='reply',
+                    target_type='comment',
+                    target_id=parent_comment_id, 
+                    post_id=post_id
+                )
         else:
-            cursor.execute("SELECT author FROM posts WHERE id = ?", (post_id,))
-            post = cursor.fetchone()
-            if post:
+            # --- 새 댓글 로직 ---
+            cursor.execute(query, (
+                post_id, author_id, sanitized_content, created_at, created_at, None,
+                guest_nickname, hashed_pw
+            ))
+            
+            # [수정] guest_nickname이 없는 (로그인한) 사용자에게만 알림
+            if post['author'] != GUEST_USER_ID:
                 create_notification(
                     recipient_id=post['author'],
                     actor_id=author_id,
@@ -1511,22 +1670,17 @@ def add_comment(post_id):
                     post_id=post_id
                 )
 
-            query = """
-                INSERT INTO comments 
-                (post_id, author, content, created_at, updated_at, parent_comment_id)
-                VALUES (?, ?, ?, ?, ?, NULL)
-            """
-            cursor.execute(query, (post_id, author_id, sanitized_content, created_at, created_at))
-
+        # (게시글/사용자 댓글 수 업데이트)
         cursor.execute("UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?", (post_id,))
-        cursor.execute("UPDATE users SET comment_count = comment_count + 1 WHERE login_id = ?", (author_id,))
-
-        update_exp_level(author_id, 10)
+        
+        if g.user: # 로그인한 사용자만 카운트 및 경험치
+            cursor.execute("UPDATE users SET comment_count = comment_count + 1 WHERE login_id = ?", (author_id,))
+            update_exp_level(author_id, 10)
 
         log_details = f"게시글(id:{post_id})에 댓글 작성. 내용:{sanitized_content}"
         if parent_comment_id:
             log_details = f"댓글(id:{parent_comment_id})에 답글 작성. 내용:{sanitized_content}"
-        add_log('ADD_COMMENT', author_id, log_details)
+        add_log('ADD_COMMENT', log_user_id, log_details)
 
         conn.commit()
 
@@ -2051,24 +2205,23 @@ def search():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # FTS 검색어 형식으로 변경 (띄어쓰기를 AND 연산자로)
-    # 예: "안녕 하세요" -> "안녕 AND 하세요"
+    # FTS 검색어 형식
     search_term_fts = ' AND '.join(query.split())
-    # 닉네임 검색은 기존 LIKE 방식 유지
+    # LIKE 검색어 형식
     search_term_like = f'%{query}%'
 
     try:
-        # 1. 검색 결과 총 개수 조회 (FTS와 닉네임 검색 결과를 합산)
-        # FTS를 사용하여 제목/내용 검색, LIKE를 사용하여 닉네임 검색
+        # [수정] 닉네임 검색(u.nickname)과 게스트 닉네임 검색(p.guest_nickname)을 모두 포함
         count_query = """
             SELECT COUNT(DISTINCT p.id)
             FROM posts p
-            JOIN users u ON p.author = u.login_id
+            LEFT JOIN users u ON p.author = u.login_id
             WHERE 
                 (p.id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH ?))
                 OR (u.nickname LIKE ?)
+                OR (p.guest_nickname LIKE ?)
         """
-        cursor.execute(count_query, (search_term_fts, search_term_like))
+        cursor.execute(count_query, (search_term_fts, search_term_like, search_term_like))
         total_posts = cursor.fetchone()[0]
         total_pages = math.ceil(total_posts / posts_per_page) if total_posts > 0 else 1
 
@@ -2077,26 +2230,26 @@ def search():
         search_query = """
             SELECT
                 p.id, p.title, p.comment_count, p.updated_at, p.view_count,
-                u.nickname,
+                p.author, p.guest_nickname, u.nickname,
                 b.board_name,
                 SUM(CASE WHEN r.reaction_type = 'like' THEN 1 WHEN r.reaction_type = 'dislike' THEN -1 ELSE 0 END) as net_reactions
             FROM posts p
-            JOIN users u ON p.author = u.login_id
             JOIN board b ON p.board_id = b.board_id
+            LEFT JOIN users u ON p.author = u.login_id
             LEFT JOIN reactions r ON r.target_id = p.id AND r.target_type = 'post'
             WHERE 
                 (p.id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH ?))
                 OR (u.nickname LIKE ?)
-              AND u.status = 'active'
+                OR (p.guest_nickname LIKE ?)
+              AND (u.status = 'active' OR u.status IS NULL) -- [수정] 게스트(NULL) 또는 활성 유저
             GROUP BY p.id
             ORDER BY p.updated_at DESC
             LIMIT ? OFFSET ?
         """
-        cursor.execute(search_query, (search_term_fts, search_term_like, posts_per_page, offset))
+        cursor.execute(search_query, (search_term_fts, search_term_like, search_term_like, posts_per_page, offset))
         posts = cursor.fetchall()
 
     except sqlite3.OperationalError as e:
-        # FTS 구문 오류 등 예외 처리
         if "fts5" in str(e):
              return Response('<script>alert("검색어에 특수문자를 사용할 수 없습니다."); history.back();</script>')
         print(f"Error during search: {e}")
@@ -2110,7 +2263,9 @@ def search():
                            query=query,
                            total_posts=total_posts,
                            total_pages=total_pages,
-                           current_page=page, user=g.user)
+                           current_page=page, 
+                           user=g.user,
+                           GUEST_USER_ID=GUEST_USER_ID) # [추가] GUEST_USER_ID 전달
 
 @app.route('/notifications/unread-count')
 @login_required

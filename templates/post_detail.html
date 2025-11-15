@@ -86,6 +86,30 @@
             }
         }
     </script>
+    <style>
+        /* 게스트 댓글 폼을 위한 스타일 */
+        .comment-form {
+            flex-wrap: wrap; /* 폼 요소가 여러 줄로 나뉠 수 있도록 */
+        }
+        .guest-auth-wrapper {
+            display: flex; 
+            gap: 10px; 
+            width: 100%; 
+            margin-bottom: 10px;
+        }
+        .guest-auth-wrapper input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #555;
+            border-radius: 6px;
+            background-color: #3e3e3e;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+        .comment-form textarea {
+            min-width: 100%; /* 게스트 입력 시 textarea가 한 줄을 다 차지하도록 */
+        }
+    </style>
 {% endblock %}
 
 {% macro render_comment(comment, post) %}
@@ -93,7 +117,8 @@
     <div class="comment-view">
         <span class="author-display" id="comment-author-{{ comment.id }}">
             
-            {% if post.board_id == 3 %}
+            {# --- ▼▼▼ [핵심 수정] 닉네임 분기 처리 (post.board_id 대신 comment.nickname 사용) --- #}
+            {% if comment.author == GUEST_USER_ID or post.board_id == 3 %}
                 <div class="comment-author">
                     <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진">
                     <span class="author-name">{{ comment.nickname }}</span>
@@ -106,12 +131,16 @@
                     </div>
                 </a>
             {% endif %}
-            </span>
+            {# --- ▲▲▲ [핵심 수정] --- #}
+
+        </span>
+
         {% if g.user and g.user.role == 'admin' %}
             <button class="btn-admin-check" 
                     data-target-type="comment" 
                     data-target-id="{{ comment.id }}">검사</button>
         {% endif %}
+
         <div class="comment-body">
             <p class="comment-text">
                 {{ comment.content }}
@@ -147,6 +176,10 @@
                         <button type="submit">삭제</button>
                     </form>
                     {% endif %}
+                    
+                    {# [추가] 게스트 수정/삭제 버튼 (일단 비밀번호 확인 페이지로만 보냄) #}
+                    {% if comment.author == GUEST_USER_ID %}
+                        <a href="#">수정</a> <a href="#">삭제</a> {% endif %}
                 </div>
             </div>
         </div>
@@ -166,11 +199,24 @@
     {% endif %}
 
     <div class="reply-form-wrapper" id="reply-form-{{ comment.id }}">
+        {# [수정] 답글 폼도 게스트/회원 분기 처리 #}
         <form class="comment-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <input type="hidden" name="parent_comment_id" value="{{ comment.id }}">
-            <textarea name="comment_content" placeholder="{{ comment.nickname }}님에게 답글 남기기..." required minlength="1"></textarea>
-            <button type="submit">등록</button>
+            
+            {% if g.user %}
+                <textarea name="comment_content" placeholder="{{ comment.nickname }}님에게 답글 남기기..." required minlength="1"></textarea>
+            {% elif post.is_public %}
+                <div class="guest-auth-wrapper">
+                    <input type="text" name="guest_nickname" class="form-control" placeholder="닉네임" required maxlength="20">
+                    <input type="password" name="guest_password" class="form-control" placeholder="비밀번호" required>
+                </div>
+                <textarea name="comment_content" placeholder="{{ comment.nickname }}님에게 답글 남기기..." required minlength="1"></textarea>
+            {% else %}
+                <textarea name="comment_content" placeholder="로그인이 필요한 게시판입니다." disabled></textarea>
+            {% endif %}
+            
+            <button type="submit" {% if not g.user and not post.is_public %}disabled{% endif %}>등록</button>
         </form>
     </div>
 
@@ -201,7 +247,8 @@
                     <h2>{{ post.title }}</h2>
                     <span class="author-display" id="post-author-{{ post.id }}">
 
-                        {% if post.board_id == 3 %}
+                        {# --- ▼▼▼ [핵심 수정] 게시글 작성자 닉네임 분기 --- #}
+                        {% if post.author == GUEST_USER_ID or post.board_id == 3 %}
                             <div class="author-info">
                                 <img src="{{ url_for('static', filename=post.profile_image) }}" alt="프로필 사진">
                                 <span class="author-name">{{ post.nickname }}</span>
@@ -214,61 +261,43 @@
                                 </div>
                             </a>
                         {% endif %}
-</span>
-        
-        {% if g.user and g.user.role == 'admin' %}
-            <button class="btn-admin-check" 
-                    data-target-type="comment" 
-                    data-target-id="{{ comment.id }}">검사</button>
-        {% endif %}
-        <div class="comment-body">
-            <div class="comment-meta">
-                <span class="comment-date">{{ comment.updated_at|datetime }}</span>
-                <div class="comment-actions">
-                    {% if not comment.parent_comment_id %}
-                    <a href="#" onclick="toggleReplyForm('{{ comment.id }}'); return false;">답글</a>
-                    {% endif %}
+                        {# --- ▲▲▲ [핵심 수정] --- #}
+                    </span>
                     
-                    {% if g.user and (g.user.login_id == comment.author or g.user.role == 'admin') %}
-                    <a href="#" onclick="toggleEdit('{{ comment.id }}'); return false;">수정</a>
-                    <form method="POST" action="{{ url_for('delete_comment', comment_id=comment.id) }}" onsubmit="return confirm('정말로 삭제하시겠습니까?');" style="display: inline;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <button type="submit">삭제</button>
-                    </form>
-                    {% endif %}
+                    <div class="post-meta" style="width: 100%; margin-top: 10px;">
+                        <span>{{ post.created_at|datetime }}</span>
+                        <span>조회 {{ post.view_count }}</span>
                     </div>
-            </div>
-        </div>
-    </div>
-
-    {% if g.user and g.user.login_id == comment.author %}
-    <div class="comment-edit" style="display: none;">
-        </div>
-    {% endif %}
-    </li>
-{% endmacro %}
-
-
-{% block content %}
-    <div class="container">
-        <div class="post-view-card">
-            <header class="post-header">
-                <div class="post-title-section">
-                    <span class="author-display" id="post-author-{{ post.id }}">
-                        </span>
 
                     {% if g.user and g.user.role == 'admin' %}
                         <button class="btn-admin-check" 
                                 data-target-type="post" 
                                 data-target-id="{{ post.id }}">검사</button>
                     {% endif %}
-                    </div>
-                </header>
+                </div>
+            </header>
 
             <div class="post-content">
                 {{ post.content|safe }}
             </div>
 
+            <div class="post-actions">
+                <button type="button" 
+                        id="post-like-btn-{{ post.id }}"
+                        class="btn btn-like {% if post.user_reaction == 'like' %}active{% endif %}" 
+                        onclick="handleReaction('post', {{ post.id }}, 'like')">
+                    👍 <span id="post-likes-count-{{ post.id }}">{{ post.likes }}</span>
+                </button>
+                
+                <button type="button" 
+                        id="post-dislike-btn-{{ post.id }}"
+                        class="btn btn-dislike {% if post.user_reaction == 'dislike' %}active{% endif %}" 
+                        onclick="handleReaction('post', {{ post.id }}, 'dislike')">
+                    👎 <span id="post-dislikes-count-{{ post.id }}">{{ post.dislikes }}</span>
+                </button>
+            </div>
+
+            {# --- ▼▼▼ [수정] 게스트/회원 수정/삭제 버튼 분기 --- #}
             {% if g.user and (g.user.login_id == post.author or g.user.role == 'admin') %}
             <div class="author-actions">
                 <a href="{{ url_for('post_edit', post_id=post.id) }}" class="btn btn-edit">수정</a>
@@ -277,26 +306,43 @@
                     <button type="submit" class="btn btn-delete">삭제</button>
                 </form>
             </div>
-            {% endif %}
+            {% elif post.author == GUEST_USER_ID %}
+            <div class="author-actions">
+                 <a href="#" class="btn btn-edit">수정</a>
+                <a href="#" class="btn btn-delete">삭제</a>
             </div>
-
-        <div class="comments-card">
+            {% endif %}
+            {# --- ▲▲▲ [수정] --- #}
+        </div> <div class="comments-card">
             <h3>댓글 {{ post.comment_count }}개</h3>
             
-            {% if g.user %}
-                <form class="comment-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            {# --- ▼▼▼ [핵심 수정] g.user(로그인 여부) 및 post.is_public에 따라 분기 처리 --- #}
+            <form class="comment-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                
+                {% if g.user %}
                     <textarea name="comment_content" placeholder="댓글을 입력하세요..." required minlength="1"></textarea>
-                    <button type="submit">등록</button>
-                </form>
-            {% else %}
-                <div class="comment-form-login-prompt">
-                    <p style="text-align: center; padding: 20px; color: #aaa;">댓글을 작성하려면 <a href="{{ url_for('login') }}" style="color: #d9534f; font-weight: bold;">로그인</a>이 필요합니다.</p>
-                </div>
-            {% endif %}
+                {% elif post.is_public %}
+                    <div class="guest-auth-wrapper">
+                        <input type="text" name="guest_nickname" class="form-control" placeholder="닉네임" required maxlength="20">
+                        <input type="password" name="guest_password" class="form-control" placeholder="비밀번호" required>
+                    </div>
+                    <textarea name="comment_content" placeholder="비회원으로 댓글을 작성합니다..." required minlength="1" style="width: 100%;"></textarea>
+                {% else %}
+                    <textarea name="comment_content" placeholder="로그인이 필요한 게시판입니다." disabled></textarea>
+                {% endif %}
+
+                {# --- [수정] 폼 제출 버튼 (비공개+비회원일 때만 비활성화) --- #}
+                <button type="submit" {% if not g.user and not post.is_public %}disabled{% endif %}>등록</button>
+            </form>
+            {# --- ▲▲▲ [핵심 수정] --- #}
+
             <ul class="comment-list">
-                </ul>
+                {% for comment in comments %}
+                    {{ render_comment(comment, post) }}
+                {% endfor %}
+            </ul>
         </div>
         
-        </div>
+    </div>
 {% endblock %}
