@@ -1407,13 +1407,15 @@ def post_detail(post_id):
                 comments_tree.append(comment)
         # --- 👆 댓글 로직 수정 끝 ---
 
+        comments_tree.reverse()
+
     except Exception as e:
         print(f"Error fetching post detail: {e}")
         user_id_for_log = user_data['login_id'] if user_data else 'Googlebot'
         add_log('ERROR', user_id_for_log, f"Error fetching post detail for post_id {post_id}: {e}")
         return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
 
-    return render_template('post_detail.html', user=user_data, post=post, comments=comments_tree)
+    return render_template('post_detail.html', user=user_data, post=post, comments=comments_tree, GUEST_USER_ID=GUEST_USER_ID)
 
 # Post Edit
 @app.route('/post-edit/<int:post_id>', methods=['GET', 'POST'])
@@ -1579,6 +1581,7 @@ def add_comment(post_id):
         return Response('<script>alert("댓글 내용을 입력해주세요."); history.back();</script>')
 
     conn = get_db()
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
     try:
@@ -2649,7 +2652,7 @@ def comment_edit_guest(comment_id):
     
     else: 
         # (GET) 수정 페이지 표시
-        return render_template('comment_edit_guest.html', comment=comment)
+        return render_template('comment_edit_guest.html', comment=comment, user=g.user)
 
 # Server Drive Unit
 if __name__ == '__main__':

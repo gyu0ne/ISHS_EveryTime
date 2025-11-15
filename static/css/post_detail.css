@@ -227,7 +227,6 @@ body {
     display: flex;
     align-items: center;
     gap: 8px; /* 프사와 닉네임 사이 간격 */
-    margin-bottom: 10px; /* 닉네임과 댓글 내용 사이 간격 */
 }
 .comment-author img {
     width: 28px; /* 프로필 사진 크기 축소 */
@@ -401,13 +400,6 @@ body {
     margin-left: 6px; /* 댓글 내용과의 간격 */
 }
 
-/* === [추가] 추천/비추천 관련 스타일 === */
-.post-actions {
-    gap: 0; /* form 간의 간격을 없애고 버튼 자체에 margin 부여 */
-}
-.post-actions form {
-    margin: 0 10px;
-}
 .reaction-score {
     font-size: 18px;
     font-weight: bold;

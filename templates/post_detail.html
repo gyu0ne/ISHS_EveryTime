@@ -106,9 +106,6 @@
             color: #e0e0e0;
             font-size: 14px;
         }
-        .comment-form textarea {
-            min-width: 100%; /* 게스트 입력 시 textarea가 한 줄을 다 차지하도록 */
-        }
     </style>
 {% endblock %}
 
@@ -175,10 +172,7 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <button type="submit">삭제</button>
                     </form>
-                    {% endif %}
-                    
-                    {# [추가] 게스트 수정/삭제 버튼 (일단 비밀번호 확인 페이지로만 보냄) #}
-                    {% if comment.author == GUEST_USER_ID %}
+                    {% elif not g.user and comment.author == GUEST_USER_ID %}
                         <a href="{{ url_for('guest_auth', action='edit', target_type='comment', target_id=comment.id) }}">수정</a> 
                         <a href="{{ url_for('guest_auth', action='delete', target_type='comment', target_id=comment.id) }}">삭제</a> 
                     {% endif %}
@@ -299,7 +293,6 @@
                 </button>
             </div>
 
-            {# --- ▼▼▼ [수정] 게스트/회원 수정/삭제 버튼 분기 --- #}
             {% if g.user and (g.user.login_id == post.author or g.user.role == 'admin') %}
             <div class="author-actions">
                 <a href="{{ url_for('post_edit', post_id=post.id) }}" class="btn btn-edit">수정</a>
@@ -308,13 +301,12 @@
                     <button type="submit" class="btn btn-delete">삭제</button>
                 </form>
             </div>
-            {% elif post.author == GUEST_USER_ID %}
+            {% elif not g.user and post.author == GUEST_USER_ID %}
             <div class="author-actions">
                  <a href="{{ url_for('guest_auth', action='edit', target_type='post', target_id=post.id) }}" class="btn btn-edit">수정</a>
                 <a href="{{ url_for('guest_auth', action='delete', target_type='post', target_id=post.id) }}" class="btn btn-delete">삭제</a>
             </div>
             {% endif %}
-            {# --- ▲▲▲ [수정] --- #}
         </div> <div class="comments-card">
             <h3>댓글 {{ post.comment_count }}개</h3>
             
