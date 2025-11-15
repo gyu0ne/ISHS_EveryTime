@@ -956,6 +956,7 @@ def mypage():
 @check_banned
 def post_write():
     conn = get_db()
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
     if request.method == 'POST':
@@ -1087,6 +1088,7 @@ def post_write():
 @app.route('/post-write-guest/<int:board_id>', methods=['GET', 'POST'])
 def post_write_guest(board_id):
     conn = get_db()
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
     # 1. 해당 게시판 정보 확인
