@@ -179,7 +179,9 @@
                     
                     {# [추가] 게스트 수정/삭제 버튼 (일단 비밀번호 확인 페이지로만 보냄) #}
                     {% if comment.author == GUEST_USER_ID %}
-                        <a href="#">수정</a> <a href="#">삭제</a> {% endif %}
+                        <a href="{{ url_for('guest_auth', action='edit', target_type='comment', target_id=comment.id) }}">수정</a> 
+                        <a href="{{ url_for('guest_auth', action='delete', target_type='comment', target_id=comment.id) }}">삭제</a> 
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -308,8 +310,8 @@
             </div>
             {% elif post.author == GUEST_USER_ID %}
             <div class="author-actions">
-                 <a href="#" class="btn btn-edit">수정</a>
-                <a href="#" class="btn btn-delete">삭제</a>
+                 <a href="{{ url_for('guest_auth', action='edit', target_type='post', target_id=post.id) }}" class="btn btn-edit">수정</a>
+                <a href="{{ url_for('guest_auth', action='delete', target_type='post', target_id=post.id) }}" class="btn btn-delete">삭제</a>
             </div>
             {% endif %}
             {# --- ▲▲▲ [수정] --- #}

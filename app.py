@@ -2362,6 +2362,292 @@ def check_author_info():
     except Exception as e:
         add_log('ERROR', g.user['login_id'], f"Error checking author info: {e}")
         return jsonify({'status': 'error', 'message': '서버 오류가 발생했습니다.'}), 500
+    
+@app.route('/guest-auth/<action>/<target_type>/<int:target_id>', methods=['GET', 'POST'])
+def guest_auth(action, target_type, target_id):
+    """
+    비회원 글/댓글 수정 및 삭제를 위한 비밀번호 인증 페이지
+    action: 'edit' 또는 'delete'
+    target_type: 'post' 또는 'comment'
+    """
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # 1. 유효성 검사
+    if action not in ['edit', 'delete'] or target_type not in ['post', 'comment']:
+        return render_template('404.html', user=g.user), 404
+
+    # 2. 대상 객체(게시글/댓글) 정보 조회
+    table_name = 'posts' if target_type == 'post' else 'comments'
+    
+    # post_id는 댓글에서 원본 게시글로 돌아가기 위해 필요
+    post_id_column = "id as post_id" if target_type == 'post' else "post_id"
+    cursor.execute(f"SELECT author, guest_password, {post_id_column} FROM {table_name} WHERE id = ?", (target_id,))
+    target_obj = cursor.fetchone()
+
+    if not target_obj:
+        return Response('<script>alert("대상이 존재하지 않습니다."); history.back();</script>')
+
+    # 3. 게스트 객체 여부 확인
+    if target_obj['author'] != GUEST_USER_ID or not target_obj['guest_password']:
+        return Response('<script>alert("비회원 게시글/댓글이 아니거나, 비밀번호가 설정되지 않았습니다."); history.back();</script>')
+
+    hashed_pw = target_obj['guest_password']
+
+    # 4. (POST) 비밀번호 제출 처리
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if not password:
+            return Response('<script>alert("비밀번호를 입력하세요."); history.back();</script>')
+
+        # 5. 비밀번호 확인
+        if bcrypt.check_password_hash(hashed_pw, password):
+            # 비밀번호 일치!
+            # 세션에 임시 인증 토큰 저장
+            session[f'guest_auth_{target_type}_{target_id}'] = True 
+            
+            if action == 'edit':
+                if target_type == 'post':
+                    return redirect(url_for('post_edit_guest', post_id=target_id))
+                else:
+                    return redirect(url_for('comment_edit_guest', comment_id=target_id))
+            
+            elif action == 'delete':
+                if target_type == 'post':
+                    # 삭제는 POST로 처리하는 것이 원칙이나, 편의를 위해 GET으로 리디렉션하여 처리
+                    return redirect(url_for('post_delete_guest', post_id=target_id))
+                else:
+                    return redirect(url_for('comment_delete_guest', comment_id=target_id))
+        else:
+            return Response('<script>alert("비밀번호가 일치하지 않습니다."); history.back();</script>')
+
+    # 6. (GET) 비밀번호 입력 폼 표시
+    action_text = f"{'게시글' if target_type == 'post' else '댓글'} {'수정' if action == 'edit' else '삭제'}"
+    return render_template('guest_auth.html', 
+                           user=g.user, 
+                           action_text=action_text,
+                           action=action, 
+                           target_type=target_type, 
+                           target_id=target_id)
+
+
+@app.route('/post-delete-guest/<int:post_id>', methods=['GET'])
+def post_delete_guest(post_id):
+    """
+    (GET) 인증된 게스트의 게시글 삭제 처리
+    """
+    # 1. 세션 인증 토큰 확인 및 제거
+    if not session.pop(f'guest_auth_post_{post_id}', None):
+        return Response('<script>alert("인증이 필요합니다."); location.href="/";</script>')
+
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT author, board_id, title FROM posts WHERE id = ? AND author = ?", (post_id, GUEST_USER_ID))
+    post = cursor.fetchone()
+
+    if not post:
+        return Response('<script>alert("삭제할 수 없거나 존재하지 않는 게시글입니다."); history.back();</script>')
+
+    board_id = post['board_id']
+    title_for_log = post['title']
+
+    try:
+        # post_delete 로직에서 사용자 스탯(경험치, 카운트) 관련 부분만 제거
+        cursor.execute("SELECT id, author FROM comments WHERE post_id = ?", (post_id,))
+        comments = cursor.fetchall()
+        
+        if comments:
+            comment_ids = [c['id'] for c in comments]
+            placeholders = ', '.join('?' for _ in comment_ids)
+            cursor.execute(f"DELETE FROM reactions WHERE target_type = 'comment' AND target_id IN ({placeholders})", comment_ids)
+            
+            comment_authors_counts = {}
+            for c in comments:
+                author = c['author']
+                if author != GUEST_USER_ID: # 로그인한 유저의 댓글 카운트만 차감
+                    comment_authors_counts[author] = comment_authors_counts.get(author, 0) + 1
+            
+            for author, count in comment_authors_counts.items():
+                cursor.execute("UPDATE users SET comment_count = comment_count - ? WHERE login_id = ?", (count, author))
+
+        cursor.execute("DELETE FROM reactions WHERE target_type = 'post' AND target_id = ?", (post_id,))
+        cursor.execute("DELETE FROM comments WHERE post_id = ?", (post_id,))
+        cursor.execute("DELETE FROM posts WHERE id = ?", (post_id,))
+
+        add_log('DELETE_GUEST_POST', session.get('guest_session_id', 'Guest'), f"게스트 게시글 (id : {post_id})를 삭제했습니다. 제목 : {title_for_log}")
+        conn.commit()
+
+    except Exception as e:
+        print(f"Error during guest post deletion: {e}")
+        add_log('ERROR', session.get('guest_session_id', 'Guest'), f"Error deleting guest post id {post_id}: {e}")
+        conn.rollback()
+        return Response('<script>alert("게시글 삭제 중 오류가 발생했습니다."); history.back();</script>')
+
+    return redirect(url_for('post_list', board_id=board_id))
+
+
+@app.route('/comment-delete-guest/<int:comment_id>', methods=['GET'])
+def comment_delete_guest(comment_id):
+    """
+    (GET) 인증된 게스트의 댓글 삭제 처리
+    """
+    # 1. 세션 인증 토큰 확인 및 제거
+    if not session.pop(f'guest_auth_comment_{comment_id}', None):
+        return Response('<script>alert("인증이 필요합니다."); location.href="/";</script>')
+
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT author, post_id, content FROM comments WHERE id = ? AND author = ?", (comment_id, GUEST_USER_ID))
+    comment = cursor.fetchone()
+
+    if not comment:
+        return Response('<script>alert("삭제할 수 없거나 존재하지 않는 댓글입니다."); history.back();</script>')
+
+    try:
+        # delete_comment 로직에서 사용자 스탯 관련 부분만 제거
+        cursor.execute("DELETE FROM reactions WHERE target_type = 'comment' AND target_id = ?", (comment_id,))
+        cursor.execute("DELETE FROM comments WHERE id = ?", (comment_id,))
+        cursor.execute("UPDATE posts SET comment_count = comment_count - 1 WHERE id = ?", (comment['post_id'],))
+
+        add_log('DELETE_GUEST_COMMENT', session.get('guest_session_id', 'Guest'), f"게스트 댓글 (id : {comment_id})를 삭제했습니다. 내용 : {comment['content']}")
+        conn.commit()
+    except Exception as e:
+        print(f"Database error while deleting guest comment: {e}")
+        add_log('ERROR', session.get('guest_session_id', 'Guest'), f"Error deleting guest comment id {comment_id}: {e}")
+        conn.rollback()
+        return Response('<script>alert("댓글 삭제 중 오류가 발생했습니다."); history.back();</script>')
+
+    return redirect(url_for('post_detail', post_id=comment['post_id']))
+
+
+@app.route('/post-edit-guest/<int:post_id>', methods=['GET', 'POST'])
+def post_edit_guest(post_id):
+    """
+    (GET/POST) 인증된 게스트의 게시글 수정
+    """
+    # 1. 세션 인증 토큰 확인 (제출 전까지 제거하지 않음)
+    if not session.get(f'guest_auth_post_{post_id}'):
+        return Response('<script>alert("인증이 필요합니다."); location.href="/";</script>')
+    
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM posts WHERE id = ? AND author = ?", (post_id, GUEST_USER_ID))
+    post = cursor.fetchone()
+
+    if not post:
+        return Response('<script>alert("존재하지 않는 게시글입니다."); history.back();</script>')
+    
+    if request.method == 'POST':
+        # (POST) 수정 폼 제출
+        title = request.form.get('title')
+        content = request.form.get('content')
+        
+        # (post_edit에서 복사)
+        if not title or not content:
+            return Response('<script>alert("제목, 내용을 모두 입력해주세요."); history.back();</script>')
+        if len(title) > 50:
+            return Response('<script>alert("제목은 50자를 초과할 수 없습니다."); history.back();</script>')
+        plain_text_content = bleach.clean(content, tags=[], strip=True)
+        if len(plain_text_content) > 5000:
+            return Response('<script>alert("글자 수는 5,000자를 초과할 수 없습니다."); history.back();</script>')
+        if len(plain_text_content) == 0:
+            return Response('<script>alert("내용을 입력해주세요."); history.back();</script>')
+
+        # (post_edit에서 복사)
+        allowed_tags = [
+            'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3',
+            'img', 'a', 'video', 'source', 'iframe',
+            'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
+            'ol', 'ul', 'li', 'blockquote', 'span', 'font'
+        ]
+        allowed_attrs = {
+            '*': ['class', 'style'],
+            'a': ['href', 'target'],
+            'img': ['src', 'alt', 'width', 'height'],
+            'video': ['src', 'width', 'height', 'controls'],
+            'source': ['src', 'type'],
+            'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+            'font': ['color', 'face']
+        }
+        allowed_css_properties = [
+        'color', 'background-color', 'font-family', 'font-size', 
+        'font-weight', 'text-align', 'text-decoration'
+        ]
+        css_sanitizer = CSSSanitizer(allowed_css_properties=allowed_css_properties)
+        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'], css_sanitizer=css_sanitizer)
+
+        updated_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # 게스트는 게시판 이동, 공지 설정 불가
+        query = "UPDATE posts SET title = ?, content = ?, updated_at = ? WHERE id = ?"
+        cursor.execute(query, (title, sanitized_content, updated_at, post_id))
+        
+        add_log('EDIT_GUEST_POST', session.get('guest_session_id', 'Guest'), f"게스트 게시글 (id : {post_id})를 수정했습니다.")
+        conn.commit()
+
+        # 수정 완료 후 인증 토큰 제거
+        session.pop(f'guest_auth_post_{post_id}', None)
+        return redirect(url_for('post_detail', post_id=post_id))
+
+    else: 
+        # (GET) 수정 페이지 표시
+        return render_template('post_edit_guest.html', post=post)
+
+
+@app.route('/comment-edit-guest/<int:comment_id>', methods=['GET', 'POST'])
+def comment_edit_guest(comment_id):
+    """
+    (GET/POST) 인증된 게스트의 댓글 수정
+    """
+    # 1. 세션 인증 토큰 확인
+    if not session.get(f'guest_auth_comment_{comment_id}'):
+        return Response('<script>alert("인증이 필요합니다."); location.href="/";</script>')
+
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM comments WHERE id = ? AND author = ?", (comment_id, GUEST_USER_ID))
+    comment = cursor.fetchone()
+
+    if not comment:
+        return Response('<script>alert("존재하지 않는 댓글입니다."); history.back();</script>')
+    
+    if request.method == 'POST':
+        # (POST) 수정 폼 제출
+        new_content = request.form.get('edit_content')
+        if not new_content or not new_content.strip():
+            return Response('<script>alert("댓글 내용을 입력해주세요."); history.back();</script>')
+        
+        try:
+            updated_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            sanitized_content = bleach.clean(new_content)
+            
+            query = "UPDATE comments SET content = ?, updated_at = ? WHERE id = ?"
+            cursor.execute(query, (sanitized_content, updated_at, comment_id))
+            
+            add_log('EDIT_GUEST_COMMENT', session.get('guest_session_id', 'Guest'), f"게스트 댓글 (id : {comment_id})를 수정했습니다.")
+            conn.commit()
+
+            # 수정 완료 후 인증 토큰 제거
+            session.pop(f'guest_auth_comment_{comment_id}', None)
+        except Exception as e:
+            print(f"Database error while editing guest comment: {e}")
+            add_log('ERROR', session.get('guest_session_id', 'Guest'), f"Error editing guest comment id {comment_id}: {e}")
+            conn.rollback()
+            return Response('<script>alert("댓글 수정 중 오류가 발생했습니다."); history.back();</script>')
+        
+        return redirect(url_for('post_detail', post_id=comment['post_id']))
+    
+    else: 
+        # (GET) 수정 페이지 표시
+        return render_template('comment_edit_guest.html', comment=comment)
 
 # Server Drive Unit
 if __name__ == '__main__':

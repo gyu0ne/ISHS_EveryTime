@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}log인곽 - 비회원 인증{% endblock %}
+
+{% block head %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login_form.css') }}">
+    <style>
+        .auth-container {
+            width: 400px;
+            max-width: 90%;
+            margin: 40px auto;
+            padding: 30px;
+            background-color: #2e2e2e;
+            border: 1px solid #444;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .auth-container h2 {
+            font-size: 22px;
+            margin-bottom: 20px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <h2>비회원 {{ action_text }}</h2>
+    <p style="color: #aaa; margin-bottom: 20px;">작성 시 입력했던 비밀번호를 입력하세요.</p>
+    
+    <form class="register-form" method="POST" action="{{ url_for('guest_auth', action=action, target_type=target_type, target_id=target_id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="password" name="password" placeholder="비밀번호" required>
+        <button type="submit" class="register-btn" style="margin-top: 20px;">확인</button>
+        <button type="button" class="register-btn" onclick="history.back()" style="background-color: #555; margin-top: 10px;">취소</button>
+    </form>
+</div>
+{% endblock %}

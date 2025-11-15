@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}log인곽 - 비회원 댓글 수정{% endblock %}
+
+{% block head %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/my_page.css') }}">
+    <style>
+        .comment-edit-card {
+            max-width: 600px;
+            width: 90%;
+            margin: 40px auto;
+        }
+        .comment-edit-card form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .comment-edit-card textarea {
+            width: 100%;
+            min-height: 150px;
+            background-color: #3e3e3e;
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 12px;
+            color: #f1f1f1;
+            font-size: 14px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        .comment-edit-card .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            background-color: #d9534f;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="card comment-edit-card">
+    <h3>비회원 댓글 수정</h3>
+    <form method="POST" action="{{ url_for('comment_edit_guest', comment_id=comment.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <textarea name="edit_content" required>{{ comment.content }}</textarea>
+        <button type="submit" class="btn">수정하기</button>
+    </form>
+</div>
+{% endblock %}
