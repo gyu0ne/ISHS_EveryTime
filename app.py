@@ -263,7 +263,7 @@ def get_bob():
         else:
             url = (
                 "https://open.neis.go.kr/hub/mealServiceDietInfo"
-                "?KEY=75f40bb14ddd41d1b5ecda3389258cb1"
+                f"?KEY={os.getenv('NEIS_API_KEY')}"
                 "&TYPE=JSON"
                 "&ATPT_OFCDC_SC_CODE=E10"
                 "&SD_SCHUL_CODE=7310058"
@@ -2246,7 +2246,7 @@ def search():
                 (p.id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH ?))
                 OR (u.nickname LIKE ?)
                 OR (p.guest_nickname LIKE ?)
-              AND (u.status = 'active' OR u.status IS NULL) -- [수정] 게스트(NULL) 또는 활성 유저
+              AND (u.status = 'active' OR u.status IS NULL OR u.status = 'deleted') -- [수정] 게스트(NULL) 또는 활성 유저
             GROUP BY p.id
             ORDER BY p.updated_at DESC
             LIMIT ? OFFSET ?
