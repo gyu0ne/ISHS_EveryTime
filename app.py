@@ -1356,11 +1356,6 @@ def post_detail(post_id):
         
         comments_dict = {}
         
-        # --- ▼ [추가] 익명 댓글 처리를 위한 변수 ---
-        anonymous_map = {}  # key: author_id, value: "익명N"
-        anonymous_count = 1
-        # --- ▲ [추가] ---
-
         # 1. 모든 댓글을 딕셔너리로 변환하고, 'replies' 리스트와 reaction 정보를 초기화합니다.
         for comment_row in all_comments:
             comment = dict(comment_row)
@@ -1624,12 +1619,21 @@ def add_comment(post_id):
         anonymous_seq = 0
 
         if post['board_id'] == 3:
-            cursor.execute("SELECT MAX(anonymous_seq) FROM comments WHERE post_id = ?", (post_id,))
-            max_seq = cursor.fetchone()[0]
-            anonymous_seq = (max_seq if max_seq else 0) + 1
-            
-            if author_id == post['author']: 
-                 anonymous_seq = 0
+            if author_id == post['author']:
+                anonymous_seq = 0
+            else:
+                cursor.execute(
+                    "SELECT anonymous_seq FROM comments WHERE post_id = ? AND author = ? LIMIT 1", 
+                    (post_id, author_id)
+                )
+                existing_seq_row = cursor.fetchone()
+
+                if existing_seq_row:
+                    anonymous_seq = existing_seq_row[0]
+                else:
+                    cursor.execute("SELECT MAX(anonymous_seq) FROM comments WHERE post_id = ?", (post_id,))
+                    max_seq = cursor.fetchone()[0]
+                    anonymous_seq = (max_seq if max_seq else 0) + 1
         
         query = """
             INSERT INTO comments 
