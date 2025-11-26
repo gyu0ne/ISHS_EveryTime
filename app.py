@@ -304,7 +304,7 @@ def get_bob():
             return content
 
 # Update User EXP and Level
-def update_exp_level(user_id, exp_change):
+def update_exp_level(user_id, exp_change, commit=True):
     conn = get_db()
     cursor = conn.cursor()
 
@@ -334,7 +334,9 @@ def update_exp_level(user_id, exp_change):
         "UPDATE users SET level = ?, exp = ? WHERE login_id = ?",
         (final_level, final_exp, user_id)
     )
-    conn.commit()
+
+    if commit:
+        conn.commit()
 
 # Jinja2 Filter for Datetime Formatting
 def format_datetime(value):
@@ -755,13 +757,11 @@ def register():
         if len(birth) != 8:
             return Response('<script> alert("생년월일은 8자리로 입력해야 합니다."); history.back(); </script>')
 
-        year = int(birth[0:4])
-        month = int(birth[4:6])
-        day = int(birth[6:8])
-
-        print(year, month, day)
-
         try:
+            year = int(birth[0:4])
+            month = int(birth[4:6])
+            day = int(birth[6:8])
+
             datetime.date(int(year), int(month), int(day))
         except ValueError:
             return Response('<script> alert("생년월일 형식을 다시 확인하세요. 1"); history.back(); </script>')
@@ -1029,6 +1029,9 @@ def post_write():
         
         # data URI를 허용하도록 protocols에 'data' 추가
         sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'], css_sanitizer=css_sanitizer)
+
+        if sanitized_content.count('<img') > 5:
+            return Response('<script>alert("이미지는 최대 5개까지 첨부할 수 있습니다."); history.back();</script>')
 
         # 4. 데이터베이스에 저장
         try:
@@ -1554,7 +1557,7 @@ def post_delete(post_id):
         cursor.execute("UPDATE users SET post_count = post_count - 1 WHERE login_id = ?", (post['author'],))
         
         # 8. 경험치를 차감합니다.
-        update_exp_level(post['author'], -50)
+        update_exp_level(post['author'], -50, False)
 
         # --- 👆 로직 수정 끝 ---
 
