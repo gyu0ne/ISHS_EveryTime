@@ -1366,25 +1366,18 @@ def post_detail(post_id):
             comment = dict(comment_row)
             comment['replies'] = []
 
-            # --- ▼ [추가] 익명 게시판 댓글 처리 로직 ---
             if board_id == 3:
-                comment_author_id = comment['author']
+                seq = comment.get('anonymous_seq', 0)
                 
-                if comment_author_id == post_author_id:
-                    # 댓글 작성자가 게시글 작성자인 경우
+                if comment['author'] == post_author_id:
                     comment['nickname'] = '익명 (작성자)'
                 else:
-                    # 댓글 작성자가 게시글 작성자가 아닌 경우
-                    if comment_author_id not in anonymous_map:
-                        # 이 작성자가 처음 댓글을 단 경우, 새 익명 번호 할당
-                        anonymous_map[comment_author_id] = f'익명{anonymous_count}'
-                        anonymous_count += 1
-                    # 맵에서 할당된 익명 번호 사용
-                    comment['nickname'] = anonymous_map[comment_author_id]
+                    if seq > 0:
+                        comment['nickname'] = f'익명{seq}'
+                    else:
+                        comment['nickname'] = '익명'
                 
-                # 프로필 이미지는 모두 기본값으로 변경
                 comment['profile_image'] = 'images/profiles/default_image.jpeg'
-            # --- ▲ [추가] ---
 
             cursor.execute("SELECT reaction_type, COUNT(*) as count FROM reactions WHERE target_type = 'comment' AND target_id = ? GROUP BY reaction_type", (comment['id'],))
             comment_reactions = {r['reaction_type']: r['count'] for r in cursor.fetchall()}
@@ -1627,12 +1620,22 @@ def add_comment(post_id):
 
         created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sanitized_content = bleach.clean(content)
+
+        anonymous_seq = 0
+
+        if post['board_id'] == 3:
+            cursor.execute("SELECT MAX(anonymous_seq) FROM comments WHERE post_id = ?", (post_id,))
+            max_seq = cursor.fetchone()[0]
+            anonymous_seq = (max_seq if max_seq else 0) + 1
+            
+            if author_id == post['author']: 
+                 anonymous_seq = 0
         
         query = """
             INSERT INTO comments 
             (post_id, author, content, created_at, updated_at, parent_comment_id,
-             guest_nickname, guest_password)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             guest_nickname, guest_password, anonymous_seq)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         if parent_comment_id:
@@ -1664,7 +1667,7 @@ def add_comment(post_id):
             # --- 새 댓글 로직 ---
             cursor.execute(query, (
                 post_id, author_id, sanitized_content, created_at, created_at, None,
-                guest_nickname, hashed_pw
+                guest_nickname, hashed_pw, anonymous_seq
             ))
             
             # [수정] guest_nickname이 없는 (로그인한) 사용자에게만 알림
