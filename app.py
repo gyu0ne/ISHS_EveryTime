@@ -1,3 +1,6 @@
+from gevent import monkey
+monkey.patch_all()
+
 from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response, make_response
 from werkzeug.middleware.proxy_fix import ProxyFix
 from bleach.css_sanitizer import CSSSanitizer
@@ -5,6 +8,7 @@ from werkzeug.utils import secure_filename
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
 from gevent.queue import Queue, Empty
+from cachetools import TTLCache
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from functools import wraps
@@ -22,6 +26,7 @@ import json
 import math
 import html
 import os
+import re
 
 load_dotenv()
 
@@ -44,6 +49,10 @@ ACADEMIC_CLUBS = ["WIN", "TNT", "PLUTONIUM", "LOGIC", "LOTTOL", "RAIBIT", "QUASA
 HOBBY_CLUBS = ["책톡", "픽쳐스", "메카", "퓨전", "차랑", "스포츠문화부", "체력단련부", "I-FLOW", "아마빌레"]
 CAREER_CLUBS = ["TIP", "필로캠", "천수동", "씽크빅", "WIZARD", "METEOR", "엔진"]
 GUEST_USER_ID = '__guest__'
+
+def clean_fts_query(text):
+    # 알파벳, 한글, 숫자, 공백만 허용
+    return re.sub(r'[^\w\s가-힣]', '', text)
 
 # DB connect (first line of all route)
 def get_db():
@@ -483,6 +492,7 @@ def main_page():
         return render_template('main_notlogined.html', bob=bob_data)
 
 googlebot_ip_cache = {}
+googlebot_ip_cache = TTLCache(maxsize=1000, ttl=3600)
 
 # Googlebot Verification Logic
 def is_googlebot():
@@ -2224,6 +2234,9 @@ def search():
     search_term_fts = ' AND '.join(query.split())
     # LIKE 검색어 형식
     search_term_like = f'%{query}%'
+
+    cleaned_query = clean_fts_query(query)
+    search_term_fts = ' AND '.join(cleaned_query.split())
 
     try:
         # [수정] 닉네임 검색(u.nickname)과 게스트 닉네임 검색(p.guest_nickname)을 모두 포함
