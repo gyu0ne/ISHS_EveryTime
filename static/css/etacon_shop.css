@@ -1,0 +1,159 @@
+:root {
+    --bg-color: #121212;
+    --card-bg: #1E1E1E;
+    --text-color: #E0E0E0;
+    --text-secondary: #A0A0A0;
+    --accent-color: #E53935;
+    --border-color: #444;
+}
+
+body {
+    background-color: var(--bg-color);
+}
+
+.shop-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.shop-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 15px;
+}
+
+.shop-header h2 {
+    color: var(--text-color);
+    font-size: 22px;
+}
+
+.user-point {
+    color: var(--text-color);
+    font-size: 14px;
+}
+
+.user-point strong {
+    color: #FFC107; /* 포인트 강조 색상 */
+    margin-right: 15px;
+}
+
+.btn-request {
+    background-color: #2C2C2C;
+    color: var(--text-color);
+    padding: 8px 12px;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 13px;
+    transition: background 0.2s;
+}
+
+.btn-request:hover {
+    background-color: #3E3E3E;
+}
+
+/* 그리드 레이아웃 */
+.pack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.pack-card {
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+}
+
+.pack-thumbnail {
+    width: 100%;
+    height: 150px;
+    background-color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.pack-thumbnail img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.pack-info {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.pack-name {
+    margin: 0 0 5px 0;
+    font-size: 16px;
+    color: var(--text-color);
+}
+
+.pack-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 15px 0;
+    flex-grow: 1;
+    line-height: 1.4;
+}
+
+.pack-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+}
+
+.pack-price {
+    font-weight: bold;
+    color: #FFC107;
+    font-size: 14px;
+}
+
+.btn-buy {
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.btn-buy:hover {
+    opacity: 0.9;
+}
+
+.btn-buy.owned {
+    background-color: #444;
+    cursor: default;
+    color: #888;
+}
+
+.no-packs {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 50px;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 600px) {
+    .pack-grid {
+        grid-template-columns: repeat(2, 1fr); /* 모바일에서 2열 */
+        gap: 10px;
+    }
+    .pack-thumbnail {
+        height: 120px;
+    }
+}

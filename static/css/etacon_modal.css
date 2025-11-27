@@ -1,0 +1,128 @@
+/* static/css/etacon_modal.css */
+
+/* 모달 배경 */
+.etacon-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 모달 창 */
+.etacon-modal {
+    background: #1E1E1E;
+    width: 90%;
+    max-width: 500px;
+    height: 600px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #444;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+}
+
+/* 헤더 */
+.etacon-modal-header {
+    padding: 15px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #252525;
+}
+
+.etacon-modal-title {
+    color: #fff;
+    font-weight: bold;
+    margin: 0;
+}
+
+.etacon-modal-close {
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+/* 탭 (패키지 목록) */
+.etacon-tabs {
+    display: flex;
+    overflow-x: auto;
+    background: #151515;
+    border-bottom: 1px solid #333;
+    white-space: nowrap;
+}
+
+.etacon-tab {
+    padding: 12px 15px;
+    color: #888;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.etacon-tab:hover {
+    color: #ccc;
+}
+
+.etacon-tab.active {
+    color: #E53935; /* 포인트 컬러 */
+    border-bottom-color: #E53935;
+    font-weight: bold;
+}
+
+/* 그리드 (아이콘 목록) */
+.etacon-grid-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    background: #1E1E1E;
+}
+
+.etacon-grid {
+    display: none; /* 기본적으로 숨김 */
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 10px;
+}
+
+.etacon-grid.active {
+    display: grid;
+}
+
+.etacon-item {
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 5px;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    background: #2C2C2C;
+}
+
+.etacon-item:hover {
+    background: #3E3E3E;
+}
+
+.etacon-item img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+/* 로딩/비어있음 상태 */
+.etacon-message {
+    text-align: center;
+    color: #777;
+    margin-top: 50px;
+}

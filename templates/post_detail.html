@@ -4,6 +4,9 @@
 
 {% block head %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/post_detail.css') }}">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/etacon_modal.css') }}">
+    <script src="{{ url_for('static', filename='js/etacon_modal.js') }}"></script>
     <script>
         function toggleEdit(commentId) {
             const commentItem = document.getElementById('comment-' + commentId);

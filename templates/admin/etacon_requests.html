@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}관리자 - 에타콘 승인{% endblock %}
+
+{% block content %}
+<div class="container" style="padding: 20px; color: #E0E0E0;">
+    <h2>에타콘 등록 대기 목록</h2>
+    
+    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <thead>
+            <tr style="border-bottom: 1px solid #444; text-align: left;">
+                <th style="padding: 10px;">ID</th>
+                <th style="padding: 10px;">패키지명</th>
+                <th style="padding: 10px;">가격</th>
+                <th style="padding: 10px;">요청자</th>
+                <th style="padding: 10px;">썸네일</th>
+                <th style="padding: 10px;">관리</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for req in requests %}
+            <tr style="border-bottom: 1px solid #333;">
+                <td style="padding: 10px;">{{ req.id }}</td>
+                <td style="padding: 10px;">{{ req.name }}</td>
+                <td style="padding: 10px;">{{ req.price }}</td>
+                <td style="padding: 10px;">{{ req.uploader_id }}</td>
+                <td style="padding: 10px;">
+                    <img src="{{ url_for('static', filename=req.thumbnail) }}" style="height: 50px;">
+                </td>
+                <td style="padding: 10px;">
+                    <button onclick="processEtacon({{ req.id }}, 'approve')" style="background: #4CAF50; color: white; border: none; padding: 5px 10px; cursor: pointer;">승인</button>
+                    <button onclick="processEtacon({{ req.id }}, 'reject')" style="background: #F44336; color: white; border: none; padding: 5px 10px; cursor: pointer;">거절</button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" style="padding: 20px; text-align: center;">대기 중인 요청이 없습니다.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+async function processEtacon(packId, action) {
+    if (!confirm(`${action === 'approve' ? '승인' : '거절'} 하시겠습니까?`)) return;
+    
+    const response = await fetch(`/admin/etacon/${action}/${packId}`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': '{{ csrf_token() }}'}
+    });
+    
+    const result = await response.json();
+    if (result.status === 'success') {
+        location.reload();
+    } else {
+        alert('오류 발생');
+    }
+}
+</script>
+{% endblock %}

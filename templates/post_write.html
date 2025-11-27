@@ -22,7 +22,12 @@
     <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-bs4.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/lang/summernote-ko-KR.js"></script> <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/post_write.css') }}">
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/etacon_modal.css') }}">
+    <script src="{{ url_for('static', filename='js/etacon_modal.js') }}"></script>
 </head>
 <body>
     <form class="editor-container" id="post-form" method="POST" action="{{ url_for('post_write') }}">
@@ -51,6 +56,13 @@
                     <span id="current-title-chars">0</span> / 50
                 </div>
             </div>
+
+            <div class="mb-2 text-right">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="openEtaconModal('summernote')" style="background-color: #2C2C2C; color: #E0E0E0; border: 1px solid #444;">
+                    에타콘
+                </button>
+            </div>
+
             {% if g.user and g.user.role == 'admin' %}
             <div class="custom-control custom-checkbox my-2">
                 <input type="checkbox" class="custom-control-input" id="is_notice" name="is_notice">

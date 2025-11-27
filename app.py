@@ -2942,6 +2942,38 @@ def buy_etacon(pack_id):
         conn.rollback()
         return jsonify({'status': 'error', 'message': '구매 처리 중 오류가 발생했습니다.'}), 500
 
+@app.route('/api/my-etacons')
+@login_required
+def my_etacons():
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # 사용자가 보유한 패키지의 모든 에타콘 조회
+    query = """
+        SELECT e.code, e.image_path, p.name as pack_name, p.id as pack_id
+        FROM etacons e
+        JOIN user_etacons ue ON e.pack_id = ue.pack_id
+        JOIN etacon_packs p ON e.pack_id = p.id
+        WHERE ue.user_id = ?
+        ORDER BY ue.purchased_at DESC, e.id ASC
+    """
+    cursor.execute(query, (g.user['login_id'],))
+    rows = cursor.fetchall()
+    
+    # 패키지별로 그룹화하여 JSON 반환
+    result = {}
+    for row in rows:
+        pack_name = row['pack_name']
+        if pack_name not in result:
+            result[pack_name] = []
+        result[pack_name].append({
+            'code': row['code'],
+            'image_path': row['image_path']
+        })
+        
+    return jsonify(result)
+
 # Server Drive Unit
 if __name__ == '__main__':
     from gevent.pywsgi import WSGIServer

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}log인곽 - 에타콘 상점{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/etacon_shop.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="shop-container">
+    <header class="shop-header">
+        <h2>에타콘 상점</h2>
+        <div class="user-point">
+            <span>내 포인트: <strong>{{ user.point }} P</strong></span>
+            <a href="{{ url_for('etacon_request') }}" class="btn-request">등록 요청</a>
+        </div>
+    </header>
+
+    <div class="pack-grid">
+        {% for pack in packs %}
+        <div class="pack-card">
+            <div class="pack-thumbnail">
+                <img src="{{ url_for('static', filename=pack.thumbnail) }}" alt="{{ pack.name }}">
+            </div>
+            <div class="pack-info">
+                <h3 class="pack-name">{{ pack.name }}</h3>
+                <p class="pack-desc">{{ pack.description }}</p>
+                <div class="pack-footer">
+                    <span class="pack-price">
+                        {% if pack.price == 0 %}무료{% else %}{{ pack.price }} P{% endif %}
+                    </span>
+                    
+                    {% if pack.is_owned > 0 %}
+                        <button class="btn-buy owned" disabled>보유중</button>
+                    {% else %}
+                        <button class="btn-buy" onclick="buyEtacon('{{ pack.id }}', '{{ pack.name }}', '{{ pack.price }}')">
+                            구매
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="no-packs">
+            <p>등록된 에타콘이 없습니다.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+async function buyEtacon(packId, packName, price) {
+    if (!confirm(`'${packName}' 에타콘을 ${price} 포인트에 구매하시겠습니까?`)) return;
+
+    try {
+        const response = await fetch(`/etacon/buy/${packId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token() }}'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            alert(result.message);
+            location.reload();
+        } else {
+            alert(result.message);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('구매 중 오류가 발생했습니다.');
+    }
+}
+</script>
+{% endblock %}
