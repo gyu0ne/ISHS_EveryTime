@@ -19,6 +19,7 @@ import requests
 import hashlib
 import secrets
 import sqlite3
+import shutil
 import bleach
 import socket
 import uuid
@@ -49,6 +50,86 @@ ACADEMIC_CLUBS = ["WIN", "TNT", "PLUTONIUM", "LOGIC", "LOTTOL", "RAIBIT", "QUASA
 HOBBY_CLUBS = ["책톡", "픽쳐스", "메카", "퓨전", "차랑", "스포츠문화부", "체력단련부", "I-FLOW", "아마빌레"]
 CAREER_CLUBS = ["TIP", "필로캠", "천수동", "씽크빅", "WIZARD", "METEOR", "엔진"]
 GUEST_USER_ID = '__guest__'
+
+ETACON_UPLOAD_FOLDER = 'static/images/etacons'
+ALLOWED_ETACON_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+os.makedirs(ETACON_UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_etacon_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_ETACON_EXTENSIONS
+
+def save_etacon_image(file, sub_folder):
+    """
+    이미지를 저장하고 경로를 반환합니다.
+    GIF는 최적화하여 저장하고, 정적 이미지는 포맷을 유지합니다.
+    sub_folder: 패키지별 폴더 (예: 'pack_1')
+    """
+    filename = secure_filename(file.filename)
+    # 파일명 중복 방지를 위한 UUID 추가
+    unique_filename = f"{uuid.uuid4().hex[:8]}_{filename}"
+    
+    save_dir = os.path.join(ETACON_UPLOAD_FOLDER, sub_folder)
+    os.makedirs(save_dir, exist_ok=True)
+    
+    save_path = os.path.join(save_dir, unique_filename)
+    
+    # Pillow로 이미지 처리 (GIF 지원)
+    try:
+        img = Image.open(file)
+        
+        # GIF인 경우 save_all=True로 애니메이션 유지
+        if file.filename.lower().endswith('.gif'):
+            img.save(save_path, save_all=True, optimize=True, loop=0)
+        else:
+            # 정적 이미지는 포맷에 맞게 저장 (필요 시 리사이징 가능)
+            img.save(save_path, optimize=True)
+            
+        return f"images/etacons/{sub_folder}/{unique_filename}"
+    except Exception as e:
+        print(f"이미지 저장 실패: {e}")
+        return None
+
+def process_etacons(content, user_id):
+    """
+    본문에 포함된 에타콘 코드(~packID_idx)를 찾아
+    사용자가 해당 패키지를 보유하고 있는지 검증한 후,
+    1. 보유 시: <img> 태그로 변환하여 리턴 (XSS 방지된 상태여야 함)
+    2. 미보유 시: 에러 메시지로 치환하거나 제거
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 에타콘 코드 패턴: ~숫자_숫자 (예: ~15_0)
+    # 주의: ~ 뒤에 공백 없이 바로 숫자가 와야 함
+    pattern = re.compile(r'~(\d+)_(\d+)')
+    
+    def replace_callback(match):
+        pack_id = int(match.group(1))
+        idx = int(match.group(2)) # 여기서는 사용하지 않지만 코드 구조상 필요
+        full_code = match.group(0)
+        
+        # 1. 사용자가 해당 패키지를 가지고 있는지 확인
+        # (성능을 위해 캐싱하거나, 한 번의 쿼리로 보유 패키지 ID 리스트를 가져오는 것이 좋음)
+        cursor.execute("SELECT 1 FROM user_etacons WHERE user_id = ? AND pack_id = ?", (user_id, pack_id))
+        has_pack = cursor.fetchone()
+        
+        if has_pack:
+            # 2. 해당 코드가 유효한 에타콘인지 확인하고 이미지 경로 가져오기
+            cursor.execute("SELECT image_path FROM etacons WHERE pack_id = ? AND code = ?", (pack_id, full_code))
+            etacon = cursor.fetchone()
+            
+            if etacon:
+                # [중요] 이미지는 class="etacon-img"로 스타일링
+                return f'<img src="/static/{etacon[0]}" class="etacon-img" alt="etacon" style="max-height: 100px;">'
+        
+        # 보유하지 않았거나 존재하지 않는 코드면 텍스트 그대로 노출 (또는 빈 문자열)
+        return ""
+
+    # 정규식 치환 실행
+    new_content = pattern.sub(replace_callback, content)
+    return new_content
 
 def clean_fts_query(text):
     # 알파벳, 한글, 숫자, 공백만 허용
@@ -1046,6 +1127,8 @@ def post_write():
         if sanitized_content.count('<img') > 5:
             return Response('<script>alert("이미지는 최대 5개까지 첨부할 수 있습니다."); history.back();</script>')
 
+        final_content = process_etacons(sanitized_content, g.user['login_id'])
+
         # 4. 데이터베이스에 저장
         try:
             created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -1055,7 +1138,7 @@ def post_write():
                 (board_id, title, content, author, created_at, updated_at, view_count, comment_count, is_notice)
                 VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)
             """
-            cursor.execute(query, (board_id, title, sanitized_content, author_id, created_at, created_at, is_notice))
+            cursor.execute(query, (board_id, title, final_content, author_id, created_at, created_at, is_notice))
 
             cursor.execute("UPDATE users SET post_count = post_count + 1 WHERE login_id = ?", (author_id,))
 
@@ -1065,7 +1148,7 @@ def post_write():
 
             cursor.execute("SELECT last_insert_rowid()")
             post_id = cursor.fetchone()[0]
-            add_log('CREATE_POST', author_id, f"'{title}' 글 작성(id : {post_id}). 내용 : {sanitized_content}")
+            add_log('CREATE_POST', author_id, f"'{title}' 글 작성(id : {post_id}). 내용 : {final_content}")
 
             return redirect(url_for('post_list', board_id=board_id))
         except Exception as e:
@@ -1488,11 +1571,13 @@ def post_edit(post_id):
         }
         sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'])
 
+        final_content = process_etacons(sanitized_content, g.user['login_id'])
+
         updated_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         query = "UPDATE posts SET board_id = ?, title = ?, content = ?, updated_at = ?, is_notice = ? WHERE id = ?"
-        cursor.execute(query, (board_id, title, sanitized_content, updated_at, is_notice, post_id))
+        cursor.execute(query, (board_id, title, final_content, updated_at, is_notice, post_id))
 
-        add_log('EDIT_POST', session['user_id'], f"게시글 (id : {post_id})를 수정했습니다. 제목 : {title} 내용 : {sanitized_content}")
+        add_log('EDIT_POST', session['user_id'], f"게시글 (id : {post_id})를 수정했습니다. 제목 : {title} 내용 : {final_content}")
 
         conn.commit()
 
@@ -1629,6 +1714,8 @@ def add_comment(post_id):
         created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sanitized_content = bleach.clean(content)
 
+        final_content = process_etacons(sanitized_content, g.user['login_id'])
+
         anonymous_seq = 0
 
         if post['board_id'] == 3:
@@ -1666,7 +1753,7 @@ def add_comment(post_id):
                 return Response('<script>alert("대댓글에는 답글을 작성할 수 없습니다."); history.back();</script>')
             
             cursor.execute(query, (
-                post_id, author_id, sanitized_content, created_at, created_at, parent_comment_id,
+                post_id, author_id, final_content, created_at, created_at, parent_comment_id,
                 guest_nickname, hashed_pw
             ))
 
@@ -1683,7 +1770,7 @@ def add_comment(post_id):
         else:
             # --- 새 댓글 로직 ---
             cursor.execute(query, (
-                post_id, author_id, sanitized_content, created_at, created_at, None,
+                post_id, author_id, final_content, created_at, created_at, None,
                 guest_nickname, hashed_pw, anonymous_seq
             ))
             
@@ -1705,9 +1792,9 @@ def add_comment(post_id):
             cursor.execute("UPDATE users SET comment_count = comment_count + 1 WHERE login_id = ?", (author_id,))
             update_exp_level(author_id, 10)
 
-        log_details = f"게시글(id:{post_id})에 댓글 작성. 내용:{sanitized_content}"
+        log_details = f"게시글(id:{post_id})에 댓글 작성. 내용:{final_content}"
         if parent_comment_id:
-            log_details = f"댓글(id:{parent_comment_id})에 답글 작성. 내용:{sanitized_content}"
+            log_details = f"댓글(id:{parent_comment_id})에 답글 작성. 내용:{final_content}"
         add_log('ADD_COMMENT', log_user_id, log_details)
 
         conn.commit()
@@ -1799,10 +1886,12 @@ def edit_comment(comment_id):
         # 4. 데이터베이스 업데이트
         updated_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sanitized_content = bleach.clean(new_content)
+
+        final_content = process_etacons(sanitized_content, g.user['login_id'])
         
         query = "UPDATE comments SET content = ?, updated_at = ? WHERE id = ?"
-        cursor.execute(query, (sanitized_content, updated_at, comment_id))
-        add_log('EDIT_COMMENT', session['user_id'], f"댓글 (id : {comment_id})를 수정했습니다. 원본 : {comment['content']}, 내용 : {sanitized_content}")
+        cursor.execute(query, (final_content, updated_at, comment_id))
+        add_log('EDIT_COMMENT', session['user_id'], f"댓글 (id : {comment_id})를 수정했습니다. 원본 : {comment['content']}, 내용 : {final_content}")
         conn.commit()
 
     except Exception as e:
@@ -2679,6 +2768,179 @@ def comment_edit_guest(comment_id):
     else: 
         # (GET) 수정 페이지 표시
         return render_template('comment_edit_guest.html', comment=comment, user=g.user)
+
+@app.route('/etacon/request', methods=['GET', 'POST'])
+@login_required
+def etacon_request():
+    if request.method == 'POST':
+        name = request.form.get('name')
+        description = request.form.get('description')
+        price = request.form.get('price', type=int)
+        
+        # 유효성 검사
+        if not name or price is None:
+            return Response('<script>alert("필수 정보를 입력해주세요."); history.back();</script>')
+
+        # 썸네일 및 에타콘 이미지들
+        thumbnail = request.files.get('thumbnail')
+        etacon_files = request.files.getlist('etacon_files') # 다중 파일 업로드
+
+        if not thumbnail or not etacon_files or len(etacon_files) == 0:
+             return Response('<script>alert("썸네일과 에타콘 이미지를 최소 1개 이상 업로드해야 합니다."); history.back();</script>')
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        try:
+            # 1. 패키지 기본 정보 저장 (ID 확보를 위해 먼저 INSERT)
+            created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            cursor.execute("""
+                INSERT INTO etacon_packs (name, description, price, thumbnail, uploader_id, status, created_at)
+                VALUES (?, ?, ?, ?, ?, 'pending', ?)
+            """, (name, description, price, '', g.user['login_id'], created_at))
+            
+            pack_id = cursor.lastrowid
+            pack_folder = f"pack_{pack_id}"
+
+            # 2. 썸네일 저장 및 업데이트
+            thumb_path = save_etacon_image(thumbnail, pack_folder)
+            if not thumb_path:
+                raise Exception("썸네일 저장 실패")
+            
+            cursor.execute("UPDATE etacon_packs SET thumbnail = ? WHERE id = ?", (thumb_path, pack_id))
+
+            # 3. 개별 에타콘 이미지 저장
+            for idx, file in enumerate(etacon_files):
+                if file and allowed_etacon_file(file.filename):
+                    img_path = save_etacon_image(file, pack_folder)
+                    if img_path:
+                        # 코드 형식: ~packID_index (예: ~15_0, ~15_1) -> 유니크하고 파싱하기 쉬움
+                        code = f"~{pack_id}_{idx}"
+                        cursor.execute("INSERT INTO etacons (pack_id, image_path, code) VALUES (?, ?, ?)", 
+                                       (pack_id, img_path, code))
+
+            conn.commit()
+            add_log('REQUEST_ETACON', g.user['login_id'], f"에타콘 패키지 '{name}' 등록을 요청했습니다.")
+            return Response('<script>alert("에타콘 등록 요청이 완료되었습니다. 관리자 승인 후 상점에 공개됩니다."); location.href="/mypage";</script>')
+
+        except Exception as e:
+            conn.rollback()
+            print(f"에타콘 등록 중 오류: {e}")
+            return Response(f'<script>alert("오류가 발생했습니다: {str(e)}"); history.back();</script>')
+
+    return render_template('etacon/request.html')
+
+@app.route('/admin/etacon/requests')
+@login_required
+@admin_required
+def admin_etacon_requests():
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # 대기 중인 패키지 조회
+    cursor.execute("SELECT * FROM etacon_packs WHERE status = 'pending' ORDER BY created_at DESC")
+    requests = cursor.fetchall()
+    
+    return render_template('admin/etacon_requests.html', requests=requests)
+
+@app.route('/admin/etacon/approve/<int:pack_id>', methods=['POST'])
+@login_required
+@admin_required
+def approve_etacon(pack_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 상태를 approved로 변경
+    cursor.execute("UPDATE etacon_packs SET status = 'approved' WHERE id = ?", (pack_id,))
+    
+    # (선택) 등록한 유저에게 자동으로 해당 패키지 지급 (자기가 만든 건 무료로 쓰게)
+    cursor.execute("SELECT uploader_id FROM etacon_packs WHERE id = ?", (pack_id,))
+    pack = cursor.fetchone()
+    if pack:
+        uploader_id = pack[0]
+        cursor.execute("INSERT OR IGNORE INTO user_etacons (user_id, pack_id, purchased_at) VALUES (?, ?, ?)",
+                       (uploader_id, pack_id, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+    
+    conn.commit()
+    add_log('APPROVE_ETACON', g.user['login_id'], f"에타콘 패키지 {pack_id}번을 승인했습니다.")
+    return jsonify({'status': 'success'})
+
+@app.route('/admin/etacon/reject/<int:pack_id>', methods=['POST'])
+@login_required
+@admin_required
+def reject_etacon(pack_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # DB에서 삭제
+    cursor.execute("DELETE FROM etacon_packs WHERE id = ?", (pack_id,))
+    conn.commit()
+    
+    try:
+        shutil.rmtree(os.path.join(ETACON_UPLOAD_FOLDER, f"pack_{pack_id}"))
+    except:
+        pass
+
+    add_log('REJECT_ETACON', g.user['login_id'], f"에타콘 패키지 {pack_id}번을 거절(삭제)했습니다.")
+    return jsonify({'status': 'success'})
+
+@app.route('/etacon/shop')
+@login_required
+def etacon_shop():
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # 승인된 패키지 목록
+    cursor.execute("""
+        SELECT p.*, 
+               (SELECT COUNT(*) FROM user_etacons ue WHERE ue.pack_id = p.id AND ue.user_id = ?) as is_owned
+        FROM etacon_packs p
+        WHERE p.status = 'approved'
+        ORDER BY p.created_at DESC
+    """, (g.user['login_id'],))
+    packs = cursor.fetchall()
+    
+    return render_template('etacon/shop.html', packs=packs, user=g.user)
+
+@app.route('/etacon/buy/<int:pack_id>', methods=['POST'])
+@login_required
+def buy_etacon(pack_id):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # 1. 패키지 정보 확인
+    cursor.execute("SELECT * FROM etacon_packs WHERE id = ? AND status = 'approved'", (pack_id,))
+    pack = cursor.fetchone()
+    
+    if not pack:
+        return jsonify({'status': 'error', 'message': '존재하지 않거나 판매 중지된 패키지입니다.'}), 404
+        
+    # 2. 이미 보유 중인지 확인
+    cursor.execute("SELECT * FROM user_etacons WHERE user_id = ? AND pack_id = ?", (g.user['login_id'], pack_id))
+    if cursor.fetchone():
+        return jsonify({'status': 'error', 'message': '이미 보유하고 있는 패키지입니다.'}), 400
+        
+    # 3. 포인트 확인 및 차감
+    if g.user['point'] < pack['price']:
+        return jsonify({'status': 'error', 'message': '포인트가 부족합니다.'}), 400
+        
+    try:
+        # 포인트 차감
+        cursor.execute("UPDATE users SET point = point - ? WHERE login_id = ?", (pack['price'], g.user['login_id']))
+        # 패키지 지급
+        cursor.execute("INSERT INTO user_etacons (user_id, pack_id, purchased_at) VALUES (?, ?, ?)",
+                       (g.user['login_id'], pack_id, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        conn.commit()
+        
+        add_log('BUY_ETACON', g.user['login_id'], f"에타콘 패키지 '{pack['name']}'을 구매했습니다. (-{pack['price']}P)")
+        return jsonify({'status': 'success', 'message': '구매가 완료되었습니다!'})
+        
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'status': 'error', 'message': '구매 처리 중 오류가 발생했습니다.'}), 500
 
 # Server Drive Unit
 if __name__ == '__main__':
