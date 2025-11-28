@@ -122,8 +122,8 @@ def process_etacons(content, user_id):
             
             if etacon:
                 # [중요] 이미지는 class="etacon-img"로 스타일링
-                return f'<img src="/static/{etacon[0]}" class="etacon-img" alt="etacon" style="max-height: 100px;">'
-        
+                return f'<img src="/static/{etacon[0]}" class="etacon-img" alt="etacon" data-code="{full_code}" style="max-height: 100px;">'
+
         # 보유하지 않았거나 존재하지 않는 코드면 텍스트 그대로 노출 (또는 빈 문자열)
         return ""
 
