@@ -3,6 +3,15 @@
 
 debug_tool.py
 
+Debugger.py
+DB_RESET.py
+DB_Rebuild.py
+DB_Force_rebuild.py
+DB_Emergency_refactoring.py
+
+*.png
+*.gif
+
 .env
 
 *.exe

@@ -91,49 +91,62 @@ def save_etacon_image(file, sub_folder):
         print(f"이미지 저장 실패: {e}")
         return None
 
+# app.py
+
 def process_etacons(content, user_id):
     """
-    본문에 포함된 에타콘 코드(~packID_idx)를 찾아
-    사용자가 해당 패키지를 보유하고 있는지 검증한 후,
-    1. 보유 시: <img> 태그로 변환하여 리턴 (XSS 방지된 상태여야 함)
-    2. 미보유 시: 에러 메시지로 치환하거나 제거
+    본문에 포함된 에타콘 코드(~packID_idx)를 이미지 태그로 변환.
     """
     conn = get_db()
     cursor = conn.cursor()
     
-    # 에타콘 코드 패턴: ~숫자_숫자 (예: ~15_0)
-    # 주의: ~ 뒤에 공백 없이 바로 숫자가 와야 함
+    print(f"DEBUG: Processing etacons for user: {user_id}") # 디버깅용 로그
+
+    # 1. 사용자가 보유한 패키지 ID 목록 조회
+    cursor.execute("SELECT pack_id FROM user_etacons WHERE user_id = ?", (user_id,))
+    # pack_id를 정수형으로 확실하게 변환하여 set에 저장
+    owned_pack_ids = {int(row[0]) for row in cursor.fetchall()}
+    print(f"DEBUG: Owned packs: {owned_pack_ids}")
+
+    # 2. 본문에서 패턴 추출 (~숫자_숫자)
     pattern = re.compile(r'~(\d+)_(\d+)')
+    matches = pattern.findall(content)
+    print(f"DEBUG: Found matches in content: {matches}")
+
+    # 3. 유효한 코드에 대한 이미지 경로 매핑 생성
+    valid_codes = {} 
     
-    def replace_callback(match):
-        pack_id = int(match.group(1))
-        idx = int(match.group(2)) # 여기서는 사용하지 않지만 코드 구조상 필요
-        full_code = match.group(0)
+    if matches:
+        # 보유 중인 패키지에 해당하는 것만 필터링
+        target_pack_ids = list({int(m[0]) for m in matches if int(m[0]) in owned_pack_ids})
         
-        # 1. 사용자가 해당 패키지를 가지고 있는지 확인
-        # (성능을 위해 캐싱하거나, 한 번의 쿼리로 보유 패키지 ID 리스트를 가져오는 것이 좋음)
-        cursor.execute("SELECT 1 FROM user_etacons WHERE user_id = ? AND pack_id = ?", (user_id, pack_id))
-        has_pack = cursor.fetchone()
-        
-        if has_pack:
-            # 2. 해당 코드가 유효한 에타콘인지 확인하고 이미지 경로 가져오기
-            cursor.execute("SELECT image_path FROM etacons WHERE pack_id = ? AND code = ?", (pack_id, full_code))
-            etacon = cursor.fetchone()
+        if target_pack_ids:
+            placeholders = ','.join(['?'] * len(target_pack_ids))
+            query = f"SELECT pack_id, code, image_path FROM etacons WHERE pack_id IN ({placeholders})"
+            cursor.execute(query, target_pack_ids)
             
-            if etacon:
-                # [중요] 이미지는 class="etacon-img"로 스타일링
-                return f'<img src="/static/{etacon[0]}" class="etacon-img" alt="etacon" data-code="{full_code}" style="max-height: 100px;">'
+            for pid, code, path in cursor.fetchall():
+                valid_codes[code] = path
+    
+    print(f"DEBUG: Valid codes map: {valid_codes}")
 
-        # 보유하지 않았거나 존재하지 않는 코드면 텍스트 그대로 노출 (또는 빈 문자열)
-        return ""
+    # 4. 치환 함수
+    def replace_callback(match):
+        # pack_id = int(match.group(1)) # 사용 안함
+        full_code = match.group(0) # 예: ~15_0
+        
+        if full_code in valid_codes:
+            image_path = valid_codes[full_code]
+            # [중요] data-code 속성 포함, 이미지 경로 앞에 /static/ 확인
+            # url_for('static', filename=...)를 쓰는 게 정석이지만, 여기서는 문자열 조합으로 처리
+            # DB에 저장된 path가 'images/...' 형태라면 '/static/'을 붙여야 함
+            final_path = image_path if image_path.startswith('/') else f"/static/{image_path}"
+            
+            return f'<img src="{final_path}" class="etacon-img" alt="etacon" data-code="{full_code}" style="max-height: 100px;">'
+            
+        return "" # 보유하지 않았거나 없는 코드는 제거
 
-    # 정규식 치환 실행
-    new_content = pattern.sub(replace_callback, content)
-    return new_content
-
-def clean_fts_query(text):
-    # 알파벳, 한글, 숫자, 공백만 허용
-    return re.sub(r'[^\w\s가-힣]', '', text)
+    return pattern.sub(replace_callback, content)
 
 # DB connect (first line of all route)
 def get_db():
@@ -727,17 +740,22 @@ def riro_auth():
             cursor.execute('SELECT COUNT(*) FROM users WHERE hakbun = ? AND status = "active"', (api_result['student_number'],))
             count_hakbun = cursor.fetchone()[0]
 
-            if count_name > 0 and count_hakbun > 0:
-                return Response(f'''
-        <script>
-            alert("이미 가입된 계정이 있습니다.");
-            history.back();
-        </script>
-    ''')
+    # DEBUG: 중복 검사 비활성화
+    #         if count_name > 0 and count_hakbun > 0:
+    #             return Response(f'''
+    #     <script>
+    #         alert("이미 가입된 계정이 있습니다.");
+    #         history.back();
+    #     </script>
+    # ''')
 
-            session['hakbun'] = api_result['student_number']
-            session['name'] = api_result['name']
-            session['gen'] = api_result['generation']
+    #         session['hakbun'] = api_result['student_number']
+    #         session['name'] = api_result['name']
+    #         session['gen'] = api_result['generation']
+
+            session['hakbun'] = '1310'
+            session['name'] = '김준서'
+            session['gen'] = '32'
 
             return redirect('yakgwan')
 
@@ -842,7 +860,6 @@ def register():
         id = request.form['login_id']
         nick = request.form['nickname']
         birth = str(request.form['birth'])
-        print(birth)
 
         if not isinstance(birth, str):
             birth = str(birth)
@@ -2828,7 +2845,7 @@ def etacon_request():
             print(f"에타콘 등록 중 오류: {e}")
             return Response(f'<script>alert("오류가 발생했습니다: {str(e)}"); history.back();</script>')
 
-    return render_template('etacon/request.html')
+    return render_template('etacon/request.html', user=g.user)
 
 @app.route('/admin/etacon/requests')
 @login_required
@@ -2842,7 +2859,7 @@ def admin_etacon_requests():
     cursor.execute("SELECT * FROM etacon_packs WHERE status = 'pending' ORDER BY created_at DESC")
     requests = cursor.fetchall()
     
-    return render_template('admin/etacon_requests.html', requests=requests)
+    return render_template('admin/etacon_requests.html', requests=requests, user=g.user)
 
 @app.route('/admin/etacon/approve/<int:pack_id>', methods=['POST'])
 @login_required

@@ -209,7 +209,9 @@
             <input type="hidden" name="parent_comment_id" value="{{ comment.id }}">
 
             <div style="width: 100%; text-align: right; margin-bottom: 5px;">
-                <button type="button" style="background:none; border:1px solid #555; color:#ccc; cursor:pointer; padding:2px 5px; border-radius:4px;" onclick="openEtaconModal('#reply-textarea-{{ comment.id }}')">에타콘</button>
+                {% if g.user %}
+                    <button type="button" style="background:none; border:1px solid #555; color:#ccc; cursor:pointer; padding:2px 5px; border-radius:4px;" onclick="openEtaconModal('#reply-textarea-{{ comment.id }}')">에타콘</button>
+                {% endif %}
             </div>
             
             {% if g.user %}
@@ -327,7 +329,9 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 
                 <div style="width: 100%; text-align: right; margin-bottom: 5px;">
-                    <button type="button" style="background:none; border:1px solid #555; color:#ccc; cursor:pointer; padding:4px 8px; border-radius:4px;" onclick="openEtaconModal('#main-comment-textarea')">에타콘</button>
+                    {% if g.user %}
+                        <button type="button" style="background:none; border:1px solid #555; color:#ccc; cursor:pointer; padding:4px 8px; border-radius:4px;" onclick="openEtaconModal('#main-comment-textarea')">에타콘</button>
+                    {% endif %}
                 </div>
 
                 {% if g.user %}

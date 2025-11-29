@@ -158,32 +158,49 @@ document.addEventListener('DOMContentLoaded', function() {
     const postForm = document.getElementById('post-form');
     if (postForm) {
         postForm.addEventListener('submit', function(e) {
-            // Summernote 내용을 가져옴
-            const content = $('#summernote-editor').summernote('code');
+            // 1. Summernote의 현재 HTML 코드를 가져옵니다.
+            // (이 시점에서는 아직 이미지가 태그로 존재함)
+            let content = $('#summernote-editor').summernote('code');
             
-            // 임시 DOM을 만들어 조작
+            // 2. 임시 DOM을 생성하여 파싱합니다.
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = content;
 
-            // 1. 방금 삽입한 미리보기 이미지 (.etacon-img-preview)
-            // 2. 서버에서 불러온 기존 이미지 (.etacon-img) 
-            // 모두 찾아서 텍스트 코드로 변환
-            const images = tempDiv.querySelectorAll('img.etacon-img-preview, img.etacon-img');
+            // 3. 에타콘 이미지 태그를 찾아 텍스트 코드로 '교체'합니다.
+            // img 태그 중 data-code 속성이 있는 것만 대상
+            const images = tempDiv.querySelectorAll('img[data-code]');
             
-            images.forEach(img => {
-                // data-code 속성이 있거나, ~로 시작하는 코드를 찾을 수 있다면 변환
-                const code = img.dataset.code; 
-                if (code) {
-                    const textNode = document.createTextNode(code);
-                    img.parentNode.replaceChild(textNode, img);
-                }
-            });
+            if (images.length > 0) {
+                images.forEach(img => {
+                    const code = img.dataset.code; 
+                    if (code) {
+                        // 이미지 태그 자체를 텍스트 노드로 교체
+                        // 예: <img ... data-code="~1_0">  ==>  ~1_0
+                        const textNode = document.createTextNode(code);
+                        img.parentNode.replaceChild(textNode, img);
+                    }
+                });
+                
+                // 4. 변환된 HTML(실제로는 텍스트 코드가 섞인 HTML)을 다시 문자열로 만듭니다.
+                content = tempDiv.innerHTML;
+            }
 
-            // 변환된 텍스트 내용을 hidden input에 저장
+            // 5. 실제 서버로 전송될 textarea에 변환된 내용을 강제로 넣습니다.
             const contentInput = document.getElementById('post-content');
             if (contentInput) {
-                contentInput.value = tempDiv.innerHTML;
+                contentInput.value = content;
+            } else {
+                // (비상용) textarea가 없다면 만들어서 넣습니다.
+                const newInput = document.createElement('textarea');
+                newInput.name = 'content';
+                newInput.value = content;
+                newInput.style.display = 'none';
+                this.appendChild(newInput);
             }
+            
+            // 6. (중요) Summernote가 다시 덮어쓰지 못하도록 
+            //    onsubmit 이벤트 전파를 막거나 할 필요는 없지만,
+            //    textarea 값 설정이 가장 마지막에 일어나도록 보장해야 합니다.
         });
     }
 });
