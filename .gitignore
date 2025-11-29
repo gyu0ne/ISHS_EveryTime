@@ -9,6 +9,8 @@ DB_Rebuild.py
 DB_Force_rebuild.py
 DB_Emergency_refactoring.py
 
+schema.sql
+
 *.png
 *.gif
 

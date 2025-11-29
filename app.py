@@ -1144,7 +1144,7 @@ def post_write():
         if sanitized_content.count('<img') > 5:
             return Response('<script>alert("이미지는 최대 5개까지 첨부할 수 있습니다."); history.back();</script>')
 
-        final_content = process_etacons(sanitized_content, g.user['login_id'])
+        final_content = sanitized_content
 
         # 4. 데이터베이스에 저장
         try:
@@ -1424,6 +1424,8 @@ def post_detail(post_id):
             post['nickname'] = post['guest_nickname'] # 게스트 닉네임 사용
             post['profile_image'] = 'images/profiles/default_image.jpeg'
 
+        post['content'] = process_etacons(post['content'], post['author'])
+
         post['created_at_datetime'] = datetime.datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
         post['updated_at_datetime'] = datetime.datetime.strptime(post['updated_at'], '%Y-%m-%d %H:%M:%S')
 
@@ -1472,6 +1474,7 @@ def post_detail(post_id):
         # 1. 모든 댓글을 딕셔너리로 변환하고, 'replies' 리스트와 reaction 정보를 초기화합니다.
         for comment_row in all_comments:
             comment = dict(comment_row)
+            comment['content'] = process_etacons(comment['content'], comment['author'])
             comment['replies'] = []
 
             if board_id == 3:
@@ -1588,7 +1591,7 @@ def post_edit(post_id):
         }
         sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'])
 
-        final_content = process_etacons(sanitized_content, g.user['login_id'])
+        final_content = sanitized_content
 
         updated_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         query = "UPDATE posts SET board_id = ?, title = ?, content = ?, updated_at = ?, is_notice = ? WHERE id = ?"
@@ -1731,7 +1734,7 @@ def add_comment(post_id):
         created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sanitized_content = bleach.clean(content)
 
-        final_content = process_etacons(sanitized_content, g.user['login_id'])
+        final_content = sanitized_content
 
         anonymous_seq = 0
 
@@ -1904,7 +1907,7 @@ def edit_comment(comment_id):
         updated_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sanitized_content = bleach.clean(new_content)
 
-        final_content = process_etacons(sanitized_content, g.user['login_id'])
+        final_content = sanitized_content
         
         query = "UPDATE comments SET content = ?, updated_at = ? WHERE id = ?"
         cursor.execute(query, (final_content, updated_at, comment_id))
@@ -2797,6 +2800,9 @@ def etacon_request():
         # 유효성 검사
         if not name or price is None:
             return Response('<script>alert("필수 정보를 입력해주세요."); history.back();</script>')
+        
+        if price < 0:
+            return Response('<script>alert("가격은 0 이상이어야 합니다."); history.back();</script>')
 
         # 썸네일 및 에타콘 이미지들
         thumbnail = request.files.get('thumbnail')

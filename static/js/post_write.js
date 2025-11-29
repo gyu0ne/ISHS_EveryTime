@@ -118,7 +118,11 @@ $(document).ready(function() {
         }
 
         // --- 이미지 개수 제한 검사 로직 추가 ---
-        const imageCount = $(content).find('img').length;
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+
+        const imageCount = $(tempDiv).find('img').not('[data-code]').length;        
+        
         if (imageCount > MAX_IMAGES) {
             alert(`이미지는 최대 ${MAX_IMAGES}개까지만 첨부할 수 있습니다. (현재: ${imageCount}개)`);
             return;
