@@ -1605,7 +1605,15 @@ def post_edit(post_id):
     else: # GET 요청
         cursor.execute("SELECT board_id, board_name FROM board ORDER BY board_id")
         boards = cursor.fetchall()
-        return render_template('post_edit.html', post=post, boards=boards)
+        
+        # --- [누락된 코드 추가] ---
+        # 수정 폼 진입 시, 텍스트 코드를 이미지로 변환하여 에디터에 표시
+        post_dict = dict(post)
+        post_dict['content'] = process_etacons(post['content'], post['author'])
+        # -----------------------
+
+        # post=post 대신 post=post_dict 전달
+        return render_template('post_edit.html', post=post_dict, boards=boards)
 
 # Post Delete
 @app.route('/post-delete/<int:post_id>', methods=['POST'])
