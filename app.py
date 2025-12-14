@@ -1413,11 +1413,26 @@ def post_detail(post_id):
         all_comments = cursor.fetchall()
         
         comments_dict = {}
+
+        etacon_codes = {c['etacon_code'] for c in all_comments if c['etacon_code']}
+        etacon_map = {}
+
+        if etacon_codes:
+            placeholders = ','.join(['?'] * len(etacon_codes))
+            # etacons 테이블에서 code와 image_path를 조회
+            cursor.execute(f"SELECT code, image_path FROM etacons WHERE code IN ({placeholders})", list(etacon_codes))
+            for code, path in cursor.fetchall():
+                etacon_map[code] = path
         
         # 1. 모든 댓글을 딕셔너리로 변환하고, 'replies' 리스트와 reaction 정보를 초기화합니다.
         for comment_row in all_comments:
             comment = dict(comment_row)
             comment['replies'] = []
+
+            if comment['etacon_code'] and comment['etacon_code'] in etacon_map:
+                comment['etacon_path'] = etacon_map[comment['etacon_code']]
+            else:
+                comment['etacon_path'] = None
 
             if board_id == 3:
                 seq = comment.get('anonymous_seq', 0)
@@ -2880,6 +2895,29 @@ def etacon_request():
 
         if not thumbnail or not etacon_files or len(etacon_files) == 0:
              return Response('<script>alert("썸네일과 에타콘 이미지를 최소 1개 이상 업로드해야 합니다."); history.back();</script>')
+        
+        if len(etacon_files) > 10:
+            return Response('<script>alert("에타콘 이미지는 한 팩당 최대 10개까지만 등록할 수 있습니다."); history.back();</script>')
+
+        def validate_image_ratio(file_obj):
+            """이미지가 1:1 비율인지 확인합니다."""
+            try:
+                img = Image.open(file_obj)
+                width, height = img.size
+                file_obj.seek(0)
+                return width == height
+            except Exception as e:
+                print(f"이미지 검사 오류: {e}")
+                return False
+
+        if thumbnail and allowed_etacon_file(thumbnail.filename):
+            if not validate_image_ratio(thumbnail):
+                return Response('<script>alert("썸네일 이미지는 정방형(1:1 비율)이어야 합니다."); history.back();</script>')
+
+        for file in etacon_files:
+            if file and allowed_etacon_file(file.filename):
+                if not validate_image_ratio(file):
+                    return Response(f'<script>alert("모든 에타콘 이미지는 1:1 비율이어야 합니다.\\n확인 필요: {file.filename}"); history.back();</script>')
 
         conn = get_db()
         cursor = conn.cursor()

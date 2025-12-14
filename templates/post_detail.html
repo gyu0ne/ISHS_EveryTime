@@ -142,6 +142,13 @@
         {% endif %}
 
         <div class="comment-body">
+        {% if comment.etacon_path %}
+            <div class="etacon-comment">
+                <img src="{{ url_for('static', filename=comment.etacon_path) }}" 
+                     alt="에타콘" 
+                     style="max-width: 150px; max-height: 150px; border-radius: 8px;">
+            </div>
+        {% else %}
             <p class="comment-text">
                 {{ comment.content }}
                 {% if comment.created_at != comment.updated_at %}
@@ -170,11 +177,15 @@
                     {% endif %}
                     
                     {% if g.user and (g.user.login_id == comment.author or g.user.role == 'admin') %}
-                    <a href="#" onclick="toggleEdit('{{ comment.id }}'); return false;">수정</a>
-                    <form method="POST" action="{{ url_for('delete_comment', comment_id=comment.id) }}" onsubmit="return confirm('정말로 삭제하시겠습니까?');" style="display: inline;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <button type="submit">삭제</button>
-                    </form>
+                        {% if not comment.etacon_path %}
+                            <a href="#" onclick="toggleEdit('{{ comment.id }}'); return false;">수정</a>
+                        {% endif %}
+                        
+                        <form method="POST" action="{{ url_for('delete_comment', comment_id=comment.id) }}" onsubmit="return confirm('정말로 삭제하시겠습니까?');" style="display: inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <button type="submit">삭제</button>
+                        </form>
+
                     {% elif not g.user and comment.author == GUEST_USER_ID %}
                         <a href="{{ url_for('guest_auth', action='edit', target_type='comment', target_id=comment.id) }}">수정</a> 
                         <a href="{{ url_for('guest_auth', action='delete', target_type='comment', target_id=comment.id) }}">삭제</a> 
@@ -182,6 +193,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 
     {% if g.user and g.user.login_id == comment.author %}
