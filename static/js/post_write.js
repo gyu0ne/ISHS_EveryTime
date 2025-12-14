@@ -2,17 +2,15 @@ $(document).ready(function() {
     $.summernote.lang['ko-KR'].color.cpSelect = 'color picker';
 
     const MAX_CHARS = 5000;
-    const MAX_IMAGES = 5; // 이미지 개수 제한 설정
+    const MAX_IMAGES = 5; 
 
     const postTitleInput = $('#post-title');
     const titleCounter = $('#current-title-chars');
 
-    // 페이지 로드 시 현재 제목 글자 수 계산 (글 수정 페이지용)
     if (postTitleInput.val()) {
         titleCounter.text(postTitleInput.val().length);
     }
 
-    // 제목 입력 시마다 글자 수 업데이트
     postTitleInput.on('keyup', function() {
         const currentLength = $(this).val().length;
         titleCounter.text(currentLength);
@@ -46,7 +44,6 @@ $(document).ready(function() {
             onChange: function(contents, $editable) {
                 updateCharCount(this);
             }
-            // onImageUpload 콜백은 제거합니다.
         }
     });
     
@@ -69,26 +66,12 @@ $(document).ready(function() {
             counterWrapper.removeClass('limit-exceeded');
         }
     }
-    
-    // uploadImage 함수는 제거합니다.
 
     $('.btn-register').on('click', function(e) {
         e.preventDefault();
 
         const title = $('#post-title').val();
-
-        // --- ▼ 추가/수정할 유효성 검사 ▼ ---
-        if (!title.trim()) {
-            alert('제목을 입력해주세요.');
-            $('#post-title').focus();
-            return;
-        }
-
-        if (title.length > 100) {
-            alert('제목은 100자를 초과할 수 없습니다.');
-            return;
-        }
-
+        
         // 1. 게시판 선택 유효성 검사
         const boardId = $('#board-select').val();
         if (!boardId) {
@@ -103,7 +86,35 @@ $(document).ready(function() {
             return;
         }
 
-        const content = $('#summernote-editor').summernote('code');
+        if (title.length > 100) {
+            alert('제목은 100자를 초과할 수 없습니다.');
+            return;
+        }
+
+        // Summernote 내용 가져오기
+        let content = $('#summernote-editor').summernote('code');
+
+        // --- [핵심 수정] 에타콘 변환 로직 통합 ---
+        // 폼 제출 직전에 이미지 태그(<img data-code="~1_0">)를 텍스트(~1_0)로 변환
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        
+        // data-code 속성이 있는 이미지만 찾기 (에타콘)
+        const etaconImages = tempDiv.querySelectorAll('img[data-code]');
+        
+        if (etaconImages.length > 0) {
+            etaconImages.forEach(img => {
+                const code = img.dataset.code;
+                if (code) {
+                    const textNode = document.createTextNode(code);
+                    img.parentNode.replaceChild(textNode, img);
+                }
+            });
+            // 변환된 HTML로 content 업데이트
+            content = tempDiv.innerHTML;
+        }
+        // ---------------------------------------
+
         const textContent = $('<div>').html(content).text();
 
         if ($('#summernote-editor').summernote('isEmpty')) {
@@ -117,11 +128,9 @@ $(document).ready(function() {
             return;
         }
 
-        // --- 이미지 개수 제한 검사 로직 추가 ---
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = content;
-
-        const imageCount = $(tempDiv).find('img').not('[data-code]').length;        
+        // 이미지 개수 제한 검사 (에타콘 제외)
+        // tempDiv는 위에서 이미 에타콘이 텍스트로 변환되었으므로, 남은 img 태그는 순수 이미지임
+        const imageCount = $(tempDiv).find('img').length; 
         
         if (imageCount > MAX_IMAGES) {
             alert(`이미지는 최대 ${MAX_IMAGES}개까지만 첨부할 수 있습니다. (현재: ${imageCount}개)`);

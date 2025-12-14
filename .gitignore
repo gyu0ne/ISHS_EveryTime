@@ -8,6 +8,7 @@ DB_RESET.py
 DB_Rebuild.py
 DB_Force_rebuild.py
 DB_Emergency_refactoring.py
+DB_Status_Check.py
 
 schema.sql
 
