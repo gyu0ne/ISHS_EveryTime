@@ -1932,27 +1932,38 @@ def delete_comment(comment_id):
         return Response('<script>alert("삭제 권한이 없습니다."); history.back();</script>')
 
     try:
-        # --- 👇 로직 수정 시작 ---
+        # 3. 삭제할 대댓글(답글) 조회
+        cursor.execute("SELECT id, author FROM comments WHERE parent_comment_id = ?", (comment_id,))
+        replies = cursor.fetchall()
 
-        # 3. 해당 댓글의 reaction을 먼저 삭제합니다.
-        cursor.execute("DELETE FROM reactions WHERE target_type = 'comment' AND target_id = ?", (comment_id,))
-
-        # 4. 데이터베이스에서 댓글을 삭제합니다.
-        cursor.execute("DELETE FROM comments WHERE id = ?", (comment_id,))
-
-        # 5. 게시글의 댓글 수를 1 감소시킵니다.
-        cursor.execute("UPDATE posts SET comment_count = comment_count - 1 WHERE id = ?", (comment['post_id'],))
+        # 삭제 대상 ID 목록 생성 (본문 + 대댓글)
+        target_ids = [comment_id] + [r['id'] for r in replies]
         
-        # 6. 사용자의 댓글 수를 1 감소시킵니다.
+        # SQL IN 절에 사용할 플레이스홀더 생성 (?, ?, ...)
+        placeholders = ','.join(['?'] * len(target_ids))
+
+        # 4. 연관된 Reaction(좋아요/싫어요) 일괄 삭제
+        cursor.execute(f"DELETE FROM reactions WHERE target_type = 'comment' AND target_id IN ({placeholders})", target_ids)
+
+        # 5. 사용자 스탯 업데이트 (삭제 대상 작성자들의 댓글 수 및 경험치 차감)
+        # 5-1. 본 댓글 작성자 차감
         cursor.execute("UPDATE users SET comment_count = comment_count - 1 WHERE login_id = ?", (comment['author'],))
+        update_exp_level(comment['author'], -10) # 헬퍼 함수 사용
 
-        # 7. 경험치를 차감합니다.
-        update_exp_level(comment['author'], -10)
+        # 5-2. 대댓글 작성자들 차감
+        for reply in replies:
+            cursor.execute("UPDATE users SET comment_count = comment_count - 1 WHERE login_id = ?", (reply['author'],))
+            update_exp_level(reply['author'], -10)
+
+        # 6. 댓글 데이터 일괄 삭제
+        cursor.execute(f"DELETE FROM comments WHERE id IN ({placeholders})", target_ids)
+
+        # 7. 게시글의 전체 댓글 수 차감 (삭제된 총 개수만큼)
+        total_deleted_count = len(target_ids)
+        cursor.execute("UPDATE posts SET comment_count = comment_count - ? WHERE id = ?", (total_deleted_count, comment['post_id']))
         
-        # --- 👆 로직 수정 끝 ---
-
-        add_log('DELETE_COMMENT', session['user_id'], f"댓글 (id : {comment_id})를 삭제했습니다. 내용 : {comment['content']}")
-
+        add_log('DELETE_COMMENT', session['user_id'], f"댓글 (id : {comment_id}) 및 대댓글 {len(replies)}개를 삭제했습니다. 내용 : {comment['content']}")
+        
         conn.commit()
     except Exception as e:
         print(f"Database error while deleting comment: {e}")

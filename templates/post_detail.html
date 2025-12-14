@@ -219,20 +219,20 @@
         <form class="comment-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <input type="hidden" name="parent_comment_id" value="{{ comment.id }}">
-
-            <div style="width: 100%; text-align: right; margin-bottom: 5px;">
-                {% if g.user %}
-                    <button type="button" 
-                        class="btn-etacon-trigger"
-                        onclick="openEtaconModal({{ post.id }}, {{ comment.id }})">
-                        에타콘
-                    </button>
-                {% endif %}
-            </div>
             
             {% if g.user %}
                 <textarea name="comment_content" placeholder="{{ comment.nickname }}님에게 답글 남기기..." required minlength="1"></textarea>
-            {% elif post.is_public %}
+
+                <div>
+                    {% if g.user %}
+                        <button type="button" 
+                            class="btn-etacon-trigger"
+                            onclick="openEtaconModal({{ post.id }}, {{ comment.id }})">
+                            에타콘
+                        </button>
+                    {% endif %}
+                </div>
+                {% elif post.is_public %}
                 <div class="guest-auth-wrapper">
                     <input type="text" name="guest_nickname" class="form-control" placeholder="닉네임" required maxlength="20">
                     <input type="password" name="guest_password" class="form-control" placeholder="비밀번호" required>
