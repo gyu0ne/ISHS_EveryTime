@@ -286,7 +286,6 @@ body {
     border: none;
     background-color: #d9534f;
     color: #fff;
-    font-size: 16px;
     font-weight: bold;
     border-radius: 6px;
     cursor: pointer;
@@ -659,3 +658,24 @@ body {
     }
 }
 /* ▲▲▲ [추가] 반응형 미디어 쿼리 끝 ▲▲▲ */
+
+.comment-form {
+    position: relative; /* 버튼 절대 위치 기준 */
+    /* 기존 flex 스타일 유지 */
+}
+
+/* 텍스트 영역 우측 하단에 에타콘 버튼 배치 (선택 사항) */
+/* 혹은 기존처럼 상단 우측에 두되 스타일 개선 */
+.btn-etacon-trigger {
+    /**/
+    width: 89.45px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+body > div.container > div:nth-child(4) > div.comments-card > form > button {
+    font-size: 16px;
+}
