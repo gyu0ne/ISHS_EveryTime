@@ -210,7 +210,11 @@
 
             <div style="width: 100%; text-align: right; margin-bottom: 5px;">
                 {% if g.user %}
-                    <button type="button" style="background:none; border:1px solid #555; color:#ccc; cursor:pointer; padding:2px 5px; border-radius:4px;" onclick="openEtaconModal('#reply-textarea-{{ comment.id }}')">에타콘</button>
+                    <button type="button" 
+                        class="btn-etacon-trigger"
+                        onclick="openEtaconModal({{ post.id }}, {{ comment.id }})">
+                        에타콘
+                    </button>
                 {% endif %}
             </div>
             
@@ -330,7 +334,11 @@
                 
                 <div style="width: 100%; text-align: right; margin-bottom: 5px;">
                     {% if g.user %}
-                        <button type="button" style="background:none; border:1px solid #555; color:#ccc; cursor:pointer; padding:4px 8px; border-radius:4px;" onclick="openEtaconModal('#main-comment-textarea')">에타콘</button>
+                        <button type="button" 
+                            class="btn-etacon-trigger"
+                            onclick="openEtaconModal({{ post.id }}, null)">
+                            에타콘
+                        </button>
                     {% endif %}
                 </div>
 

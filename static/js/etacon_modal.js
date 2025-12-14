@@ -1,38 +1,48 @@
-// static/js/etacon_modal.js
-
 document.addEventListener('DOMContentLoaded', function() {
-    const modalOverlay = document.createElement('div');
-    modalOverlay.className = 'etacon-modal-overlay';
-    modalOverlay.innerHTML = `
-        <div class="etacon-modal">
-            <div class="etacon-modal-header">
-                <h3 class="etacon-modal-title">보유 에타콘</h3>
-                <button class="etacon-modal-close">&times;</button>
+    // 1. 모달 HTML 생성 (한 번만 생성됨)
+    if (!document.querySelector('.etacon-modal-overlay')) {
+        const modalOverlay = document.createElement('div');
+        modalOverlay.className = 'etacon-modal-overlay';
+        modalOverlay.innerHTML = `
+            <div class="etacon-modal">
+                <div class="etacon-modal-header">
+                    <h3 class="etacon-modal-title">보유 에타콘</h3>
+                    <button class="etacon-modal-close">&times;</button>
+                </div>
+                <div class="etacon-tabs" id="etacon-tabs"></div>
+                <div class="etacon-grid-container" id="etacon-grids">
+                    <div class="etacon-message">로딩 중...</div>
+                </div>
             </div>
-            <div class="etacon-tabs" id="etacon-tabs"></div>
-            <div class="etacon-grid-container" id="etacon-grids">
-                <div class="etacon-message">로딩 중...</div>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modalOverlay);
+        `;
+        document.body.appendChild(modalOverlay);
+    }
 
+    const modalOverlay = document.querySelector('.etacon-modal-overlay');
     const closeBtn = modalOverlay.querySelector('.etacon-modal-close');
     const tabsContainer = document.getElementById('etacon-tabs');
     const gridsContainer = document.getElementById('etacon-grids');
     
     let etaconsLoaded = false;
-    let targetInput = null; // 에타콘을 삽입할 대상 (summernote 또는 textarea)
+    
+    // 전송 시 필요한 데이터 저장 변수
+    let currentPostId = null;
+    let currentParentId = null;
 
-    // --- 1. 모달 열기/닫기 함수 ---
-    window.openEtaconModal = function(targetSelector) {
-        targetInput = targetSelector; // '#summernote-editor' 또는 'textarea[name="comment_content"]'
+    // --- 1. 모달 열기 함수 ---
+    // 비회원은 사용 불가하므로 formId 파라미터는 필요 없습니다.
+    window.openEtaconModal = function(postId, parentId = null) {
+        currentPostId = postId;
+        currentParentId = parentId;
+        
         modalOverlay.style.display = 'flex';
+        
         if (!etaconsLoaded) {
             fetchEtacons();
         }
     };
 
+    // 닫기 이벤트
     closeBtn.addEventListener('click', () => {
         modalOverlay.style.display = 'none';
     });
@@ -47,6 +57,10 @@ document.addEventListener('DOMContentLoaded', function() {
     async function fetchEtacons() {
         try {
             const response = await fetch('/api/my-etacons');
+            if (response.status === 401 || response.status === 403) {
+                gridsContainer.innerHTML = '<div class="etacon-message">로그인이 필요합니다.</div>';
+                return;
+            }
             const data = await response.json();
             
             renderEtacons(data);
@@ -74,7 +88,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const tab = document.createElement('div');
             tab.className = `etacon-tab ${index === 0 ? 'active' : ''}`;
             tab.textContent = packName;
-            tab.dataset.target = `pack-${index}`;
             
             tab.addEventListener('click', () => switchTab(index));
             tabsContainer.appendChild(tab);
@@ -82,20 +95,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // 그리드 생성
             const grid = document.createElement('div');
             grid.className = `etacon-grid ${index === 0 ? 'active' : ''}`;
-            grid.id = `pack-${index}`;
-
+            
             data[packName].forEach(etacon => {
                 const item = document.createElement('div');
                 item.className = 'etacon-item';
                 
                 const img = document.createElement('img');
-                img.src = `/static/${etacon.image_path}`;
+                img.src = `/static/${etacon.image_path}`; // 경로 주의
                 img.alt = 'etacon';
-                // 데이터 속성에 코드 저장 (~pack_idx)
-                img.dataset.code = etacon.code; 
                 
                 item.appendChild(img);
-                item.addEventListener('click', () => insertEtacon(etacon));
+                // 클릭 시 전송 함수 호출
+                item.addEventListener('click', () => sendEtacon(etacon.code));
                 grid.appendChild(item);
             });
 
@@ -118,89 +129,38 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- 4. 에타콘 삽입 로직 (핵심) ---
-    function insertEtacon(etacon) {
-        const imgUrl = `/static/${etacon.image_path}`;
-        const code = etacon.code; // 예: ~15_0
+    // --- 4. 에타콘 전송 로직 (API 호출) ---
+    async function sendEtacon(code) {
+        // 전송할 데이터 (비회원 정보 불필요)
+        const payload = {
+            post_id: currentPostId,
+            parent_comment_id: currentParentId,
+            etacon_code: code
+        };
 
-        if (targetInput === 'summernote') {
-            // [게시글 작성] Summernote에 실제 이미지 태그 삽입
-            // data-code 속성을 심어서 나중에 전송 시 텍스트로 변환할 수 있게 함
-            const imgNode = document.createElement('img');
-            imgNode.src = imgUrl;
-            imgNode.className = 'etacon-img-preview'; // 식별용 클래스
-            imgNode.dataset.code = code;
-            imgNode.style.maxWidth = '100px';
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             
-            $('#summernote-editor').summernote('insertNode', imgNode);
-            
-        } else {
-            // [댓글 작성] 일반 Textarea에는 텍스트 코드 삽입
-            const textarea = document.querySelector(targetInput);
-            if (textarea) {
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                const text = textarea.value;
-                const before = text.substring(0, start);
-                const after = text.substring(end, text.length);
-                
-                textarea.value = before + code + after;
-                textarea.focus();
-                textarea.selectionEnd = start + code.length;
-            }
-        }
-        
-        modalOverlay.style.display = 'none';
-    }
+            const response = await fetch('/api/comment/etacon', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify(payload)
+            });
 
-    // --- 5. 폼 제출 가로채기 (이미지 -> 텍스트 코드 변환) ---
-    // 게시글 작성 폼 (#post-form) 제출 시 실행
-    const postForm = document.getElementById('post-form');
-    if (postForm) {
-        postForm.addEventListener('submit', function(e) {
-            // 1. Summernote의 현재 HTML 코드를 가져옵니다.
-            // (이 시점에서는 아직 이미지가 태그로 존재함)
-            let content = $('#summernote-editor').summernote('code');
-            
-            // 2. 임시 DOM을 생성하여 파싱합니다.
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = content;
+            const result = await response.json();
 
-            // 3. 에타콘 이미지 태그를 찾아 텍스트 코드로 '교체'합니다.
-            // img 태그 중 data-code 속성이 있는 것만 대상
-            const images = tempDiv.querySelectorAll('img[data-code]');
-            
-            if (images.length > 0) {
-                images.forEach(img => {
-                    const code = img.dataset.code; 
-                    if (code) {
-                        // 이미지 태그 자체를 텍스트 노드로 교체
-                        // 예: <img ... data-code="~1_0">  ==>  ~1_0
-                        const textNode = document.createTextNode(code);
-                        img.parentNode.replaceChild(textNode, img);
-                    }
-                });
-                
-                // 4. 변환된 HTML(실제로는 텍스트 코드가 섞인 HTML)을 다시 문자열로 만듭니다.
-                content = tempDiv.innerHTML;
-            }
-
-            // 5. 실제 서버로 전송될 textarea에 변환된 내용을 강제로 넣습니다.
-            const contentInput = document.getElementById('post-content');
-            if (contentInput) {
-                contentInput.value = content;
+            if (result.status === 'success') {
+                window.location.reload(); // 성공 시 새로고침
             } else {
-                // (비상용) textarea가 없다면 만들어서 넣습니다.
-                const newInput = document.createElement('textarea');
-                newInput.name = 'content';
-                newInput.value = content;
-                newInput.style.display = 'none';
-                this.appendChild(newInput);
+                alert(result.message);
+                modalOverlay.style.display = 'none'; // 실패 시 모달 닫기
             }
-            
-            // 6. (중요) Summernote가 다시 덮어쓰지 못하도록 
-            //    onsubmit 이벤트 전파를 막거나 할 필요는 없지만,
-            //    textarea 값 설정이 가장 마지막에 일어나도록 보장해야 합니다.
-        });
+        } catch (error) {
+            console.error('Error:', error);
+            alert('에타콘 전송 중 오류가 발생했습니다.');
+        }
     }
 });

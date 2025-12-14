@@ -98,22 +98,6 @@ $(document).ready(function() {
         // 폼 제출 직전에 이미지 태그(<img data-code="~1_0">)를 텍스트(~1_0)로 변환
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = content;
-        
-        // data-code 속성이 있는 이미지만 찾기 (에타콘)
-        const etaconImages = tempDiv.querySelectorAll('img[data-code]');
-        
-        if (etaconImages.length > 0) {
-            etaconImages.forEach(img => {
-                const code = img.dataset.code;
-                if (code) {
-                    const textNode = document.createTextNode(code);
-                    img.parentNode.replaceChild(textNode, img);
-                }
-            });
-            // 변환된 HTML로 content 업데이트
-            content = tempDiv.innerHTML;
-        }
-        // ---------------------------------------
 
         const textContent = $('<div>').html(content).text();
 

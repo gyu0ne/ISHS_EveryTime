@@ -60,11 +60,6 @@
                 <label class="custom-control-label" for="is_notice">공지사항으로 등록</label>
             </div>
             {% endif %}
-            <div class="mb-2 text-right">
-                <button type="button" class="btn btn-sm btn-secondary" onclick="openEtaconModal('summernote')" style="background-color: #2C2C2C; color: #E0E0E0; border: 1px solid #444;">
-                    에타콘
-                </button>
-            </div>
             <div id="summernote-editor">{{ post.content|safe }}</div>
             <textarea name="content" id="post-content" style="display:none;"></textarea>
         </main>

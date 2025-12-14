@@ -93,61 +93,6 @@ def save_etacon_image(file, sub_folder):
 
 # app.py
 
-def process_etacons(content, user_id):
-    """
-    본문에 포함된 에타콘 코드(~packID_idx)를 이미지 태그로 변환.
-    """
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    print(f"DEBUG: Processing etacons for user: {user_id}") # 디버깅용 로그
-
-    # 1. 사용자가 보유한 패키지 ID 목록 조회
-    cursor.execute("SELECT pack_id FROM user_etacons WHERE user_id = ?", (user_id,))
-    # pack_id를 정수형으로 확실하게 변환하여 set에 저장
-    owned_pack_ids = {int(row[0]) for row in cursor.fetchall()}
-    print(f"DEBUG: Owned packs: {owned_pack_ids}")
-
-    # 2. 본문에서 패턴 추출 (~숫자_숫자)
-    pattern = re.compile(r'~(\d+)_(\d+)')
-    matches = pattern.findall(content)
-    print(f"DEBUG: Found matches in content: {matches}")
-
-    # 3. 유효한 코드에 대한 이미지 경로 매핑 생성
-    valid_codes = {} 
-    
-    if matches:
-        # 보유 중인 패키지에 해당하는 것만 필터링
-        target_pack_ids = list({int(m[0]) for m in matches if int(m[0]) in owned_pack_ids})
-        
-        if target_pack_ids:
-            placeholders = ','.join(['?'] * len(target_pack_ids))
-            query = f"SELECT pack_id, code, image_path FROM etacons WHERE pack_id IN ({placeholders})"
-            cursor.execute(query, target_pack_ids)
-            
-            for pid, code, path in cursor.fetchall():
-                valid_codes[code] = path
-    
-    print(f"DEBUG: Valid codes map: {valid_codes}")
-
-    # 4. 치환 함수
-    def replace_callback(match):
-        # pack_id = int(match.group(1)) # 사용 안함
-        full_code = match.group(0) # 예: ~15_0
-        
-        if full_code in valid_codes:
-            image_path = valid_codes[full_code]
-            # [중요] data-code 속성 포함, 이미지 경로 앞에 /static/ 확인
-            # url_for('static', filename=...)를 쓰는 게 정석이지만, 여기서는 문자열 조합으로 처리
-            # DB에 저장된 path가 'images/...' 형태라면 '/static/'을 붙여야 함
-            final_path = image_path if image_path.startswith('/') else f"/static/{image_path}"
-            
-            return f'<img src="{final_path}" class="etacon-img" alt="etacon" data-code="{full_code}" style="max-height: 100px;">'
-            
-        return "" # 보유하지 않았거나 없는 코드는 제거
-
-    return pattern.sub(replace_callback, content)
-
 # DB connect (first line of all route)
 def get_db():
     db = getattr(g, '_database', None)
@@ -1424,8 +1369,6 @@ def post_detail(post_id):
             post['nickname'] = post['guest_nickname'] # 게스트 닉네임 사용
             post['profile_image'] = 'images/profiles/default_image.jpeg'
 
-        post['content'] = process_etacons(post['content'], post['author'])
-
         post['created_at_datetime'] = datetime.datetime.strptime(post['created_at'], '%Y-%m-%d %H:%M:%S')
         post['updated_at_datetime'] = datetime.datetime.strptime(post['updated_at'], '%Y-%m-%d %H:%M:%S')
 
@@ -1474,7 +1417,6 @@ def post_detail(post_id):
         # 1. 모든 댓글을 딕셔너리로 변환하고, 'replies' 리스트와 reaction 정보를 초기화합니다.
         for comment_row in all_comments:
             comment = dict(comment_row)
-            comment['content'] = process_etacons(comment['content'], comment['author'])
             comment['replies'] = []
 
             if board_id == 3:
@@ -1609,7 +1551,6 @@ def post_edit(post_id):
         # --- [누락된 코드 추가] ---
         # 수정 폼 진입 시, 텍스트 코드를 이미지로 변환하여 에디터에 표시
         post_dict = dict(post)
-        post_dict['content'] = process_etacons(post['content'], post['author'])
         # -----------------------
 
         # post=post 대신 post=post_dict 전달
@@ -1833,6 +1774,127 @@ def add_comment(post_id):
         return Response('<script>alert("댓글 작성 중 오류가 발생했습니다."); history.back();</script>')
 
     return redirect(url_for('post_detail', post_id=post_id))
+
+@app.route('/api/comment/etacon', methods=['POST'])
+@check_banned
+def add_etacon_comment():
+    data = request.get_json()
+    post_id = data.get('post_id')
+    etacon_code = data.get('etacon_code')
+    parent_comment_id = data.get('parent_comment_id')
+    
+    # 게스트 정보 (로그인 안 한 경우)
+    guest_nickname = data.get('guest_nickname')
+    guest_password = data.get('guest_password')
+
+    if not post_id or not etacon_code:
+        return jsonify({'status': 'error', 'message': '잘못된 요청입니다.'}), 400
+
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    try:
+        # 1. 게시글 정보 확인
+        cursor.execute("SELECT author, board_id FROM posts WHERE id = ?", (post_id,))
+        post = cursor.fetchone()
+        if not post:
+            return jsonify({'status': 'error', 'message': '게시글이 존재하지 않습니다.'}), 404
+            
+        cursor.execute("SELECT is_public FROM board WHERE board_id = ?", (post['board_id'],))
+        board = cursor.fetchone()
+        is_public_board = board['is_public'] == 1
+
+        # 2. 작성자 정보 설정
+        author_id = None
+        hashed_pw = None
+        log_user_id = 'Guest'
+
+        if g.user:
+            author_id = g.user['login_id']
+            log_user_id = g.user['login_id']
+            
+            # [보유권 검증] 로그인 유저는 보유한 패키지인지 확인
+            pack_id = int(etacon_code.split('_')[0].replace('~', ''))
+            cursor.execute("SELECT 1 FROM user_etacons WHERE user_id = ? AND pack_id = ?", (author_id, pack_id))
+            if not cursor.fetchone():
+                return jsonify({'status': 'error', 'message': '보유하지 않은 에타콘입니다.'}), 403
+
+        elif is_public_board:
+            # 비회원 검증
+            if not guest_nickname or not guest_password:
+                return jsonify({'status': 'error', 'message': '비회원은 닉네임과 비밀번호 입력 후 에타콘을 선택해주세요.'}), 400
+            if len(guest_password) < 4:
+                return jsonify({'status': 'error', 'message': '비밀번호는 4자 이상이어야 합니다.'}), 400
+            
+            author_id = GUEST_USER_ID
+            hashed_pw = bcrypt.generate_password_hash(guest_password).decode('utf-8')
+            log_user_id = session.get('guest_session_id', 'Guest')
+        else:
+            return jsonify({'status': 'error', 'message': '로그인이 필요한 게시판입니다.'}), 403
+
+        # 3. 익명 순서 처리 (익명게시판인 경우)
+        anonymous_seq = 0
+        if post['board_id'] == 3:
+            if author_id == post['author']:
+                anonymous_seq = 0
+            else:
+                cursor.execute("SELECT anonymous_seq FROM comments WHERE post_id = ? AND author = ? LIMIT 1", (post_id, author_id))
+                row = cursor.fetchone()
+                if row:
+                    anonymous_seq = row[0]
+                else:
+                    cursor.execute("SELECT MAX(anonymous_seq) FROM comments WHERE post_id = ?", (post_id,))
+                    max_seq = cursor.fetchone()[0]
+                    anonymous_seq = (max_seq if max_seq else 0) + 1
+
+        # 4. DB 저장
+        created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        query = """
+            INSERT INTO comments 
+            (post_id, author, content, etacon_code, created_at, updated_at, parent_comment_id,
+             guest_nickname, guest_password, anonymous_seq)
+            VALUES (?, ?, '에타콘', ?, ?, ?, ?, ?, ?, ?)
+        """
+        cursor.execute(query, (
+            post_id, author_id, etacon_code, created_at, created_at, parent_comment_id,
+            guest_nickname, hashed_pw, anonymous_seq
+        ))
+        comment_id = cursor.lastrowid # 생성된 댓글 ID
+
+        # 5. 알림 전송 (자신이 쓴 글/댓글 제외)
+        recipient_id = None
+        action = 'comment'
+        target_id = post_id # 알림 클릭 시 이동할 ID
+
+        if parent_comment_id:
+            cursor.execute("SELECT author FROM comments WHERE id = ?", (parent_comment_id,))
+            parent = cursor.fetchone()
+            if parent and parent['author'] != GUEST_USER_ID:
+                recipient_id = parent['author']
+                action = 'reply'
+                target_id = parent_comment_id
+        elif post['author'] != GUEST_USER_ID:
+            recipient_id = post['author']
+        
+        if recipient_id:
+            create_notification(recipient_id, author_id, action, 'post', target_id, post_id)
+
+        # 6. 카운트 및 경험치
+        cursor.execute("UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?", (post_id,))
+        if g.user:
+            cursor.execute("UPDATE users SET comment_count = comment_count + 1 WHERE login_id = ?", (author_id,))
+            update_exp_level(author_id, 10)
+
+        add_log('ADD_ETACON', log_user_id, f"게시글(id:{post_id})에 에타콘 댓글 작성.")
+        conn.commit()
+        
+        return jsonify({'status': 'success', 'message': '에타콘이 등록되었습니다.'})
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Error adding etacon comment: {e}")
+        return jsonify({'status': 'error', 'message': '서버 오류가 발생했습니다.'}), 500
 
 # Comment Delete
 @app.route('/comment/delete/<int:comment_id>', methods=['POST'])
