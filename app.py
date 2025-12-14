@@ -60,6 +60,10 @@ def allowed_etacon_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_ETACON_EXTENSIONS
 
+def clean_fts_query(query):
+    # FTS 검색 쿼리 정제 (특수문자 제거)
+    return re.sub(r'[^\w\s]', '', query)
+
 def save_etacon_image(file, sub_folder):
     """
     이미지를 저장하고 경로를 반환합니다.
@@ -740,22 +744,17 @@ def riro_auth():
             cursor.execute('SELECT COUNT(*) FROM users WHERE hakbun = ? AND status = "active"', (api_result['student_number'],))
             count_hakbun = cursor.fetchone()[0]
 
-    # DEBUG: 중복 검사 비활성화
-    #         if count_name > 0 and count_hakbun > 0:
-    #             return Response(f'''
-    #     <script>
-    #         alert("이미 가입된 계정이 있습니다.");
-    #         history.back();
-    #     </script>
-    # ''')
+            if count_name > 0 and count_hakbun > 0:
+                return Response(f'''
+        <script>
+            alert("이미 가입된 계정이 있습니다.");
+            history.back();
+        </script>
+    ''')
 
-    #         session['hakbun'] = api_result['student_number']
-    #         session['name'] = api_result['name']
-    #         session['gen'] = api_result['generation']
-
-            session['hakbun'] = '1310'
-            session['name'] = '김준서'
-            session['gen'] = '32'
+            session['hakbun'] = api_result['student_number']
+            session['name'] = api_result['name']
+            session['gen'] = api_result['generation']
 
             return redirect('yakgwan')
 
@@ -1138,8 +1137,8 @@ def post_write():
         ]
         css_sanitizer = CSSSanitizer(allowed_css_properties=allowed_css_properties)
         
-        # data URI를 허용하도록 protocols에 'data' 추가
-        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'], css_sanitizer=css_sanitizer)
+        # data URI 제거 (XSS 방지)
+        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https'], css_sanitizer=css_sanitizer)
 
         if sanitized_content.count('<img') > 5:
             return Response('<script>alert("이미지는 최대 5개까지 첨부할 수 있습니다."); history.back();</script>')
@@ -1266,7 +1265,7 @@ def post_write_guest(board_id):
         'font-weight', 'text-align', 'text-decoration'
         ]
         css_sanitizer = CSSSanitizer(allowed_css_properties=allowed_css_properties)
-        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'], css_sanitizer=css_sanitizer)
+        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https'], css_sanitizer=css_sanitizer)
 
         # 8. DB에 저장
         try:
@@ -1589,7 +1588,7 @@ def post_edit(post_id):
             'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
             'font': ['color', 'face']
         }
-        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'])
+        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https'])
 
         final_content = sanitized_content
 
@@ -2562,11 +2561,62 @@ def guest_auth(action, target_type, target_id):
                     return redirect(url_for('comment_edit_guest', comment_id=target_id))
             
             elif action == 'delete':
-                if target_type == 'post':
-                    # 삭제는 POST로 처리하는 것이 원칙이나, 편의를 위해 GET으로 리디렉션하여 처리
-                    return redirect(url_for('post_delete_guest', post_id=target_id))
-                else:
-                    return redirect(url_for('comment_delete_guest', comment_id=target_id))
+                # 삭제 로직 통합 (CSRF 방지)
+                try:
+                    if target_type == 'post':
+                        # 게시글 삭제 로직
+                        cursor.execute("SELECT author, board_id, title FROM posts WHERE id = ? AND author = ?", (target_id, GUEST_USER_ID))
+                        post = cursor.fetchone()
+                        if not post:
+                            return Response('<script>alert("삭제할 수 없거나 존재하지 않는 게시글입니다."); history.back();</script>')
+
+                        board_id = post['board_id']
+                        title_for_log = post['title']
+
+                        # 댓글 및 리액션 삭제
+                        cursor.execute("SELECT id, author FROM comments WHERE post_id = ?", (target_id,))
+                        comments = cursor.fetchall()
+                        if comments:
+                            comment_ids = [c['id'] for c in comments]
+                            placeholders = ', '.join('?' for _ in comment_ids)
+                            cursor.execute(f"DELETE FROM reactions WHERE target_type = 'comment' AND target_id IN ({placeholders})", comment_ids)
+
+                            # 로그인 유저 댓글 카운트 차감
+                            comment_authors_counts = {}
+                            for c in comments:
+                                author = c['author']
+                                if author != GUEST_USER_ID:
+                                    comment_authors_counts[author] = comment_authors_counts.get(author, 0) + 1
+                            for author, count in comment_authors_counts.items():
+                                cursor.execute("UPDATE users SET comment_count = comment_count - ? WHERE login_id = ?", (count, author))
+
+                        cursor.execute("DELETE FROM reactions WHERE target_type = 'post' AND target_id = ?", (target_id,))
+                        cursor.execute("DELETE FROM comments WHERE post_id = ?", (target_id,))
+                        cursor.execute("DELETE FROM posts WHERE id = ?", (target_id,))
+
+                        add_log('DELETE_GUEST_POST', session.get('guest_session_id', 'Guest'), f"게스트 게시글 (id : {target_id})를 삭제했습니다. 제목 : {title_for_log}")
+                        conn.commit()
+                        return redirect(url_for('post_list', board_id=board_id))
+
+                    else:
+                        # 댓글 삭제 로직
+                        cursor.execute("SELECT author, post_id, content FROM comments WHERE id = ? AND author = ?", (target_id, GUEST_USER_ID))
+                        comment = cursor.fetchone()
+                        if not comment:
+                            return Response('<script>alert("삭제할 수 없거나 존재하지 않는 댓글입니다."); history.back();</script>')
+
+                        cursor.execute("DELETE FROM reactions WHERE target_type = 'comment' AND target_id = ?", (target_id,))
+                        cursor.execute("DELETE FROM comments WHERE id = ?", (target_id,))
+                        cursor.execute("UPDATE posts SET comment_count = comment_count - 1 WHERE id = ?", (comment['post_id'],))
+
+                        add_log('DELETE_GUEST_COMMENT', session.get('guest_session_id', 'Guest'), f"게스트 댓글 (id : {target_id})를 삭제했습니다. 내용 : {comment['content']}")
+                        conn.commit()
+                        return redirect(url_for('post_detail', post_id=comment['post_id']))
+
+                except Exception as e:
+                    print(f"Error during guest deletion: {e}")
+                    conn.rollback()
+                    return Response('<script>alert("삭제 중 오류가 발생했습니다."); history.back();</script>')
         else:
             return Response('<script>alert("비밀번호가 일치하지 않습니다."); history.back();</script>')
 
@@ -2580,97 +2630,7 @@ def guest_auth(action, target_type, target_id):
                            target_id=target_id)
 
 
-@app.route('/post-delete-guest/<int:post_id>', methods=['GET'])
-def post_delete_guest(post_id):
-    """
-    (GET) 인증된 게스트의 게시글 삭제 처리
-    """
-    # 1. 세션 인증 토큰 확인 및 제거
-    if not session.pop(f'guest_auth_post_{post_id}', None):
-        return Response('<script>alert("인증이 필요합니다."); location.href="/";</script>')
-
-    conn = get_db()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT author, board_id, title FROM posts WHERE id = ? AND author = ?", (post_id, GUEST_USER_ID))
-    post = cursor.fetchone()
-
-    if not post:
-        return Response('<script>alert("삭제할 수 없거나 존재하지 않는 게시글입니다."); history.back();</script>')
-
-    board_id = post['board_id']
-    title_for_log = post['title']
-
-    try:
-        # post_delete 로직에서 사용자 스탯(경험치, 카운트) 관련 부분만 제거
-        cursor.execute("SELECT id, author FROM comments WHERE post_id = ?", (post_id,))
-        comments = cursor.fetchall()
-        
-        if comments:
-            comment_ids = [c['id'] for c in comments]
-            placeholders = ', '.join('?' for _ in comment_ids)
-            cursor.execute(f"DELETE FROM reactions WHERE target_type = 'comment' AND target_id IN ({placeholders})", comment_ids)
-            
-            comment_authors_counts = {}
-            for c in comments:
-                author = c['author']
-                if author != GUEST_USER_ID: # 로그인한 유저의 댓글 카운트만 차감
-                    comment_authors_counts[author] = comment_authors_counts.get(author, 0) + 1
-            
-            for author, count in comment_authors_counts.items():
-                cursor.execute("UPDATE users SET comment_count = comment_count - ? WHERE login_id = ?", (count, author))
-
-        cursor.execute("DELETE FROM reactions WHERE target_type = 'post' AND target_id = ?", (post_id,))
-        cursor.execute("DELETE FROM comments WHERE post_id = ?", (post_id,))
-        cursor.execute("DELETE FROM posts WHERE id = ?", (post_id,))
-
-        add_log('DELETE_GUEST_POST', session.get('guest_session_id', 'Guest'), f"게스트 게시글 (id : {post_id})를 삭제했습니다. 제목 : {title_for_log}")
-        conn.commit()
-
-    except Exception as e:
-        print(f"Error during guest post deletion: {e}")
-        add_log('ERROR', session.get('guest_session_id', 'Guest'), f"Error deleting guest post id {post_id}: {e}")
-        conn.rollback()
-        return Response('<script>alert("게시글 삭제 중 오류가 발생했습니다."); history.back();</script>')
-
-    return redirect(url_for('post_list', board_id=board_id))
-
-
-@app.route('/comment-delete-guest/<int:comment_id>', methods=['GET'])
-def comment_delete_guest(comment_id):
-    """
-    (GET) 인증된 게스트의 댓글 삭제 처리
-    """
-    # 1. 세션 인증 토큰 확인 및 제거
-    if not session.pop(f'guest_auth_comment_{comment_id}', None):
-        return Response('<script>alert("인증이 필요합니다."); location.href="/";</script>')
-
-    conn = get_db()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT author, post_id, content FROM comments WHERE id = ? AND author = ?", (comment_id, GUEST_USER_ID))
-    comment = cursor.fetchone()
-
-    if not comment:
-        return Response('<script>alert("삭제할 수 없거나 존재하지 않는 댓글입니다."); history.back();</script>')
-
-    try:
-        # delete_comment 로직에서 사용자 스탯 관련 부분만 제거
-        cursor.execute("DELETE FROM reactions WHERE target_type = 'comment' AND target_id = ?", (comment_id,))
-        cursor.execute("DELETE FROM comments WHERE id = ?", (comment_id,))
-        cursor.execute("UPDATE posts SET comment_count = comment_count - 1 WHERE id = ?", (comment['post_id'],))
-
-        add_log('DELETE_GUEST_COMMENT', session.get('guest_session_id', 'Guest'), f"게스트 댓글 (id : {comment_id})를 삭제했습니다. 내용 : {comment['content']}")
-        conn.commit()
-    except Exception as e:
-        print(f"Database error while deleting guest comment: {e}")
-        add_log('ERROR', session.get('guest_session_id', 'Guest'), f"Error deleting guest comment id {comment_id}: {e}")
-        conn.rollback()
-        return Response('<script>alert("댓글 삭제 중 오류가 발생했습니다."); history.back();</script>')
-
-    return redirect(url_for('post_detail', post_id=comment['post_id']))
+# (Deleted vulnerable guest delete routes)
 
 
 @app.route('/post-edit-guest/<int:post_id>', methods=['GET', 'POST'])
@@ -2729,7 +2689,7 @@ def post_edit_guest(post_id):
         'font-weight', 'text-align', 'text-decoration'
         ]
         css_sanitizer = CSSSanitizer(allowed_css_properties=allowed_css_properties)
-        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'], css_sanitizer=css_sanitizer)
+        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https'], css_sanitizer=css_sanitizer)
 
         updated_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         # 게스트는 게시판 이동, 공지 설정 불가
@@ -2959,8 +2919,13 @@ def buy_etacon(pack_id):
         return jsonify({'status': 'error', 'message': '포인트가 부족합니다.'}), 400
         
     try:
-        # 포인트 차감
-        cursor.execute("UPDATE users SET point = point - ? WHERE login_id = ?", (pack['price'], g.user['login_id']))
+        # 포인트 차감 (Atomic Check)
+        cursor.execute("UPDATE users SET point = point - ? WHERE login_id = ? AND point >= ?", (pack['price'], g.user['login_id'], pack['price']))
+
+        if cursor.rowcount == 0:
+            conn.rollback()
+            return jsonify({'status': 'error', 'message': '포인트가 부족하거나 구매에 실패했습니다.'}), 400
+
         # 패키지 지급
         cursor.execute("INSERT INTO user_etacons (user_id, pack_id, purchased_at) VALUES (?, ?, ?)",
                        (g.user['login_id'], pack_id, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
