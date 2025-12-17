@@ -289,23 +289,129 @@
                         {% endif %}
                         {# --- ▲▲▲ [핵심 수정] --- #}
                     </span>
-                    
-                    <div class="post-meta" style="width: 100%; margin-top: 10px;">
-                        <span>{{ post.created_at|datetime }}</span>
-                        <span>조회 {{ post.view_count }}</span>
-                    </div>
-
                     {% if g.user and g.user.role == 'admin' %}
                         <button class="btn-admin-check" 
                                 data-target-type="post" 
                                 data-target-id="{{ post.id }}">검사</button>
                     {% endif %}
+                    
+                    <div class="post-meta" style="width: 100%; margin-top: 10px;">
+                        <span>{{ post.created_at|datetime }}</span>
+                        <span>조회 {{ post.view_count }}</span>
+                    </div>
                 </div>
             </header>
 
             <div class="post-content">
                 {{ post.content|safe }}
             </div>
+
+            {% if poll %}
+            <div class="poll-container" id="poll-container-{{ poll.id }}">
+                <h3 class="poll-title">{{ poll.title }}</h3>
+                <div class="poll-meta"><span id="poll-total-{{ poll.id }}">{{ poll.total_votes }}</span>명 참여</div>
+
+                <div class="poll-options">
+                    {% for option in poll.options %}
+                    {% set show_result = poll.user_voted_option_id or (g.user and (g.user.role == 'admin' or g.user.login_id == post.author)) %}
+                    
+                    <div class="poll-option-wrapper {% if show_result %}result-mode{% else %}vote-mode{% endif %}" 
+                         id="option-wrapper-{{ option.id }}"
+                         onclick="votePoll({{ poll.id }}, {{ option.id }})">
+                        
+                        <div class="poll-bar-bg" 
+                             id="bar-{{ option.id }}"
+                             style="width: {% if show_result %}{{ option.percent }}{% else %}0{% endif %}%;">
+                        </div>
+
+                        <div class="poll-content-row">
+                            <span class="poll-text">
+                                {% if option.is_voted %}
+                                    <i class="fas fa-check-circle" style="color: #d9534f; margin-right: 5px;"></i>
+                                {% endif %}
+                                {{ option.option_text }}
+                            </span>
+                            
+                            <span class="poll-stat" id="stat-{{ option.id }}" style="display: {% if show_result %}block{% else %}none{% endif %};">
+                                {{ option.percent }}% ({{ option.vote_count }}명)
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <script>
+            async function votePoll(pollId, optionId) {
+                // 로그인 체크 (UI에서 버튼을 눌렀을 때)
+                {% if not g.user %}
+                    alert('로그인이 필요한 서비스입니다.');
+                    return;
+                {% endif %}
+
+                try {
+                    const response = await fetch('/api/vote', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token() }}'
+                        },
+                        body: JSON.stringify({ poll_id: pollId, option_id: optionId })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.status === 'success') {
+                        // UI 업데이트
+                        updatePollUI(pollId, result.options, result.total_votes, result.user_voted_option_id);
+                    } else {
+                        alert(result.message);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('투표 중 오류가 발생했습니다.');
+                }
+            }
+
+            function updatePollUI(pollId, options, totalVotes, myOptionId) {
+                // 총 참여자 수 업데이트
+                document.getElementById(`poll-total-${pollId}`).textContent = totalVotes;
+
+                options.forEach(opt => {
+                    const wrapper = document.getElementById(`option-wrapper-${opt.id}`);
+                    const bar = document.getElementById(`bar-${opt.id}`);
+                    const stat = document.getElementById(`stat-${opt.id}`);
+                    const textSpan = wrapper.querySelector('.poll-text');
+
+                    // 1. 모드 변경 (vote-mode -> result-mode)
+                    wrapper.classList.remove('vote-mode');
+                    wrapper.classList.add('result-mode');
+
+                    // 2. 그래프 너비 업데이트
+                    bar.style.width = `${opt.percent}%`;
+
+                    // 3. 수치 텍스트 업데이트 및 표시
+                    stat.textContent = `${opt.percent}% (${opt.vote_count}명)`;
+                    stat.style.display = 'block';
+
+                    // 4. 내가 선택한 항목 아이콘 표시
+                    if (opt.id === myOptionId) {
+                        textSpan.innerHTML = `<i class="fas fa-check-circle" style="color: #d9534f; margin-right: 5px;"></i> ${textSpan.textContent.trim().replace(/^✔\s*/, '')}`; // 기존 아이콘 중복 방지
+                        wrapper.classList.add('selected'); // 스타일링용 클래스 추가
+                    } else {
+                        // 다른 항목은 아이콘 제거
+                        const cleanText = textSpan.textContent.trim(); 
+                        // 만약 기존에 아이콘 텍스트가 섞여있다면 정제 필요하나, 여기선 innerHTML 재설정이 안전
+                        // 단순화를 위해 기존 텍스트만 남김 (실제 구현 시 option_text를 data 속성으로 저장해두면 더 좋음)
+                    }
+                });
+                
+                // 페이지 새로고침을 통해 아이콘 등 상태를 확실히 동기화하는 것도 방법입니다.
+                // 여기서는 부드러운 UX를 위해 DOM 조작만 수행했습니다.
+                location.reload(); // [선택] 확실한 UI 반영을 위해 새로고침 (AJAX 효과를 원하면 위 DOM 조작 코드 고도화 필요)
+            }
+            </script>
+            {% endif %}
 
             <div class="post-actions">
                 <button type="button" 

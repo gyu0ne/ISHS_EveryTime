@@ -1023,6 +1023,17 @@ def post_write():
         content = request.form.get('content')
         board_id = request.form.get('board_id') # board_id 수신
 
+        poll_title = request.form.get('poll_title')
+        poll_options = request.form.getlist('poll_options[]')
+        
+        has_poll = False
+        if poll_title and poll_options:
+            # 빈 옵션 제거
+            poll_options = [opt for opt in poll_options if opt.strip()]
+            if len(poll_options) < 2:
+                return Response('<script>alert("투표 항목은 최소 2개 이상이어야 합니다."); history.back();</script>')
+            has_poll = True
+
         if not board_id:
              return Response('<script>alert("게시판을 선택해주세요."); history.back();</script>')
         
@@ -1102,14 +1113,23 @@ def post_write():
             """
             cursor.execute(query, (board_id, title, final_content, author_id, created_at, created_at, is_notice))
 
+            post_id = cursor.lastrowid # last_insert_rowid() 대신 cursor.lastrowid 사용 권장
+
+            if has_poll:
+                cursor.execute("INSERT INTO polls (post_id, title, created_at) VALUES (?, ?, ?)", 
+                               (post_id, poll_title, created_at))
+                poll_id = cursor.lastrowid
+                
+                for option_text in poll_options:
+                    cursor.execute("INSERT INTO poll_options (poll_id, option_text, vote_count) VALUES (?, ?, 0)",
+                                   (poll_id, option_text))
+
             cursor.execute("UPDATE users SET post_count = post_count + 1 WHERE login_id = ?", (author_id,))
 
             update_exp_level(author_id, 50)
 
             conn.commit()
 
-            cursor.execute("SELECT last_insert_rowid()")
-            post_id = cursor.fetchone()[0]
             add_log('CREATE_POST', author_id, f"'{title}' 글 작성(id : {post_id}). 내용 : {final_content}")
 
             return redirect(url_for('post_list', board_id=board_id))
@@ -1365,6 +1385,47 @@ def post_detail(post_id):
             post['nickname'] = '익명'
             post['profile_image'] = 'images/profiles/default_image.jpeg'
         # --- ▲ [수정] ---
+
+        cursor.execute("SELECT * FROM polls WHERE post_id = ?", (post_id,))
+        poll_row = cursor.fetchone()
+        
+        poll_data = None
+        if poll_row:
+            poll_data = dict(poll_row)
+            poll_id = poll_data['id']
+            
+            # 옵션 목록 조회
+            cursor.execute("SELECT * FROM poll_options WHERE poll_id = ?", (poll_id,))
+            options_rows = cursor.fetchall()
+            
+            # 총 투표수 계산
+            total_votes = sum(opt['vote_count'] for opt in options_rows)
+            poll_data['total_votes'] = total_votes
+            
+            # 사용자 투표 여부 확인
+            user_voted_option_id = None
+            if g.user:
+                cursor.execute("SELECT option_id FROM poll_history WHERE poll_id = ? AND user_id = ?", 
+                               (poll_id, g.user['login_id']))
+                history = cursor.fetchone()
+                if history:
+                    user_voted_option_id = history['option_id']
+            
+            # 옵션 데이터 가공 (비율 계산)
+            options = []
+            for opt in options_rows:
+                opt_dict = dict(opt)
+                if total_votes > 0:
+                    opt_dict['percent'] = round((opt['vote_count'] / total_votes) * 100, 1)
+                else:
+                    opt_dict['percent'] = 0
+                
+                opt_dict['is_voted'] = (opt['id'] == user_voted_option_id)
+                options.append(opt_dict)
+                
+            poll_data['options'] = options
+            poll_data['user_voted_option_id'] = user_voted_option_id
+
         elif post['author'] == GUEST_USER_ID: # 게스트
             post['nickname'] = post['guest_nickname'] # 게스트 닉네임 사용
             post['profile_image'] = 'images/profiles/default_image.jpeg'
@@ -1479,7 +1540,7 @@ def post_detail(post_id):
         add_log('ERROR', user_id_for_log, f"Error fetching post detail for post_id {post_id}: {e}")
         return Response('<script>alert("게시글을 불러오는 중 오류가 발생했습니다."); history.back();</script>')
 
-    return render_template('post_detail.html', user=user_data, post=post, comments=comments_tree, GUEST_USER_ID=GUEST_USER_ID)
+    return render_template('post_detail.html', user=user_data, post=post, comments=comments_tree, poll=poll_data, GUEST_USER_ID=GUEST_USER_ID)
 
 # Post Edit
 @app.route('/post-edit/<int:post_id>', methods=['GET', 'POST'])
@@ -1593,6 +1654,14 @@ def post_delete(post_id):
 
     try:
         # --- 👇 로직 수정 시작 ---
+        cursor.execute("SELECT id FROM polls WHERE post_id = ?", (post_id,))
+        poll = cursor.fetchone()
+        
+        if poll:
+            poll_id = poll[0]
+            cursor.execute("DELETE FROM poll_history WHERE poll_id = ?", (poll_id,))
+            cursor.execute("DELETE FROM poll_options WHERE poll_id = ?", (poll_id,))
+            cursor.execute("DELETE FROM polls WHERE id = ?", (poll_id,))
 
         # 1. 삭제될 댓글들의 ID와 작성자 정보를 미리 조회합니다.
         cursor.execute("SELECT id, author FROM comments WHERE post_id = ?", (post_id,))
@@ -3115,6 +3184,95 @@ def my_etacons():
         })
         
     return jsonify(result)
+
+@app.route('/api/vote', methods=['POST'])
+@login_required
+@check_banned
+def vote_api():
+    data = request.get_json()
+    poll_id = data.get('poll_id')
+    option_id = data.get('option_id')
+    
+    if not poll_id or not option_id:
+        return jsonify({'status': 'error', 'message': '잘못된 요청입니다.'}), 400
+        
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        user_id = g.user['login_id']
+        current_voted_option_id = option_id # 기본적으로 현재 선택한 항목으로 설정
+        
+        # 1. 이미 투표했는지 확인
+        cursor.execute("SELECT id, option_id FROM poll_history WHERE poll_id = ? AND user_id = ?", (poll_id, user_id))
+        history = cursor.fetchone()
+        
+        if history:
+            old_option_id = history[1]
+            history_id = history[0]
+            
+            if old_option_id == option_id:
+                # [투표 취소] 같은 항목을 다시 누름 -> 기록 삭제 및 카운트 감소
+                cursor.execute("UPDATE poll_options SET vote_count = vote_count - 1 WHERE id = ?", (old_option_id,))
+                cursor.execute("DELETE FROM poll_history WHERE id = ?", (history_id,))
+                
+                current_voted_option_id = None # 선택된 항목 없음
+                action_type = "CANCEL"
+            else:
+                # [투표 변경] 다른 항목 누름 -> 기존 감소, 신규 증가, 기록 수정
+                cursor.execute("UPDATE poll_options SET vote_count = vote_count - 1 WHERE id = ?", (old_option_id,))
+                cursor.execute("UPDATE poll_options SET vote_count = vote_count + 1 WHERE id = ?", (option_id,))
+                cursor.execute("UPDATE poll_history SET option_id = ? WHERE id = ?", (option_id, history_id))
+                
+                action_type = "CHANGE"
+        else:
+            # [신규 투표]
+            cursor.execute("INSERT INTO poll_history (poll_id, user_id, option_id) VALUES (?, ?, ?)", 
+                           (poll_id, user_id, option_id))
+            cursor.execute("UPDATE poll_options SET vote_count = vote_count + 1 WHERE id = ?", (option_id,))
+            
+            action_type = "VOTE"
+            
+        conn.commit()
+        
+        # 2. 최신 투표 현황 조회하여 반환
+        cursor.execute("SELECT id, vote_count FROM poll_options WHERE poll_id = ?", (poll_id,))
+        updated_options = cursor.fetchall()
+        
+        total_votes = sum(opt[1] for opt in updated_options)
+        
+        results = []
+        for opt in updated_options:
+            percent = 0
+            if total_votes > 0:
+                percent = round((opt[1] / total_votes) * 100, 1)
+            results.append({
+                'id': opt[0],
+                'vote_count': opt[1],
+                'percent': percent,
+                'is_voted': (opt[0] == current_voted_option_id)
+            })
+            
+        # 메시지 설정
+        if action_type == "CANCEL":
+            msg = "투표를 취소했습니다."
+        elif action_type == "CHANGE":
+            msg = "투표를 변경했습니다."
+        else:
+            msg = "투표했습니다."
+
+        return jsonify({
+            'status': 'success',
+            'message': msg,
+            'total_votes': total_votes,
+            'options': results,
+            'user_voted_option_id': current_voted_option_id # 프론트엔드 반영용 ID (취소 시 null)
+        })
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Vote error: {e}")
+        return jsonify({'status': 'error', 'message': '투표 처리 중 오류가 발생했습니다.'}), 500
 
 # Server Drive Unit
 if __name__ == '__main__':

@@ -67,6 +67,54 @@ $(document).ready(function() {
         }
     }
 
+    const $pollSettings = $('#poll-settings');
+    const $pollToggleBtn = $('#btn-toggle-poll');
+    const $pollOptionsList = $('#poll-options-list');
+    const $pollTitleInput = $('input[name="poll_title"]');
+
+    // 1. 투표 첨부 토글
+    $pollToggleBtn.on('click', function() {
+        $(this).hide();
+        $pollSettings.slideDown();
+        $pollTitleInput.focus();
+    });
+
+    // 2. 투표 삭제 (취소)
+    $('#btn-remove-poll').on('click', function() {
+        $pollTitleInput.val('');
+        $pollOptionsList.find('input').val('');
+        // 옵션 개수 초기화 (2개만 남기기)
+        while ($pollOptionsList.children().length > 2) {
+            $pollOptionsList.children().last().remove();
+        }
+        $pollSettings.slideUp();
+        $pollToggleBtn.show();
+    });
+
+    // 3. 항목 추가
+    $('#btn-add-option').on('click', function() {
+        const currentCount = $pollOptionsList.children().length;
+        if (currentCount >= 10) {
+            alert('투표 항목은 최대 10개까지 가능합니다.');
+            return;
+        }
+        const newOption = `
+            <div class="poll-option-item" style="display: flex; gap: 5px; margin-bottom: 8px;">
+                <input type="text" name="poll_options[]" class="form-control" placeholder="항목 ${currentCount + 1}" maxlength="30" style="flex: 1;">
+                <button type="button" class="btn-del-option" style="background:none; border:none; color:#d9534f; cursor:pointer;">&times;</button>
+            </div>`;
+        $pollOptionsList.append(newOption);
+    });
+
+    // 4. 항목 개별 삭제
+    $(document).on('click', '.btn-del-option', function() {
+        $(this).parent().remove();
+        // placeholder 번호 재정렬
+        $pollOptionsList.children().each(function(index) {
+            $(this).find('input').attr('placeholder', `항목 ${index + 1}`);
+        });
+    });
+
     $('.btn-register').on('click', function(e) {
         e.preventDefault();
 
