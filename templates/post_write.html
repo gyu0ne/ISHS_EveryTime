@@ -55,7 +55,14 @@
                 <div class="title-char-counter">
                     <span id="current-title-chars">0</span> / 50
                 </div>
-            </div>
+                <div class="option-area" style="margin: 15px 0; display: flex; align-items: center;">
+                    <div class="custom-control custom-switch">
+                        <input type="checkbox" class="custom-control-input" id="only_my_gen" name="only_my_gen">
+                        <label class="custom-control-label" for="only_my_gen" style="font-weight: 500; color: #555; cursor: pointer;">
+                            내 기수에게만 공개 ({{ g.user.gen }}기)
+                        </label>
+                    </div>
+                </div>
 
             {% if g.user and g.user.role == 'admin' %}
             <div class="custom-control custom-checkbox my-2">

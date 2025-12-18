@@ -1059,6 +1059,19 @@ def post_write():
         if g.user and g.user['role'] == 'admin':
             is_notice = 1 if request.form.get('is_notice') == 'on' else 0
 
+        target_grade = 0
+        only_my_gen = request.form.get('only_my_gen') # 체크박스 값 확인 ('on' 또는 None)
+        
+        if only_my_gen == 'on':
+            if g.user and g.user['gen']:
+                try:
+                    # 로그인한 사용자의 기수 정보를 가져와 설정
+                    target_grade = int(g.user['gen'])
+                except ValueError:
+                    target_grade = 0 # 기수 정보 오류 시 전체 공개
+            else:
+                return Response('<script>alert("기수 정보를 찾을 수 없어 제한을 설정할 수 없습니다."); history.back();</script>')
+
         # 2. 서버 사이드 유효성 검사
         if not title or not content or not board_id:
             return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
@@ -1108,10 +1121,10 @@ def post_write():
 
             query = """
                 INSERT INTO posts
-                (board_id, title, content, author, created_at, updated_at, view_count, comment_count, is_notice)
-                VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)
+                (board_id, title, content, author, created_at, updated_at, view_count, comment_count, is_notice, target_grade)
+                VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
             """
-            cursor.execute(query, (board_id, title, final_content, author_id, created_at, created_at, is_notice))
+            cursor.execute(query, (board_id, title, final_content, author_id, created_at, created_at, is_notice, target_grade))
 
             post_id = cursor.lastrowid # last_insert_rowid() 대신 cursor.lastrowid 사용 권장
 
@@ -1291,7 +1304,7 @@ def post_list(board_id, page):
         # 2. 공지사항 목록 조회 (is_notice = 1) - 쿼리 수정
         notice_query = """
             SELECT
-                p.id, p.title, u.nickname, p.updated_at, p.view_count,
+                p.id, p.title, u.nickname, p.updated_at, p.view_count, p.target_grade,
                 SUM(CASE WHEN r.reaction_type = 'like' THEN 1 WHEN r.reaction_type = 'dislike' THEN -1 ELSE 0 END) as net_reactions
             FROM posts p
             JOIN users u ON p.author = u.login_id
@@ -1312,7 +1325,7 @@ def post_list(board_id, page):
         offset = (page - 1) * posts_per_page
         posts_query = """
             SELECT
-                p.id, p.title, p.comment_count, p.updated_at, p.view_count, u.nickname,
+                p.id, p.title, p.comment_count, p.updated_at, p.view_count, u.nickname, p.target_grade,
                 SUM(CASE WHEN r.reaction_type = 'like' THEN 1 WHEN r.reaction_type = 'dislike' THEN -1 ELSE 0 END) as net_reactions
             FROM posts p
             JOIN users u ON p.author = u.login_id
@@ -1376,6 +1389,23 @@ def post_detail(post_id):
         # ▲▲▲ [추가] ▲▲▲
 
         post = dict(post_data)
+
+        if post['target_grade'] > 0:
+            if not g.user:
+                return Response('<script>alert("로그인이 필요한 글입니다."); location.href="/login";</script>')
+            
+            # 관리자(admin) 프리패스
+            is_admin = g.user.get('role') == 'admin'
+            # 작성자 본인 프리패스
+            is_author = g.user['login_id'] == post['author']
+            
+            if not is_admin and not is_author:
+                # 사용자 기수 확인 (세션의 'grade' 키가 기수 정보를 담고 있다고 가정)
+                # 주의: 리로스쿨 연동 방식에 따라 g.user['grade'] 값이 '15'인지 '15기'인지 확인 필요 (여기선 숫자로 가정)
+                user_grade = int(g.user.get('grade', 0))
+                
+                if user_grade != post['target_grade']:
+                    return Response(f'<script>alert("{post["target_grade"]}기 학생만 조회할 수 있는 글입니다."); history.back();</script>')
         
         # --- ▼ [수정] 익명 게시판 처리를 위해 원본 작성자 ID와 게시판 ID 저장 ---
         post_author_id = post['author'] 
