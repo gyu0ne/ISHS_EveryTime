@@ -685,22 +685,17 @@ def riro_auth():
             cursor.execute('SELECT COUNT(*) FROM users WHERE hakbun = ? AND status = "active"', (api_result['student_number'],))
             count_hakbun = cursor.fetchone()[0]
 
-    # DEBUG: 중복 검사 비활성화
-    #         if count_name > 0 and count_hakbun > 0:
-    #             return Response(f'''
-    #     <script>
-    #         alert("이미 가입된 계정이 있습니다.");
-    #         history.back();
-    #     </script>
-    # ''')
+            if count_name > 0 and count_hakbun > 0:
+                return Response(f'''
+        <script>
+            alert("이미 가입된 계정이 있습니다.");
+            history.back();
+        </script>
+    ''')
 
-    #         session['hakbun'] = api_result['student_number']
-    #         session['name'] = api_result['name']
-    #         session['gen'] = api_result['generation']
-
-            session['hakbun'] = '1310'
-            session['name'] = '김준서'
-            session['gen'] = '32'
+            session['hakbun'] = api_result['student_number']
+            session['name'] = api_result['name']
+            session['gen'] = api_result['generation']
 
             return redirect('yakgwan')
 
