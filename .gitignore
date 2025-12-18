@@ -54,3 +54,4 @@ views/jsonnamu
 
 route_go/bin/*
 !route_go/bin/test
+.omx/
