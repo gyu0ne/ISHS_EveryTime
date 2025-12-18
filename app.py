@@ -2446,7 +2446,7 @@ def change_password():
 
         add_log('CHANGE_PASSWORD', session['user_id'], "비밀번호를 변경했습니다.")
         
-        resp = make_response('<script>alert("비밀번호가 성공적으로 변경되었습니다."); window.location.href = "/mypage";</script>')
+        resp = make_response('<script>alert("비밀번호가 성공적으로 변경되었습니다. 다시 로그인해주세요."); window.location.href = "/logout";</script>')
         resp.set_cookie('remember_token', '', max_age=0)
         return resp
 
@@ -3082,7 +3082,7 @@ def etacon_request():
         except Exception as e:
             conn.rollback()
             print(f"에타콘 등록 중 오류: {e}")
-            return Response(f'<script>alert("오류가 발생했습니다: {str(e)}"); history.back();</script>')
+            return Response(f'<script>alert("오류가 발생했습니다."); history.back();</script>')
 
     return render_template('etacon/request.html', user=g.user)
 
