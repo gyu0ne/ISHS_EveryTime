@@ -44,11 +44,19 @@
                         </div>
                     </div>
                     <div class="dropdown">
-                        <a href="#" class="dropdown-toggle">{{ user.nickname }}님 ▼</a>
-                        <div class="dropdown-menu">
-                            <a href="{{ url_for('mypage') }}">마이페이지</a>
-                            <a href="{{ url_for('logout') }}">로그아웃</a>
-                        </div>
+                        <a href="#" class="dropdown-toggle">
+                            {% if user %}
+                                {{ user.nickname }}님 ▼
+                            {% else %}
+                                비회원 사용자
+                            {% endif %}
+                        </a>
+                        {% if user %}
+                            <div class="dropdown-menu">
+                                <a href="{{ url_for('mypage') }}">마이페이지</a>
+                                <a href="{{ url_for('logout') }}">로그아웃</a>
+                            </div>
+                        {% endif %}
                     </div>
                     <button class="hamburger-menu" aria-label="메뉴 열기">
                     <span class="hamburger-icon"></span>
