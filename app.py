@@ -67,8 +67,13 @@ def save_etacon_image(file, sub_folder):
     sub_folder: 패키지별 폴더 (예: 'pack_1')
     """
     filename = secure_filename(file.filename)
-    # 파일명 중복 방지를 위한 UUID 추가
-    unique_filename = f"{uuid.uuid4().hex[:8]}_{filename}"
+
+    try:
+        ext = filename.rsplit('.', 1)[1].lower()
+    except IndexError:
+        ext = 'jpg' # 확장자가 없는 예외적인 경우 기본값
+
+    unique_filename = f"{uuid.uuid4().hex[:8]}.{ext}"
     
     save_dir = os.path.join(ETACON_UPLOAD_FOLDER, sub_folder)
     os.makedirs(save_dir, exist_ok=True)
