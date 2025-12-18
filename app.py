@@ -2117,8 +2117,11 @@ def edit_comment(comment_id):
 @app.route('/react/<target_type>/<int:target_id>', methods=['POST'])
 @check_banned
 def react(target_type, target_id):
+    if not g.user:
+        return jsonify({'status': 'error', 'message': '비회원 유저는 게시글에 반응할 수 없습니다.'}), 403
+
     reaction_type = request.form.get('reaction_type')
-    user_id = session['user_id']
+    user_id = g.user['login_id']
     
     if target_type not in ['post', 'comment'] or reaction_type not in ['like', 'dislike']:
         return jsonify({'status': 'error', 'message': '잘못된 접근입니다.'}), 400
