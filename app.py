@@ -2522,6 +2522,17 @@ def delete_account():
         print(f"Error during account deletion: {e}")
         return Response('<script>alert("계정 삭제 중 오류가 발생했습니다."); history.back();</script>')
     
+def clean_fts_query(text):
+    """
+    FTS5 검색 쿼리에서 문법 오류를 일으킬 수 있는 특수문자를 제거합니다.
+    """
+    # 1. 알파벳, 숫자, 한글, 공백만 남기고 모두 제거 (정규표현식 사용)
+    # import re 가 상단에 되어있어야 합니다. (이미 되어 있습니다)
+    cleaned_text = re.sub(r'[^\w\s]', '', text)
+    
+    # 2. 양쪽 공백 제거
+    return cleaned_text.strip()
+
 @app.route('/search')
 @login_required
 def search():
