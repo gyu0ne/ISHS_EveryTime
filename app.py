@@ -2300,8 +2300,8 @@ def update_profile_image():
                     print(f"Warning: 이전 프로필 이미지 삭제 실패: {e}")
                     add_log('WARNING', session['user_id'], f"이전 프로필 이미지 삭제 실패: {e}")
 
-        filename = secure_filename(file.filename)
-        unique_filename = str(uuid.uuid4()) + "_" + filename
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        unique_filename = f"{uuid.uuid4()}.{ext}"
         save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
 
         # --- 👇 이미지 최적화 로직 시작 ---
