@@ -1390,14 +1390,15 @@ def post_detail(post_id):
                 return Response('<script>alert("로그인이 필요한 글입니다."); location.href="/login";</script>')
             
             # 관리자(admin) 프리패스
-            is_admin = g.user.get('role') == 'admin'
+            is_admin = g.user['role'] == 'admin'
             # 작성자 본인 프리패스
             is_author = g.user['login_id'] == post['author']
             
             if not is_admin and not is_author:
-                # 사용자 기수 확인 (세션의 'grade' 키가 기수 정보를 담고 있다고 가정)
-                # 주의: 리로스쿨 연동 방식에 따라 g.user['grade'] 값이 '15'인지 '15기'인지 확인 필요 (여기선 숫자로 가정)
-                user_grade = int(g.user.get('grade', 0))
+                try:
+                    user_grade = int(g.user['gen'])
+                except (ValueError, IndexError, KeyError):
+                    user_grade = 0
                 
                 if user_grade != post['target_grade']:
                     return Response(f'<script>alert("{post["target_grade"]}기 학생만 조회할 수 있는 글입니다."); history.back();</script>')
