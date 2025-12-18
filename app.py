@@ -495,7 +495,7 @@ def main_page():
         cursor = conn.cursor()
 
         free_board_posts = get_recent_posts(1)
-        info_board_posts = get_recent_posts(2)
+        info_board_posts = get_recent_posts(3)
         hot_posts = get_hot_posts()
         trending_posts = get_trending_posts()
         

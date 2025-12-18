@@ -94,9 +94,9 @@
                 </ul>
             </div>
             <div class="board-column">
-                <h3><a href="/board/2">정보게시판</a></h3>
+                <h3><a href="/board/2">익명게시판</a></h3>
                 <ul>
-                    {# 1. 정보게시판도 동일한 방식으로 먼저 게시글을 출력합니다. #}
+                    {# 1. 익명게시판도 동일한 방식으로 먼저 게시글을 출력합니다. #}
                     {% for post in info_posts %}
                     <li>
                         <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
@@ -104,7 +104,7 @@
                     </li>
                     {% endfor %}
 
-                    {# 2. 정보게시판도 5개 미만일 경우 빈 자리를 채웁니다. #}
+                    {# 2. 익명게시판도 5개 미만일 경우 빈 자리를 채웁니다. #}
                     {% if info_posts|length < 5 %}
                         {% for i in range(5 - info_posts|length) %}
                         <li>
