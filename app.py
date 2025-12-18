@@ -1833,7 +1833,7 @@ def add_comment(post_id):
             
             cursor.execute(query, (
                 post_id, author_id, final_content, created_at, created_at, parent_comment_id,
-                guest_nickname, hashed_pw
+                guest_nickname, hashed_pw, anonymous_seq
             ))
 
             # [수정] guest_nickname이 없는 (로그인한) 사용자에게만 알림
