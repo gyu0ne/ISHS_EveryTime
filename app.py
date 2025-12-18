@@ -2078,7 +2078,7 @@ def edit_comment(comment_id):
     cursor = conn.cursor()
 
     # 1. 수정할 댓글 정보 조회 (권한 확인용)
-    cursor.execute("SELECT author, post_id FROM comments WHERE id = ?", (comment_id,))
+    cursor.execute("SELECT author, post_id, content FROM comments WHERE id = ?", (comment_id,))
     comment = cursor.fetchone()
 
     if not comment:
