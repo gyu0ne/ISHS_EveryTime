@@ -2355,7 +2355,8 @@ def user_profile(nickname):
     posts_query = """
         SELECT p.id, p.title, p.comment_count, p.updated_at, b.board_name
         FROM posts p JOIN board b ON p.board_id = b.board_id
-        WHERE p.author = ? ORDER BY p.updated_at DESC
+        WHERE p.author = ? AND p.board_id != 3
+        ORDER BY p.updated_at DESC
     """
     cursor.execute(posts_query, (login_id,))
     user_posts = cursor.fetchall()
@@ -2364,7 +2365,8 @@ def user_profile(nickname):
     comments_query = """
         SELECT c.content, c.post_id, c.updated_at, p.title AS post_title
         FROM comments c JOIN posts p ON c.post_id = p.id
-        WHERE c.author = ? ORDER BY c.updated_at DESC
+        WHERE c.author = ? AND p.board_id != 3
+        ORDER BY c.updated_at DESC
     """
     cursor.execute(comments_query, (login_id,))
     user_comments = cursor.fetchall()
@@ -2568,7 +2570,7 @@ def search():
             LEFT JOIN users u ON p.author = u.login_id
             WHERE 
                 (p.id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH ?))
-                OR (u.nickname LIKE ?)
+                OR (p.board_id != 3 AND u.nickname LIKE ?) 
                 OR (p.guest_nickname LIKE ?)
         """
         cursor.execute(count_query, (search_term_fts, search_term_like, search_term_like))
@@ -2580,7 +2582,8 @@ def search():
         search_query = """
             SELECT
                 p.id, p.title, p.comment_count, p.updated_at, p.view_count,
-                p.author, p.guest_nickname, u.nickname,
+                p.author, p.guest_nickname, p.board_id,
+                CASE WHEN p.board_id = 3 THEN '익명' ELSE u.nickname END as nickname,
                 b.board_name,
                 SUM(CASE WHEN r.reaction_type = 'like' THEN 1 WHEN r.reaction_type = 'dislike' THEN -1 ELSE 0 END) as net_reactions
             FROM posts p
@@ -2588,10 +2591,12 @@ def search():
             LEFT JOIN users u ON p.author = u.login_id
             LEFT JOIN reactions r ON r.target_id = p.id AND r.target_type = 'post'
             WHERE 
-                (p.id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH ?))
-                OR (u.nickname LIKE ?)
-                OR (p.guest_nickname LIKE ?)
-              AND (u.status = 'active' OR u.status IS NULL OR u.status = 'deleted') -- [수정] 게스트(NULL) 또는 활성 유저
+                (
+                    (p.id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH ?))
+                    OR (p.board_id != 3 AND u.nickname LIKE ?)
+                    OR (p.guest_nickname LIKE ?)
+                )
+              AND (u.status = 'active' OR u.status IS NULL OR u.status = 'deleted')
             GROUP BY p.id
             ORDER BY p.updated_at DESC
             LIMIT ? OFFSET ?

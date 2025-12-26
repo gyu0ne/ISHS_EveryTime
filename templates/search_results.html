@@ -43,7 +43,10 @@
                         </span>
                         
                         <span class="col-author">
-                            {% if post.author == GUEST_USER_ID %}
+                            {# --- [수정] 익명 게시글(board_id=3)인 경우 작성자 링크 제거 및 '익명' 표시 --- #}
+                            {% if post.board_id == 3 %}
+                                익명
+                            {% elif post.author == GUEST_USER_ID %}
                                 <span class="guest-author">{{ post.guest_nickname }}</span>
                             {% else %}
                                 <a href="{{ url_for('user_profile', nickname=post.nickname) }}">{{ post.nickname }}</a>
