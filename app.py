@@ -8,6 +8,7 @@ from werkzeug.utils import secure_filename
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
 from gevent.queue import Queue, Empty
+from nfcl.core import ComciganAPI
 from cachetools import TTLCache
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
@@ -111,6 +112,69 @@ def get_log_db():
     if db is None:
         db = g._log_database = sqlite3.connect(LOG_DATABASE)
     return db
+
+def get_grade_class(hakbun):
+    """
+    학번(예: 2305)을 입력받아 학년(2)과 반(3)을 반환합니다.
+    형식이 맞지 않으면 None, None을 반환합니다.
+    """
+    try:
+        s_hakbun = str(hakbun)
+        if len(s_hakbun) == 4:
+            grade = int(s_hakbun[0])
+            class_num = int(s_hakbun[1])
+            return grade, class_num
+    except (ValueError, IndexError):
+        pass
+    return None, None
+
+def get_timetable_data(grade, class_num):
+    """
+    DB에서 시간표를 조회하고, 없거나 날짜가 지났으면 nfcl로 크롤링하여 갱신합니다.
+    """
+    today = datetime.datetime.now().strftime('%Y-%m-%d')
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # 1. DB 조회
+    cursor.execute("SELECT week_schedule, updated_at FROM timetables WHERE grade = ? AND class_num = ?", (grade, class_num))
+    row = cursor.fetchone()
+
+    # 2. 데이터가 있고, 오늘 업데이트된 것이라면 DB 데이터 반환
+    if row and row[1] == today:
+        try:
+            return json.loads(row[0])
+        except json.JSONDecodeError:
+            pass # JSON 파싱 에러 시 재수집
+
+    # 3. 데이터가 없거나 구형이라면 크롤링 (nfcl 사용)
+    try:
+        # headless=True로 설정하여 백그라운드에서 실행
+        nfcl = ComciganAPI(headless=True)
+        # 학교명 하드코딩 (필요 시 환경 변수로 분리 가능)
+        data = nfcl.get_timetable("인천과학고등학교", grade, class_num)
+        
+        if "error" in data:
+            print(f"NFCL Error: {data['error']}")
+            # 에러 발생 시 기존 데이터가 있다면 반환, 없다면 None
+            return json.loads(row[0]) if row else None
+
+        week_schedule = data['timetable'] # 주간 시간표 딕셔너리
+
+        # 4. DB 저장 (INSERT OR REPLACE)
+        json_schedule = json.dumps(week_schedule, ensure_ascii=False)
+        cursor.execute("""
+            INSERT OR REPLACE INTO timetables (grade, class_num, week_schedule, updated_at)
+            VALUES (?, ?, ?, ?)
+        """, (grade, class_num, json_schedule, today))
+        conn.commit()
+
+        return week_schedule
+
+    except Exception as e:
+        print(f"Timetable Fetch Error: {e}")
+        add_log('ERROR', 'SYSTEM', f"시간표 수집 실패 ({grade}-{class_num}): {e}")
+        return None
 
 # Close DB connecting
 @app.teardown_appcontext
@@ -508,10 +572,28 @@ def main_page():
 
         bob_data = get_bob()
 
+        timetable_today = []
+        if user_data and user_data['hakbun']:
+            grade, class_num = get_grade_class(user_data['hakbun'])
+            
+            if grade and class_num:
+                full_timetable = get_timetable_data(grade, class_num)
+                
+                if full_timetable:
+                    # 오늘 요일 구하기 (0:월, 1:화, ... 4:금, 5~6:주말)
+                    weekday_map = {0: '월', 1: '화', 2: '수', 3: '목', 4: '금'}
+                    today_idx = datetime.datetime.now().weekday()
+                    
+                    # 주말이면 월요일 시간표를 보여주거나 빈 리스트 (여기선 월요일 예시)
+                    target_day = weekday_map.get(today_idx, '월') 
+                    
+                    timetable_today = full_timetable.get(target_day, [])
+
         if user_data:
             return render_template('main_logined.html', 
                                    user=user_data, 
                                    bob=bob_data, 
+                                   timetable=timetable_today,
                                    free_posts=free_board_posts, 
                                    info_posts=info_board_posts,
                                    hot_posts=hot_posts,

@@ -57,18 +57,36 @@
                 <h4><span>석식</span></h4>
                 <p class="meal-menu">{{ bob[2] |safe}}</p>
             </div>
-            <div class="meal-item timetable-widget">
-                <h4><span>시간표</span></h4>
-                <ol class="timetable-list">
-                    <li><span class="period">1교시</span><span class="subject">문학</span></li>
-                    <li><span class="period">2교시</span><span class="subject">수학 II</span></li>
-                    <li><span class="period">3교시</span><span class="subject">물리학 I</span></li>
-                    <li><span class="period">4교시</span><span class="subject">영어</span></li>
-                    <li><span class="period">5교시</span><span class="subject">영어</span></li>
-                    <li><span class="period">6교시</span><span class="subject">영어</span></li>
-                    <li><span class="period">7교시</span><span class="subject">영어</span></li>
-                </ol>
-            </div>
+<div class="meal-item timetable-widget">
+    <h4>
+        <span>시간표</span>
+        {% if user.hakbun %}
+            <span style="font-size: 0.8em; font-weight: normal; margin-left: 5px;">
+                ({{ (user.hakbun | string)[0] }}학년 {{ (user.hakbun | string)[1] }}반)
+            </span>
+        {% endif %}
+    </h4>
+    
+            <ol class="timetable-list">
+                {% if timetable %}
+                    {% for item in timetable %}
+                        <li class="{% if item.changed %}changed-schedule{% endif %}">
+                            <span class="period">{{ item.period }}교시</span>
+                            <span class="subject">
+                                {{ item.subject }}
+                                {% if item.teacher %}
+                                    <span class="teacher-name">({{ item.teacher }})</span>
+                                {% endif %}
+                            </span>
+                        </li>
+                    {% endfor %}
+                {% else %}
+                    <li class="no-data" style="text-align: center; padding: 20px; color: #888;">
+                        오늘의 시간표 정보가 없습니다.
+                    </li>
+                {% endif %}
+            </ol>
+        </div>
         </div>
         <div class="board-preview">
             <div class="board-column">
