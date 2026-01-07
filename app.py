@@ -65,6 +65,7 @@ def save_etacon_image(file, sub_folder):
     """
     이미지를 저장하고 경로를 반환합니다.
     GIF는 최적화하여 저장하고, 정적 이미지는 포맷을 유지합니다.
+    JPG 저장 시 투명 배경(RGBA) 오류를 방지합니다.
     sub_folder: 패키지별 폴더 (예: 'pack_1')
     """
     filename = secure_filename(file.filename)
@@ -89,15 +90,25 @@ def save_etacon_image(file, sub_folder):
         if file.filename.lower().endswith('.gif'):
             img.save(save_path, save_all=True, optimize=True, loop=0)
         else:
-            # 정적 이미지는 포맷에 맞게 저장 (필요 시 리사이징 가능)
+            # 정적 이미지는 포맷에 맞게 저장
+            # [수정] JPG/JPEG 저장 시 RGBA 모드 오류 해결 로직 추가
+            if ext in ['jpg', 'jpeg']:
+                if img.mode in ('RGBA', 'LA'):
+                    # 투명한 배경을 흰색으로 채워서 RGB로 변환 (투명->검은색 방지)
+                    background = Image.new("RGB", img.size, (255, 255, 255))
+                    # 이미지의 알파 채널을 마스크로 사용하여 붙여넣기
+                    background.paste(img, mask=img.split()[-1])
+                    img = background
+                elif img.mode == 'P':
+                    # 팔레트 모드일 경우 RGB로 변환
+                    img = img.convert('RGB')
+            
             img.save(save_path, optimize=True)
             
         return f"images/etacons/{sub_folder}/{unique_filename}"
     except Exception as e:
         print(f"이미지 저장 실패: {e}")
         return None
-
-# app.py
 
 # DB connect (first line of all route)
 def get_db():
