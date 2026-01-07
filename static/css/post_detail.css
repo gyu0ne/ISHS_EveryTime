@@ -785,3 +785,73 @@ body > div.container > div:nth-child(4) > div.comments-card > form > button {
         font-size: 14px;
     }
 }
+
+/* 기본 옵션 스타일 */
+.poll-option-item {
+    position: relative;
+    padding: 12px 15px;
+    margin-bottom: 10px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    cursor: pointer;
+    background-color: #fff;
+    transition: all 0.2s;
+    overflow: hidden; /* 바가 튀어나가는 것 방지 */
+}
+
+.poll-option-item:hover {
+    background-color: #f9f9f9;
+    border-color: #ccc;
+}
+
+/* [중요] 선택된 상태 스타일 (.selected 클래스가 있을 때) */
+.poll-option-item.selected {
+    border-color: #ff6b6b;
+    background-color: #fff0f0;
+}
+
+.poll-option-item.selected .poll-text {
+    font-weight: bold;
+    color: #d63031;
+}
+
+/* 체크 아이콘은 평소에 숨김 */
+.check-icon {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #d63031;
+    display: none; /* 숨김 */
+}
+
+/* 선택되었을 때만 아이콘 보임 */
+.poll-option-item.selected .check-icon {
+    display: block;
+}
+
+/* 그래프 바 스타일 */
+.progress-bar-bg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    z-index: 0;
+    pointer-events: none; /* 클릭 방해 금지 */
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background-color: rgba(255, 107, 107, 0.1); /* 연한 붉은색 */
+    width: 0%;
+    transition: width 0.5s ease;
+}
+
+/* 텍스트는 바 위에 떠야 함 */
+.poll-content-row {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: space-between;
+}

@@ -308,109 +308,99 @@
             </div>
 
             {% if poll %}
-            <div class="poll-container" id="poll-container-{{ poll.id }}">
-                <h3 class="poll-title">{{ poll.title }}</h3>
-                <div class="poll-meta"><span id="poll-total-{{ poll.id }}">{{ poll.total_votes }}</span>명 참여</div>
+            <div class="poll-container">
+                <div class="poll-header">
+                    <strong>Q. {{ poll.title }}</strong>
+                    <span class="poll-meta">총 <span id="poll-total-{{ poll.id }}">{{ poll.total_votes }}</span>명 참여</span>
+                </div>
 
                 <div class="poll-options">
                     {% for option in poll.options %}
-                    {% set show_result = poll.user_voted_option_id or (g.user and (g.user.role == 'admin' or g.user.login_id == post.author)) %}
-                    
-                    <div class="poll-option-wrapper {% if show_result %}result-mode{% else %}vote-mode{% endif %}" 
-                         id="option-wrapper-{{ option.id }}"
-                         onclick="votePoll({{ poll.id }}, {{ option.id }})">
+                    <div class="poll-option-item {% if option.is_voted %}selected{% endif %}" 
+                        id="option-wrapper-{{ option.id }}"
+                        onclick="votePoll('{{ poll.id }}', '{{ option.id }}')">
                         
-                        <div class="poll-bar-bg" 
-                             id="bar-{{ option.id }}"
-                             style="width: {% if show_result %}{{ option.percent }}{% else %}0{% endif %}%;">
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" 
+                                id="bar-{{ option.id }}" 
+                                style="width: {{ option.percent }}%;"></div>
                         </div>
 
                         <div class="poll-content-row">
                             <span class="poll-text">
-                                {% if option.is_voted %}
-                                    <i class="fas fa-check-circle" style="color: #d9534f; margin-right: 5px;"></i>
-                                {% endif %}
                                 {{ option.option_text }}
                             </span>
-                            
-                            <span class="poll-stat" id="stat-{{ option.id }}" style="display: {% if show_result %}block{% else %}none{% endif %};">
+                            <span class="poll-stat" id="stat-{{ option.id }}">
                                 {{ option.percent }}% ({{ option.vote_count }}명)
                             </span>
                         </div>
+
+                        <i class="fas fa-check-circle check-icon"></i>
                     </div>
                     {% endfor %}
                 </div>
             </div>
+            {% endif %}
 
             <script>
-            async function votePoll(pollId, optionId) {
-                // 로그인 체크 (UI에서 버튼을 눌렀을 때)
-                {% if not g.user %}
-                    alert('로그인이 필요한 서비스입니다.');
-                    return;
-                {% endif %}
+                async function votePoll(pollId, optionId) {
+                    // 로그인 체크 등 기존 로직...
+                    {% if not g.user %}
+                        alert('로그인이 필요한 서비스입니다.');
+                        return;
+                    {% endif %}
 
-                try {
-                    const response = await fetch('/api/vote', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': '{{ csrf_token() }}'
-                        },
-                        body: JSON.stringify({ poll_id: pollId, option_id: optionId })
-                    });
+                    try {
+                        const response = await fetch('/api/vote', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({ poll_id: pollId, option_id: optionId })
+                        });
 
-                    const result = await response.json();
+                        const result = await response.json();
 
-                    if (result.status === 'success') {
-                        // UI 업데이트
-                        updatePollUI(pollId, result.options, result.total_votes, result.user_voted_option_id);
-                    } else {
-                        alert(result.message);
+                        if (result.status === 'success') {
+                            // UI 업데이트 함수 호출 (새로고침 없음!)
+                            updatePollUI(pollId, result.options, result.total_votes, result.user_voted_option_id);
+                        } else {
+                            alert(result.message);
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('투표 중 오류가 발생했습니다.');
                     }
-                } catch (error) {
-                    console.error('Error:', error);
-                    alert('투표 중 오류가 발생했습니다.');
                 }
-            }
 
-            function updatePollUI(pollId, options, totalVotes, myOptionId) {
-                // 총 참여자 수 업데이트
-                document.getElementById(`poll-total-${pollId}`).textContent = totalVotes;
+                function updatePollUI(pollId, options, totalVotes, myOptionId) {
+                    // 1. 총 참여자 수 업데이트
+                    const totalCountEl = document.getElementById(`poll-total-${pollId}`);
+                    if (totalCountEl) totalCountEl.textContent = totalVotes;
 
-                options.forEach(opt => {
-                    const wrapper = document.getElementById(`option-wrapper-${opt.id}`);
-                    const bar = document.getElementById(`bar-${opt.id}`);
-                    const stat = document.getElementById(`stat-${opt.id}`);
-                    const textSpan = wrapper.querySelector('.poll-text');
+                    // 2. 각 옵션 상태 업데이트
+                    options.forEach(opt => {
+                        const wrapper = document.getElementById(`option-wrapper-${opt.id}`);
+                        const bar = document.getElementById(`bar-${opt.id}`);
+                        const stat = document.getElementById(`stat-${opt.id}`);
 
-                    // 1. 모드 변경 (vote-mode -> result-mode)
-                    wrapper.classList.remove('vote-mode');
-                    wrapper.classList.add('result-mode');
+                        if (wrapper && bar && stat) {
+                            // 그래프 너비 변경 (애니메이션 효과)
+                            bar.style.width = `${opt.percent}%`;
+                            
+                            // 텍스트 수치 변경
+                            stat.textContent = `${opt.percent}% (${opt.vote_count}명)`;
 
-                    // 2. 그래프 너비 업데이트
-                    bar.style.width = `${opt.percent}%`;
-
-                    // 3. 수치 텍스트 업데이트 및 표시
-                    stat.textContent = `${opt.percent}% (${opt.vote_count}명)`;
-                    stat.style.display = 'block';
-
-                    // 4. 내가 선택한 항목 아이콘 표시
-                    if (opt.id === myOptionId) {
-                        textSpan.innerHTML = `<i class="fas fa-check-circle" style="color: #d9534f; margin-right: 5px;"></i> ${textSpan.textContent.trim().replace(/^✔\s*/, '')}`; // 기존 아이콘 중복 방지
-                        wrapper.classList.add('selected'); // 스타일링용 클래스 추가
-                    } else {
-                        // 다른 항목은 아이콘 제거
-                        const cleanText = textSpan.textContent.trim(); 
-                        // 만약 기존에 아이콘 텍스트가 섞여있다면 정제 필요하나, 여기선 innerHTML 재설정이 안전
-                        // 단순화를 위해 기존 텍스트만 남김 (실제 구현 시 option_text를 data 속성으로 저장해두면 더 좋음)
-                    }
-                });
-                
-                // 페이지 새로고침을 통해 아이콘 등 상태를 확실히 동기화하는 것도 방법입니다.
-                // 여기서는 부드러운 UX를 위해 DOM 조작만 수행했습니다.
-                location.reload(); // [선택] 확실한 UI 반영을 위해 새로고침 (AJAX 효과를 원하면 위 DOM 조작 코드 고도화 필요)
-            }
+                            // [핵심] 클래스 토글로 선택 상태 제어
+                            if (opt.id === myOptionId) {
+                                wrapper.classList.add('selected'); // CSS가 아이콘 보여줌
+                            } else {
+                                wrapper.classList.remove('selected'); // CSS가 아이콘 숨김
+                            }
+                        }
+                    });
+                }
             </script>
             {% endif %}
 
