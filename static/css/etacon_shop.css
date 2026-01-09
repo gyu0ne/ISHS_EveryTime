@@ -7,10 +7,6 @@
     --border-color: #444;
 }
 
-body {
-    background-color: var(--bg-color);
-}
-
 .shop-container {
     max-width: 1000px;
     margin: 0 auto;
