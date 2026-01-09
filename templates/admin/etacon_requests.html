@@ -15,6 +15,7 @@
                 <th style="padding: 10px;">요청자</th>
                 <th style="padding: 10px;">썸네일</th>
                 <th style="padding: 10px;">관리</th>
+                <th style="padding: 10px;">상세보기</th>
             </tr>
         </thead>
         <tbody>
@@ -30,6 +31,12 @@
                 <td style="padding: 10px;">
                     <button onclick="processEtacon({{ req.id }}, 'approve')" style="background: #4CAF50; color: white; border: none; padding: 5px 10px; cursor: pointer;">승인</button>
                     <button onclick="processEtacon({{ req.id }}, 'reject')" style="background: #F44336; color: white; border: none; padding: 5px 10px; cursor: pointer;">거절</button>
+                </td>
+                <td style="padding: 10px;">
+                    <button type="button" class="btn-detail" 
+                        onclick='openDetailModal({{ req | tojson | safe }})'>
+                        상세보기
+                    </button>
                 </td>
             </tr>
             {% else %}
@@ -58,4 +65,282 @@ async function processEtacon(packId, action) {
     }
 }
 </script>
+
+<div id="etaconDetailModal" class="etacon-modal-overlay" onclick="closeDetailModal(event)">
+    <div class="etacon-modal-content">
+        <div class="etacon-modal-header">
+            <h3 id="modalTitle">패키지 상세 정보</h3>
+            <button class="btn-close-modal" onclick="closeDetailModal('force')">&times;</button>
+        </div>
+        
+        <div class="etacon-modal-body">
+            <div class="info-group">
+                <div class="info-row">
+                    <span class="info-label">제작자</span>
+                    <span class="info-value" id="modalAuthor">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">가격</span>
+                    <span class="info-value"><span id="modalPrice">0</span> P</span>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <span class="info-label">설명</span>
+                    <div id="modalDesc" class="desc-box"></div>
+                </div>
+            </div>
+
+            <h4 class="section-title">포함된 에타콘</h4>
+            <div id="modalImageGrid" class="etacon-image-grid">
+                </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 모달 열기 함수
+    function openDetailModal(packData) {
+        // 1. 텍스트 정보 주입
+        document.getElementById('modalTitle').textContent = packData.name;
+        document.getElementById('modalAuthor').textContent = packData.author || packData.uploader_id; // 필드명 확인 필요
+        document.getElementById('modalPrice').textContent = packData.price;
+        document.getElementById('modalDesc').textContent = packData.description;
+
+        // 2. 이미지 그리드 초기화 및 생성
+        const grid = document.getElementById('modalImageGrid');
+        grid.innerHTML = '';
+
+        if (packData.images && packData.images.length > 0) {
+            packData.images.forEach(path => {
+                const item = document.createElement('div');
+                item.className = 'etacon-grid-item';
+                
+                const img = document.createElement('img');
+                // Flask static 경로 처리 ('/static/' 추가)
+                img.src = path.startsWith('/static') ? path : '/static/' + path;
+                img.alt = 'etacon';
+                
+                item.appendChild(img);
+                grid.appendChild(item);
+            });
+        } else {
+            grid.innerHTML = '<div class="no-images">이미지가 없습니다.</div>';
+        }
+
+        // 3. 모달 활성화 (애니메이션 시작)
+        const modal = document.getElementById('etaconDetailModal');
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden'; // 뒷 배경 스크롤 막기
+    }
+
+    // 모달 닫기 함수
+    function closeDetailModal(event) {
+        // 오버레이 클릭(배경) 또는 닫기 버튼 클릭('force') 시 닫음
+        if (event === 'force' || event.target.id === 'etaconDetailModal') {
+            const modal = document.getElementById('etaconDetailModal');
+            modal.classList.remove('active');
+            document.body.style.overflow = ''; // 스크롤 복구
+        }
+    }
+</script>
+<style>
+/* --- [NEW] 에타콘 상세 모달 디자인 --- */
+
+/* 1. 모달 배경 (Overlay) */
+.etacon-modal-overlay {
+    display: none; /* 기본 숨김 */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6); /* 배경 어둡게 */
+    backdrop-filter: blur(5px); /* 배경 블러 효과 */
+    z-index: 2000; /* 최상단 배치 */
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* 활성화 상태 */
+.etacon-modal-overlay.active {
+    display: flex;
+    opacity: 1;
+}
+
+/* 2. 모달 본문 (Content) */
+.etacon-modal-content {
+    background-color: #212121; /* 메인 배경색 */
+    width: 90%;
+    max-width: 600px; /* 적당한 너비 */
+    max-height: 85vh; /* 화면 높이의 85%까지만 */
+    border-radius: 16px; /* 둥근 모서리 */
+    border: 1px solid #444;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* 내부 스크롤 제어 */
+    transform: translateY(20px);
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.etacon-modal-overlay.active .etacon-modal-content {
+    transform: translateY(0); /* 떠오르는 효과 */
+}
+
+/* 3. 모달 헤더 */
+.etacon-modal-header {
+    padding: 20px 25px;
+    background-color: #2e2e2e;
+    border-bottom: 1px solid #3a3a3a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.etacon-modal-header h3 {
+    font-family: 'Pretendard', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+}
+
+.btn-close-modal {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 28px;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s;
+    padding: 0;
+}
+.btn-close-modal:hover {
+    color: #d9534f; /* 닫기 버튼 포인트 컬러 */
+}
+
+/* 4. 모달 바디 (스크롤 영역) */
+.etacon-modal-body {
+    padding: 25px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+/* 스크롤바 커스텀 */
+.etacon-modal-body::-webkit-scrollbar {
+    width: 8px;
+}
+.etacon-modal-body::-webkit-scrollbar-track {
+    background: #212121;
+}
+.etacon-modal-body::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+}
+.etacon-modal-body::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* 5. 정보 섹션 스타일 */
+.info-group {
+    margin-bottom: 24px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 15px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 8px;
+}
+
+.info-label {
+    color: #888;
+    font-weight: 500;
+}
+
+.info-value {
+    color: #fff;
+    font-weight: 600;
+}
+
+.desc-box {
+    background-color: #2e2e2e;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #3a3a3a;
+    color: #ddd;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-top: 8px;
+}
+
+.section-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #eee;
+    margin: 30px 0 15px;
+    padding-left: 10px;
+    border-left: 4px solid #d9534f; /* 포인트 라인 */
+}
+
+/* 6. 이미지 그리드 */
+.etacon-image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); /* 반응형 그리드 */
+    gap: 12px;
+}
+
+.etacon-grid-item {
+    background-color: #2e2e2e;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s;
+    cursor: pointer;
+}
+
+.etacon-grid-item:hover {
+    transform: scale(1.05);
+    border-color: #d9534f;
+    z-index: 1;
+}
+
+.etacon-grid-item img {
+    max-width: 90%;
+    max-height: 90%;
+    object-fit: contain;
+}
+
+.no-images {
+    text-align: center;
+    color: #666;
+    padding: 20px 0;
+}
+
+/* 7. 목록의 '상세보기' 버튼 스타일 */
+.btn-detail {
+    background-color: #3e3e3e;
+    color: #e0e0e0;
+    border: 1px solid #555;
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-detail:hover {
+    background-color: #555;
+    color: #fff;
+    border-color: #777;
+}
+</style>
 {% endblock %}

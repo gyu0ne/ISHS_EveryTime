@@ -3192,11 +3192,24 @@ def admin_etacon_requests():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # 대기 중인 패키지 조회
+    # 1. 대기 중인 패키지 기본 정보 조회
     cursor.execute("SELECT * FROM etacon_packs WHERE status = 'pending' ORDER BY created_at DESC")
-    requests = cursor.fetchall()
+    pack_rows = cursor.fetchall()
     
-    return render_template('admin/etacon_requests.html', requests=requests, user=g.user)
+    requests_data = []
+    
+    # 2. 각 패키지에 포함된 에타콘 이미지 리스트 조회 및 병합
+    for row in pack_rows:
+        pack = dict(row) # Row 객체를 dict로 변환 (데이터 추가를 위해)
+        
+        # 해당 패키지의 이미지 경로들 조회
+        cursor.execute("SELECT image_path FROM etacons WHERE pack_id = ?", (pack['id'],))
+        images = [img['image_path'] for img in cursor.fetchall()]
+        
+        pack['images'] = images # 이미지 리스트 추가
+        requests_data.append(pack)
+    
+    return render_template('admin/etacon_requests.html', requests=requests_data, user=g.user)
 
 @app.route('/admin/etacon/approve/<int:pack_id>', methods=['POST'])
 @login_required
