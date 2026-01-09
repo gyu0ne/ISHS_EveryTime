@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}사용자 관리 - log인곽{% endblock %}
+
+{% block head %}
+<style>
+    .admin-container {
+        max-width: 1000px;
+        margin: 30px auto;
+        padding: 0 20px;
+        color: #e0e0e0;
+    }
+    
+    .admin-header {
+        margin-bottom: 30px;
+        border-bottom: 1px solid #444;
+        padding-bottom: 15px;
+    }
+    
+    .admin-header h2 {
+        font-size: 24px;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    /* 관리 카드 그리드 */
+    .management-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 25px;
+        margin-bottom: 40px;
+    }
+
+    .manage-card {
+        background-color: #2e2e2e;
+        border: 1px solid #3a3a3a;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    .manage-card h3 {
+        font-size: 18px;
+        margin-bottom: 20px;
+        color: #fff;
+        border-bottom: 1px solid #444;
+        padding-bottom: 10px;
+    }
+    
+    .manage-card h3.ban-title { color: #d9534f; }
+    .manage-card h3.unban-title { color: #5cb85c; }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+    
+    .form-group label {
+        display: block;
+        font-size: 14px;
+        color: #aaa;
+        margin-bottom: 5px;
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 10px;
+        background-color: #3e3e3e;
+        border: 1px solid #555;
+        border-radius: 6px;
+        color: #fff;
+        font-size: 14px;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: #aaa;
+    }
+
+    .btn-submit {
+        width: 100%;
+        padding: 12px;
+        border: none;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+        margin-top: 10px;
+        font-size: 15px;
+    }
+    
+    .btn-ban { background-color: #d9534f; color: white; }
+    .btn-ban:hover { background-color: #c9302c; }
+    
+    .btn-unban { background-color: #5cb85c; color: white; }
+    .btn-unban:hover { background-color: #4cae4c; }
+
+    /* 차단 목록 테이블 */
+    .banned-list-section {
+        background-color: #2e2e2e;
+        border: 1px solid #3a3a3a;
+        border-radius: 12px;
+        padding: 25px;
+    }
+
+    .user-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+    }
+    
+    .user-table th, .user-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #444;
+        font-size: 14px;
+    }
+    
+    .user-table th {
+        color: #aaa;
+        font-weight: 600;
+    }
+    
+    .user-table tr:last-child td {
+        border-bottom: none;
+    }
+    
+    .expiry-date {
+        color: #d9534f;
+        font-weight: bold;
+    }
+
+    @media (max-width: 768px) {
+        .management-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+    <div class="admin-header">
+        <h2>사용자 관리 (차단/해제)</h2>
+    </div>
+
+    <div class="management-grid">
+        <div class="manage-card">
+            <h3 class="ban-title">🚫 사용자 차단</h3>
+            <form action="{{ url_for('admin_ban_user') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label>학번</label>
+                    <input type="text" name="hakbun" class="form-control" placeholder="예: 2305" required>
+                </div>
+                <div class="form-group">
+                    <label>이름 (실명)</label>
+                    <input type="text" name="name" class="form-control" placeholder="예: 홍길동" required>
+                </div>
+                <div class="form-group">
+                    <label>차단 기간 (일)</label>
+                    <input type="number" name="duration" class="form-control" placeholder="일 단위 입력 (예: 3)" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>사유 (선택)</label>
+                    <input type="text" name="reason" class="form-control" placeholder="관리자 로그용 사유">
+                </div>
+                <button type="submit" class="btn-submit btn-ban">차단하기</button>
+            </form>
+        </div>
+
+        <div class="manage-card">
+            <h3 class="unban-title">✅ 차단 해제</h3>
+            <form action="{{ url_for('admin_unban_user') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label>학번</label>
+                    <input type="text" name="hakbun" class="form-control" placeholder="예: 2305" required>
+                </div>
+                <div class="form-group">
+                    <label>이름 (실명)</label>
+                    <input type="text" name="name" class="form-control" placeholder="예: 홍길동" required>
+                </div>
+                <button type="submit" class="btn-submit btn-unban">해제하기</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="banned-list-section">
+        <h3>현재 제재 중인 사용자</h3>
+        {% if banned_users %}
+        <table class="user-table">
+            <thead>
+                <tr>
+                    <th>학번</th>
+                    <th>이름</th>
+                    <th>닉네임</th>
+                    <th>차단 만료일</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in banned_users %}
+                <tr>
+                    <td>{{ user.hakbun }}</td>
+                    <td>{{ user.name }}</td>
+                    <td>{{ user.nickname }}</td>
+                    <td class="expiry-date">{{ user.banned_until }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="padding: 20px; text-align: center; color: #888;">현재 차단된 사용자가 없습니다.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

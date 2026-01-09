@@ -203,6 +203,7 @@ def close_log_connection(exception):
 
 @app.before_request
 def load_logged_in_user():
+    # 정적 파일 요청 등은 건너뜀
     if request.endpoint and 'static' in request.endpoint:
         return
 
@@ -216,21 +217,56 @@ def load_logged_in_user():
         cursor.execute("SELECT * FROM users WHERE login_id = ?", (user_id,))
         g.user = cursor.fetchone()
 
-        # --- ▼ [수정] 제재 상태 확인 로직 통합 ---
+        # [기존 로직] 제재 상태 만료 확인
         if g.user and g.user['status'] == 'banned' and g.user['banned_until']:
             try:
                 banned_until_date = datetime.datetime.strptime(g.user['banned_until'], '%Y-%m-%d %H:%M:%S')
                 if datetime.datetime.now() > banned_until_date:
-                    # 제재 기간 만료, 상태를 active로 변경
                     cursor.execute("UPDATE users SET status = 'active', banned_until = NULL WHERE login_id = ?", (g.user['login_id'],))
                     conn.commit()
-                    # g.user 객체를 다시 로드하여 갱신
                     cursor.execute("SELECT * FROM users WHERE login_id = ?", (user_id,))
                     g.user = cursor.fetchone()
             except (ValueError, TypeError):
-                # 날짜 형식이 잘못되었거나 NULL인 경우
                 pass
-        # --- ▲ [수정] ---
+
+# 2. [필수] 차단된 사용자 확인 (반드시 위 함수보다 아래에 있어야 합니다!)
+@app.before_request
+def block_banned_users():
+    # g.user가 아직 생성되지 않았거나(위 함수 누락/순서 에러), 비로그인 상태면 통과
+    if not hasattr(g, 'user') or not g.user:
+        return
+
+    # 정적 리소스 및 로그아웃 등은 제외
+    if request.endpoint and ('static' in request.endpoint or 'logout' in request.endpoint):
+        return
+
+    # 차단된 유저인지 확인
+    if g.user['status'] == 'banned':
+        # API, 댓글 작성 등 개별 기능 제한은 @check_banned에서 처리하므로 패스
+        if request.path.startswith('/api/') or request.path.startswith('/react/') or request.path.startswith('/comment/'):
+            return
+
+        # "최초 접속" 알림 처리
+        if not session.get('banned_notice_shown'):
+            banned_until_str = "알 수 없음"
+            if g.user['banned_until']:
+                try:
+                    dt = datetime.datetime.strptime(g.user['banned_until'], '%Y-%m-%d %H:%M:%S')
+                    banned_until_str = dt.strftime('%Y년 %m월 %d일 %H:%M')
+                except ValueError:
+                    banned_until_str = g.user['banned_until']
+
+            message = f"활동이 정지된 계정입니다.\\n(글 읽기는 가능하지만 작성 및 추천은 제한됩니다.)\\n\\n[해제 예정일]\\n{banned_until_str}"
+            
+            session['banned_notice_shown'] = True # 알림 확인 처리
+            
+            if request.method == 'GET':
+                return Response(f'''
+                    <script>
+                        alert("{message}");
+                        window.location.reload(); 
+                    </script>
+                ''')
 
 # --- 👇 [추가] 제재된 사용자의 활동을 제한하는 데코레이터 ---
 def check_banned(f):
@@ -3098,6 +3134,7 @@ def comment_edit_guest(comment_id):
         return render_template('comment_edit_guest.html', comment=comment, user=g.user)
 
 @app.route('/etacon/request', methods=['GET', 'POST'])
+@check_banned
 @login_required
 def etacon_request():
     if request.method == 'POST':
@@ -3429,6 +3466,96 @@ def vote_api():
         conn.rollback()
         print(f"Vote error: {e}")
         return jsonify({'status': 'error', 'message': '투표 처리 중 오류가 발생했습니다.'}), 500
+
+@app.route('/admin/users')
+@login_required
+@admin_required
+def admin_users():
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # 현재 차단된 사용자 목록 조회 (만료일이 남았거나 status가 banned인 경우)
+    cursor.execute("""
+        SELECT * FROM users 
+        WHERE status = 'banned' 
+        ORDER BY banned_until DESC
+    """)
+    banned_users = cursor.fetchall()
+    
+    return render_template('admin/manage_users.html', banned_users=banned_users, user=g.user)
+
+@app.route('/admin/users/ban', methods=['POST'])
+@login_required
+@admin_required
+def admin_ban_user():
+    name = request.form.get('name')
+    hakbun = request.form.get('hakbun')
+    duration = request.form.get('duration', type=int)
+    reason = request.form.get('reason', '') # 차단 사유 (로그용)
+    
+    if not name or not hakbun or not duration:
+        return Response('<script>alert("이름, 학번, 기간을 모두 입력해주세요."); history.back();</script>')
+        
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 1. 사용자 찾기 (동명이인 방지를 위해 학번까지 확인)
+    cursor.execute("SELECT login_id, nickname FROM users WHERE name = ? AND hakbun = ?", (name, hakbun))
+    target_user = cursor.fetchone()
+    
+    if not target_user:
+        return Response('<script>alert("해당 정보(이름/학번)와 일치하는 사용자를 찾을 수 없습니다."); history.back();</script>')
+    
+    user_id = target_user[0]
+    nickname = target_user[1]
+    
+    # 관리자는 차단 불가
+    cursor.execute("SELECT role FROM users WHERE login_id = ?", (user_id,))
+    if cursor.fetchone()[0] == 'admin':
+         return Response('<script>alert("관리자 계정은 차단할 수 없습니다."); history.back();</script>')
+
+    # 2. 차단 만료일 계산
+    banned_until = (datetime.datetime.now() + datetime.timedelta(days=duration)).strftime('%Y-%m-%d %H:%M:%S')
+    
+    # 3. DB 업데이트
+    cursor.execute("UPDATE users SET status = 'banned', banned_until = ? WHERE login_id = ?", (banned_until, user_id))
+    conn.commit()
+    
+    add_log('BAN_USER', g.user['login_id'], f"사용자 차단: {nickname}({name}, {hakbun}) - {duration}일. 사유: {reason}")
+    
+    return Response(f'<script>alert("{nickname}님을 {duration}일간 차단했습니다."); location.href="/admin/users";</script>')
+
+@app.route('/admin/users/unban', methods=['POST'])
+@login_required
+@admin_required
+def admin_unban_user():
+    name = request.form.get('name')
+    hakbun = request.form.get('hakbun')
+    
+    if not name or not hakbun:
+         return Response('<script>alert("이름과 학번을 입력해주세요."); history.back();</script>')
+
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 사용자 찾기
+    cursor.execute("SELECT login_id, nickname FROM users WHERE name = ? AND hakbun = ?", (name, hakbun))
+    target_user = cursor.fetchone()
+    
+    if not target_user:
+        return Response('<script>alert("해당 정보(이름/학번)와 일치하는 사용자를 찾을 수 없습니다."); history.back();</script>')
+        
+    user_id = target_user[0]
+    nickname = target_user[1]
+    
+    # 차단 해제 업데이트
+    cursor.execute("UPDATE users SET status = 'active', banned_until = NULL WHERE login_id = ?", (user_id,))
+    conn.commit()
+    
+    add_log('UNBAN_USER', g.user['login_id'], f"사용자 차단 해제: {nickname}({name}, {hakbun})")
+    
+    return Response(f'<script>alert("{nickname}님의 차단을 해제했습니다."); location.href="/admin/users";</script>')
 
 # Server Drive Unit
 if __name__ == '__main__':

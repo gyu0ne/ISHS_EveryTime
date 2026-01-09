@@ -57,6 +57,7 @@
                                 <a href="{{ url_for('logout') }}">로그아웃</a>
                                 {% if user and user.role == 'admin' %}
                                 <a href="/admin/etacon/requests">에타콘 신청 관리</a>
+                                <a href="/admin/users">유저 관리</a>
                                 {% endif %}
                             </div>
                         {% endif %}
