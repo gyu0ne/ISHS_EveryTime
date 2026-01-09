@@ -3383,8 +3383,13 @@ def my_etacons():
 @check_banned
 def vote_api():
     data = request.get_json()
-    poll_id = data.get('poll_id')
-    option_id = data.get('option_id')
+    
+    # [수정 1] 프론트엔드에서 문자열로 넘어올 수 있으므로 int()로 변환하여 비교해야 함
+    try:
+        poll_id = int(data.get('poll_id'))
+        option_id = int(data.get('option_id'))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': '잘못된 데이터 형식입니다.'}), 400
     
     if not poll_id or not option_id:
         return jsonify({'status': 'error', 'message': '잘못된 요청입니다.'}), 400
@@ -3401,15 +3406,16 @@ def vote_api():
         history = cursor.fetchone()
         
         if history:
-            old_option_id = history[1]
             history_id = history[0]
+            old_option_id = history[1] # DB에서 가져온 값 (Integer)
             
+            # [수정 2] 자료형이 맞춰졌으므로 이제 정확한 비교가 가능함
             if old_option_id == option_id:
                 # [투표 취소] 같은 항목을 다시 누름 -> 기록 삭제 및 카운트 감소
                 cursor.execute("UPDATE poll_options SET vote_count = vote_count - 1 WHERE id = ?", (old_option_id,))
                 cursor.execute("DELETE FROM poll_history WHERE id = ?", (history_id,))
                 
-                current_voted_option_id = None # 선택된 항목 없음
+                current_voted_option_id = None # 선택된 항목 없음 (취소됨)
                 action_type = "CANCEL"
             else:
                 # [투표 변경] 다른 항목 누름 -> 기존 감소, 신규 증가, 기록 수정
@@ -3443,7 +3449,8 @@ def vote_api():
                 'id': opt[0],
                 'vote_count': opt[1],
                 'percent': percent,
-                'is_voted': (opt[0] == current_voted_option_id)
+                # JS에서 비교 시 문자열/숫자 차이가 있을 수 있으므로 여기서는 단순 데이터만 전달
+                'is_voted': (opt[0] == current_voted_option_id) 
             })
             
         # 메시지 설정
@@ -3459,7 +3466,7 @@ def vote_api():
             'message': msg,
             'total_votes': total_votes,
             'options': results,
-            'user_voted_option_id': current_voted_option_id # 프론트엔드 반영용 ID (취소 시 null)
+            'user_voted_option_id': current_voted_option_id # 취소 시 null 반환됨
         })
         
     except Exception as e:

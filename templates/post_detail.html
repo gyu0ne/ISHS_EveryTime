@@ -308,7 +308,14 @@
             </div>
 
             {% if poll %}
-            <div class="poll-container">
+            {% set ns = namespace(is_voted=false) %}
+            {% for option in poll.options %}
+                {% if option.is_voted %}
+                    {% set ns.is_voted = true %}
+                {% endif %}
+            {% endfor %}
+
+            <div class="poll-container {% if ns.is_voted %}voted{% endif %}">
                 <div class="poll-header">
                     <strong>Q. {{ poll.title }}</strong>
                     <span class="poll-meta">총 <span id="poll-total-{{ poll.id }}">{{ poll.total_votes }}</span>명 참여</span>
@@ -323,7 +330,7 @@
                         <div class="progress-bar-bg">
                             <div class="progress-bar-fill" 
                                 id="bar-{{ option.id }}" 
-                                style="width: {{ option.percent }}%;"></div>
+                                style="width: {{ '%.1f'|format(option.percent) }}%;"></div>
                         </div>
 
                         <div class="poll-content-row">
@@ -331,7 +338,7 @@
                                 {{ option.option_text }}
                             </span>
                             <span class="poll-stat" id="stat-{{ option.id }}">
-                                {{ option.percent }}% ({{ option.vote_count }}명)
+                                {{ '%.1f'|format(option.percent) }}% ({{ option.vote_count }}명)
                             </span>
                         </div>
 
@@ -374,9 +381,21 @@
                 }
 
                 function updatePollUI(pollId, options, totalVotes, myOptionId) {
-                    // 1. 총 참여자 수 업데이트
-                    const totalCountEl = document.getElementById(`poll-total-${pollId}`);
-                    if (totalCountEl) totalCountEl.textContent = totalVotes;
+                    // 1. 투표 상태에 따라 컨테이너 스타일(그래프 노출 여부) 변경
+                    const pollTotalSpan = document.getElementById(`poll-total-${pollId}`);
+                    
+                    if (pollTotalSpan) {
+                        const container = pollTotalSpan.closest('.poll-container');
+                        if (container) {
+                            // [수정] 내 선택(myOptionId)이 있으면 결과 모드(.voted), 없으면(취소 시) 투표 모드 복귀
+                            if (myOptionId) {
+                                container.classList.add('voted');
+                            } else {
+                                container.classList.remove('voted');
+                            }
+                        }
+                        pollTotalSpan.textContent = totalVotes;
+                    }
 
                     // 2. 각 옵션 상태 업데이트
                     options.forEach(opt => {
@@ -385,17 +404,20 @@
                         const stat = document.getElementById(`stat-${opt.id}`);
 
                         if (wrapper && bar && stat) {
-                            // 그래프 너비 변경 (애니메이션 효과)
-                            bar.style.width = `${opt.percent}%`;
-                            
-                            // 텍스트 수치 변경
-                            stat.textContent = `${opt.percent}% (${opt.vote_count}명)`;
+                            // 소수점 1자리로 포맷 통일
+                            const percentFixed = parseFloat(opt.percent).toFixed(1);
 
-                            // [핵심] 클래스 토글로 선택 상태 제어
-                            if (opt.id === myOptionId) {
-                                wrapper.classList.add('selected'); // CSS가 아이콘 보여줌
+                            requestAnimationFrame(() => {
+                                bar.style.width = `${percentFixed}%`;
+                            });
+                            
+                            stat.textContent = `${percentFixed}% (${opt.vote_count}명)`;
+
+                            // [수정] 선택 상태 토글 (취소 시 myOptionId가 null이므로 모든 selected가 해제됨)
+                            if (String(opt.id) === String(myOptionId)) {
+                                wrapper.classList.add('selected'); 
                             } else {
-                                wrapper.classList.remove('selected'); // CSS가 아이콘 숨김
+                                wrapper.classList.remove('selected');
                             }
                         }
                     });

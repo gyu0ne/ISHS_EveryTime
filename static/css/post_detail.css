@@ -681,97 +681,6 @@ body > div.container > div:nth-child(4) > div.comments-card > form > button {
     font-size: 16px;
 }
 
-/* --- 투표 UI 스타일 --- */
-.poll-container {
-    margin: 20px 30px;
-    padding: 20px;
-    background-color: #333;
-    border: 1px solid #444;
-    border-radius: 12px;
-}
-
-.poll-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: #f1f1f1;
-    margin-bottom: 5px;
-}
-
-.poll-meta {
-    font-size: 13px;
-    color: #888;
-    margin-bottom: 15px;
-    text-align: right;
-}
-
-.poll-options {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.poll-option-wrapper {
-    position: relative;
-    width: 100%;
-    min-height: 44px;
-    background-color: #333;
-    border-radius: 8px;
-    overflow: hidden;
-    cursor: pointer;
-    border: 1px solid #444;
-    transition: border-color 0.2s;
-}
-
-/* 투표 모드 (결과 보기 전) : 버튼처럼 보이게 */
-.poll-option-wrapper.vote-mode:hover {
-    background-color: #3e3e3e;
-    border-color: #888;
-}
-
-/* 결과 모드 (투표 후) : 그래프 배경 */
-.poll-option-wrapper.result-mode {
-    cursor: default; /* 이미 투표했으므로 기본 커서 (변경 가능하므로 pointer 유지해도 됨) */
-    cursor: pointer; 
-}
-
-.poll-bar-bg {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    background-color: rgba(217, 83, 79, 0.3); /* 포인트 컬러의 투명도 버전 */
-    z-index: 1;
-    transition: width 0.5s ease-out;
-}
-
-/* 내가 선택한 항목 강조 */
-.poll-option-wrapper.selected .poll-bar-bg {
-    background-color: rgba(217, 83, 79, 0.6); /* 좀 더 진하게 */
-}
-
-.poll-content-row {
-    position: relative;
-    z-index: 2; /* 그래프 위에 글씨 표시 */
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 15px;
-    width: 100%;
-    height: 100%;
-}
-
-.poll-text {
-    font-size: 15px;
-    font-weight: 500;
-    color: #e0e0e0;
-}
-
-.poll-stat {
-    font-size: 13px;
-    font-weight: bold;
-    color: #d9534f; /* 포인트 컬러 */
-}
-
 /* 모바일 대응 */
 @media (max-width: 600px) {
     .poll-container {
@@ -786,111 +695,103 @@ body > div.container > div:nth-child(4) > div.comments-card > form > button {
     }
 }
 
-/* 기본 옵션 스타일 */
+/* --- 투표 UI 스타일 (수정본) --- */
+.poll-container {
+    margin: 20px 30px;
+    padding: 20px;
+    background-color: #333;
+    border: 1px solid #444;
+    border-radius: 12px;
+}
+/* 투표 완료 시 그래프 표시를 위해 필요한 클래스 스타일 */
+.poll-container.voted .progress-bar-bg {
+    opacity: 1;
+}
+.poll-container.voted .poll-result-text {
+    display: inline-block;
+}
+
+/* 옵션 아이템 기본 스타일 */
 .poll-option-item {
     position: relative;
     padding: 12px 15px;
     margin-bottom: 10px;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    cursor: pointer;
-    background-color: #fff;
-    transition: all 0.2s;
-    overflow: hidden; /* 바가 튀어나가는 것 방지 */
-}
-
-.poll-option-item:hover {
-    background-color: #f9f9f9;
-    border-color: #ccc;
-}
-
-/* [중요] 선택된 상태 스타일 (.selected 클래스가 있을 때) 및 기본 아이템 스타일 */
-
-/* 1. 기본 투표 항목 스타일 (다크 모드 적용) */
-.poll-option-item {
-    position: relative;
-    padding: 12px 15px;
-    margin-bottom: 10px;
-    
-    /* [수정] 배경색과 테두리를 다크 테마에 맞춤 */
     background-color: #333; 
     border: 1px solid #444;
     border-radius: 8px;
-    
     cursor: pointer;
-    transition: all 0.2s;
-    overflow: hidden; /* 바가 튀어나가는 것 방지 */
-    color: #e0e0e0; /* 글자색 밝게 */
+    transition: all 0.2s ease;
+    overflow: hidden;
+    color: #e0e0e0;
+    z-index: 1;
 }
 
-/* 2. 마우스 올렸을 때 (Hover) */
-.poll-option-item:hover {
-    /* [수정] 살짝 더 밝은 회색으로 변경 */
-    background-color: #3e3e3e; 
-    border-color: #666;
+/* [Hover] 투표 안 했을 때만 적용 */
+.poll-container:not(.voted) .poll-option-item:hover {
+    background-color: #3e3e3e;
+    border-color: #888;
 }
 
-/* 3. 선택된 상태 스타일 (.selected) */
+/* [Selected] 선택된 상태 스타일 - 우선순위 최상위 설정 */
 .poll-option-item.selected {
-    /* [수정] 포인트 컬러(#d9534f)를 테두리에 적용 */
-    border-color: #d9534f;
-    
-    /* [수정] 배경은 붉은색을 아주 연하게 투명도로 적용 */
-    background-color: rgba(217, 83, 79, 0.15); 
+    border-color: #d9534f !important;
+    background-color: rgba(217, 83, 79, 0.15) !important;
 }
-
-/* 4. 선택된 항목의 텍스트 강조 */
 .poll-option-item.selected .poll-text {
-    font-weight: bold;
-    /* [수정] 너무 쨍한 빨강 대신, 다크모드에서 잘 보이는 밝은 붉은색 */
-    color: #ff6b6b; 
+    font-weight: 700;
+    color: #ff6b6b;
 }
 
-/* 5. 체크 아이콘 스타일 */
+/* 체크 아이콘 */
 .check-icon {
     position: absolute;
     right: 15px;
     top: 50%;
     transform: translateY(-50%);
-    
-    /* [수정] 테마 포인트 컬러 사용 */
-    color: #d9534f; 
-    
-    display: none; /* 숨김 */
-    z-index: 10; /* 그래프 바보다 위에 오도록 설정 */
+    color: #d9534f;
+    display: none;
+    z-index: 10;
 }
-
-/* 선택되었을 때만 아이콘 보임 */
+/* 선택된 항목에서만 아이콘 표시 */
 .poll-option-item.selected .check-icon {
     display: block;
 }
 
-/* 6. 그래프 바 (투표율 배경) 스타일 */
+/* --- 그래프 바 스타일 수정 (핵심) --- */
+/* 배경 컨테이너 (항상 100% 너비, 투명도 조절로 숨김/표시) */
 .progress-bar-bg {
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
-    width: 100%;
-    z-index: 0;
-    pointer-events: none; /* 클릭 방해 금지 */
+    height: 100%;
+    width: 100%; 
+    background-color: transparent; 
+    z-index: -1; /* 텍스트 뒤로 */
+    opacity: 0; /* 기본 숨김, .voted 클래스 추가시 보임 */
+    transition: opacity 0.3s ease;
 }
 
+/* 실제 채워지는 바 (HTML ID와 매칭) */
 .progress-bar-fill {
     height: 100%;
-    
-    /* [수정] 그래프 색상을 테마 포인트 컬러(#d9534f)의 투명도 버전으로 변경 */
-    background-color: rgba(217, 83, 79, 0.3); 
-    
-    width: 0%;
-    transition: width 0.5s ease;
+    width: 0%; /* JS가 제어 */
+    background-color: rgba(217, 83, 79, 0.3); /* 그래프 색상 */
+    transition: width 0.5s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-/* 7. 텍스트 레이아웃 (바 위에 글씨가 뜨도록) */
+/* 텍스트 정렬 */
 .poll-content-row {
     position: relative;
-    z-index: 1;
+    z-index: 2;
     display: flex;
     justify-content: space-between;
-    align-items: center; /* 텍스트 수직 중앙 정렬 추가 */
+    align-items: center;
+    width: 100%;
+}
+.poll-text { font-size: 15px; font-weight: 500; }
+.poll-stat { font-size: 13px; font-weight: bold; color: #d9534f; }
+
+body > div.container > div:nth-child(4) > div.post-view-card > div.poll-container > div.poll-header {
+    margin-bottom: 15px;
 }
