@@ -3296,7 +3296,6 @@ def etacon_shop():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # 승인된 패키지 목록
     cursor.execute("""
         SELECT p.*, 
                (SELECT COUNT(*) FROM user_etacons ue WHERE ue.pack_id = p.id AND ue.user_id = ?) as is_owned
@@ -3304,7 +3303,19 @@ def etacon_shop():
         WHERE p.status = 'approved'
         ORDER BY p.created_at DESC
     """, (g.user['login_id'],))
-    packs = cursor.fetchall()
+    pack_rows = cursor.fetchall()
+
+    # [추가] "에타콘 승인" 로직과 동일하게, 각 패키지별 상세 이미지 목록을 조회하여 병합
+    packs = []
+    for row in pack_rows:
+        pack = dict(row) # Row 객체를 dict로 변환
+        
+        # 해당 패키지의 이미지 경로들 조회
+        cursor.execute("SELECT image_path FROM etacons WHERE pack_id = ?", (pack['id'],))
+        images = [img['image_path'] for img in cursor.fetchall()]
+        
+        pack['images'] = images # 이미지 리스트 추가
+        packs.append(pack)
     
     return render_template('etacon/shop.html', packs=packs, user=g.user)
 

@@ -1,9 +1,41 @@
 {% extends "base.html" %}
 
-{% block title %}log인곽 - 에타콘 상점{% endblock %}
+{% block title %}에타콘 상점{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/etacon_shop.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/etacon_shop.css') }}">
+    <script>
+        // 구매 함수
+        async function buyEtacon(packId, packName, price) {
+            if (!confirm(`'${packName}'을(를) ${price}P에 구매하시겠습니까?`)) return;
+
+            try {
+                const response = await fetch(`/etacon/buy/${packId}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
+                });
+                const result = await response.json();
+                
+                alert(result.message);
+                if (result.status === 'success') {
+                    location.reload();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('구매 중 오류가 발생했습니다.');
+            }
+        }
+
+        // 모달 열기/닫기
+        function openPreviewModal(packId) {
+            const modal = document.getElementById('preview-modal-' + packId);
+            if (modal) modal.style.display = 'flex';
+        }
+        function closePreviewModal(packId) {
+            const modal = document.getElementById('preview-modal-' + packId);
+            if (modal) modal.style.display = 'none';
+        }
+    </script>
 {% endblock %}
 
 {% block content %}
@@ -16,27 +48,57 @@
         </div>
     </header>
 
-    <div class="pack-grid">
+    <div class="pack-list">
         {% for pack in packs %}
-        <div class="pack-card">
+        <div class="pack-card {% if pack.is_owned %}owned{% endif %}">
             <div class="pack-thumbnail">
                 <img src="{{ url_for('static', filename=pack.thumbnail) }}" alt="{{ pack.name }}">
             </div>
+            
             <div class="pack-info">
                 <h3 class="pack-name">{{ pack.name }}</h3>
                 <p class="pack-desc">{{ pack.description }}</p>
-                <div class="pack-footer">
-                    <span class="pack-price">
-                        {% if pack.price == 0 %}무료{% else %}{{ pack.price }} P{% endif %}
-                    </span>
-                    
-                    {% if pack.is_owned > 0 %}
-                        <button class="btn-buy owned" disabled>보유중</button>
+            </div>
+
+            <div class="pack-actions-col">
+                <div class="pack-price">
+                    {% if pack.is_owned %}
+                        <span class="owned-badge">보유중</span>
                     {% else %}
-                        <button class="btn-buy" onclick="buyEtacon('{{ pack.id }}', '{{ pack.name }}', '{{ pack.price }}')">
-                            구매
-                        </button>
+                        {{ pack.price }} P
                     {% endif %}
+                </div>
+                
+                <div class="btn-group">
+                    <button class="btn-preview" onclick="openPreviewModal('{{ pack.id }}')">구성 보기</button>
+                    
+                    {% if not pack.is_owned %}
+                        <button class="btn-buy" onclick="buyEtacon('{{ pack.id }}', '{{ pack.name }}', {{ pack.price }})">구매</button>
+                    {% else %}
+                        <button class="btn-buy" disabled>구매완료</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div id="preview-modal-{{ pack.id }}" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closePreviewModal('{{ pack.id }}')">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>{{ pack.name }} 구성</h3>
+                    <button class="btn-close" onclick="closePreviewModal('{{ pack.id }}')">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="etacon-grid">
+                        {% if pack.images %}
+                            {% for img_path in pack.images %}
+                                <div class="etacon-item">
+                                    <img src="{{ url_for('static', filename=img_path) }}" loading="lazy">
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <p style="text-align:center; color:#888;">미리보기 이미지가 없습니다.</p>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -47,31 +109,4 @@
         {% endfor %}
     </div>
 </div>
-
-<script>
-async function buyEtacon(packId, packName, price) {
-    if (!confirm(`'${packName}' 에타콘을 ${price} 포인트에 구매하시겠습니까?`)) return;
-
-    try {
-        const response = await fetch(`/etacon/buy/${packId}`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token() }}'
-            }
-        });
-        
-        const result = await response.json();
-        
-        if (result.status === 'success') {
-            alert(result.message);
-            location.reload();
-        } else {
-            alert(result.message);
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('구매 중 오류가 발생했습니다.');
-    }
-}
-</script>
 {% endblock %}

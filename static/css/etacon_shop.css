@@ -3,12 +3,12 @@
     --card-bg: #1E1E1E;
     --text-color: #E0E0E0;
     --text-secondary: #A0A0A0;
-    --accent-color: #E53935;
+    --accent-color: #d9534f;
     --border-color: #444;
 }
 
 .shop-container {
-    max-width: 1000px;
+    max-width: 900px;
     margin: 0 auto;
     padding: 20px;
 }
@@ -17,139 +17,221 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 30px;
-    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
     padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .shop-header h2 {
-    color: var(--text-color);
-    font-size: 22px;
+    font-size: 24px;
+    color: #f1f1f1;
 }
 
 .user-point {
+    font-size: 15px;
     color: var(--text-color);
-    font-size: 14px;
 }
-
 .user-point strong {
-    color: #FFC107; /* 포인트 강조 색상 */
-    margin-right: 15px;
+    color: #FFC107;
+    margin-left: 5px;
 }
-
 .btn-request {
-    background-color: #2C2C2C;
-    color: var(--text-color);
-    padding: 8px 12px;
+    margin-left: 15px;
+    padding: 6px 12px;
+    background-color: #333;
+    border: 1px solid #555;
+    color: #ddd;
     text-decoration: none;
-    border-radius: 4px;
     font-size: 13px;
-    transition: background 0.2s;
+    border-radius: 4px;
+    transition: all 0.2s;
 }
-
 .btn-request:hover {
-    background-color: #3E3E3E;
+    background-color: #444;
 }
 
-/* 그리드 레이아웃 */
-.pack-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 20px;
+/* --- 리스트 레이아웃 스타일 --- */
+.pack-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px; /* 항목 간 간격 */
 }
 
 .pack-card {
-    background-color: var(--card-bg);
-    border-radius: 8px;
-    overflow: hidden;
-    border: 1px solid var(--border-color);
     display: flex;
-    flex-direction: column;
+    flex-direction: row; /* 가로 배치 */
+    align-items: center;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    transition: border-color 0.2s;
+}
+.pack-card:hover {
+    border-color: #666;
 }
 
+/* 썸네일 (왼쪽 고정) */
 .pack-thumbnail {
-    width: 100%;
-    height: 150px;
+    width: 100px;
+    height: 100px;
+    flex-shrink: 0; /* 크기 줄어듦 방지 */
     background-color: #000;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-right: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: hidden;
 }
-
 .pack-thumbnail img {
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
 }
 
+/* 정보 영역 (가운데 유동적) */
 .pack-info {
-    padding: 15px;
+    flex-grow: 1;
     display: flex;
     flex-direction: column;
-    flex-grow: 1;
+    justify-content: center;
+    margin-right: 20px;
 }
 
 .pack-name {
-    margin: 0 0 5px 0;
-    font-size: 16px;
-    color: var(--text-color);
+    font-size: 18px;
+    font-weight: bold;
+    color: #f1f1f1;
+    margin-bottom: 8px;
 }
 
 .pack-desc {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
-    margin: 0 0 15px 0;
-    flex-grow: 1;
     line-height: 1.4;
+    margin: 0;
 }
 
-.pack-footer {
+/* 우측 액션 영역 (가격 + 버튼들) */
+.pack-actions-col {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: auto;
+    flex-direction: column;
+    align-items: flex-end; /* 우측 정렬 */
+    gap: 10px;
+    min-width: 140px;
 }
 
 .pack-price {
+    font-size: 16px;
     font-weight: bold;
     color: #FFC107;
-    font-size: 14px;
+    margin-bottom: 5px;
+}
+.pack-price .owned-badge {
+    color: #4CAF50; /* 보유중 초록색 */
+}
+
+.btn-group {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-preview, .btn-buy {
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-preview {
+    background-color: #3e3e3e;
+    color: #e0e0e0;
+    border: 1px solid #555;
+}
+.btn-preview:hover {
+    background-color: #4f4f4f;
 }
 
 .btn-buy {
     background-color: var(--accent-color);
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
+    color: #fff;
 }
-
 .btn-buy:hover {
-    opacity: 0.9;
+    background-color: #c9302c;
 }
-
-.btn-buy.owned {
+.btn-buy:disabled {
     background-color: #444;
-    cursor: default;
     color: #888;
+    cursor: default;
 }
 
 .no-packs {
-    grid-column: 1 / -1;
     text-align: center;
     padding: 50px;
     color: var(--text-secondary);
 }
 
+/* --- 모달 스타일 (이전과 동일) --- */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    display: flex; justify-content: center; align-items: center;
+}
+.modal-content {
+    background-color: #2e2e2e;
+    padding: 20px;
+    border-radius: 12px;
+    width: 90%; max-width: 500px; max-height: 80vh;
+    overflow-y: auto;
+    border: 1px solid #444;
+}
+.modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #444;
+}
+.btn-close {
+    background: none; border: none; color: #aaa; font-size: 24px; cursor: pointer;
+}
+.etacon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    gap: 10px;
+}
+.etacon-item img {
+    width: 100%; border-radius: 6px; background-color: #3e3e3e; padding: 4px;
+}
+
+/* 모바일 반응형 */
 @media (max-width: 600px) {
-    .pack-grid {
-        grid-template-columns: repeat(2, 1fr); /* 모바일에서 2열 */
-        gap: 10px;
+    .pack-card {
+        flex-direction: column; /* 세로 배치 */
+        align-items: flex-start;
+        position: relative;
     }
     .pack-thumbnail {
-        height: 120px;
+        width: 100%;
+        height: 120px; /* 썸네일 높이 조절 */
+        margin-right: 0;
+        margin-bottom: 15px;
+    }
+    .pack-info {
+        margin-right: 0;
+        margin-bottom: 15px;
+        width: 100%;
+    }
+    .pack-actions-col {
+        width: 100%;
+        flex-direction: row; /* 버튼 가로 배치 */
+        justify-content: space-between;
+        align-items: center;
+    }
+    .btn-group {
+        flex-grow: 1;
+        justify-content: flex-end;
     }
 }
