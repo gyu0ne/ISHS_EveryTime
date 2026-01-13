@@ -795,3 +795,36 @@ body > div.container > div:nth-child(4) > div.comments-card > form > button {
 body > div.container > div:nth-child(4) > div.post-view-card > div.poll-container > div.poll-header {
     margin-bottom: 15px;
 }
+
+.post-content a {
+    color: #58a6ff; /* 어두운 배경에서 잘 보이는 밝은 파란색 */
+    text-decoration: underline;
+    word-break: break-all; /* 긴 URL 줄바꿈 */
+}
+.post-content a:hover {
+    color: #79c0ff; /* 호버 시 조금 더 밝게 */
+}
+
+/* --- [추가] 게시글 본문 내 미디어(동영상, 유튜브) 반응형 스타일 --- */
+
+/* 1. 비디오(MP4 등) 및 아이프레임(유튜브 등) 공통 스타일 */
+.post-content video,
+.post-content iframe {
+    max-width: 80%;       /* 부모 요소(게시글 영역)를 넘지 않도록 제한 */
+    border-radius: 6px;    /* 이미지와 통일감 있게 모서리 둥글게 */
+    margin: 15px 0;        /* 위아래 여백 추가 */
+}
+
+/* 2. 유튜브(iframe) 전용 스타일: 16:9 비율 유지 및 너비 꽉 채우기 */
+.post-content iframe {
+    width: 80%;           /* 가로로 꽉 채우기 (모바일 최적화) */
+    height: auto;          /* 높이 자동 설정을 위해 초기화 */
+    aspect-ratio: 16 / 9;  /* 최신 브라우저에서 16:9 비율 강제 유지 */
+}
+
+/* 3. 비디오(video) 전용 스타일: 원본 비율 유지 */
+.post-content video {
+    width: auto;           /* 원본 크기 유지하되 max-width에 의해 제한됨 */
+    height: auto;          /* 비율에 맞춰 높이 자동 조절 */
+    display: block;        /* 블록 요소로 변경하여 배치 안정화 */
+}
