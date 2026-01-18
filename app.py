@@ -659,9 +659,10 @@ def main_page():
                            hobby_clubs=HOBBY_CLUBS,
                            career_clubs=CAREER_CLUBS)
         else:
-            # 혹시 모를 예외 처리 (세션은 있는데 DB에 유저가 없는 경우)
+            # 세션은 있는데 DB에 유저가 없는 경우 - 세션 정리 후 비로그인 페이지 렌더링
             session.clear()
-            return redirect('/')
+            bob_data = get_bob()
+            return render_template('main_notlogined.html', bob=bob_data)
     else:
         # 비로그인 시
         bob_data = get_bob()
@@ -1798,18 +1799,19 @@ def post_edit(post_id):
 @check_banned
 def post_delete(post_id):
     conn = get_db()
+    conn.row_factory = sqlite3.Row  # row_factory 설정 추가
     cursor = conn.cursor()
 
-    cursor.execute("SELECT author, board_id FROM posts WHERE id = ?", (post_id,))
+    cursor.execute("SELECT author, board_id, title FROM posts WHERE id = ?", (post_id,))
     post = cursor.fetchone()
 
     if not post:
         return Response('<script>alert("존재하지 않거나 삭제된 게시글입니다."); history.back();</script>')
 
-    board_id = post[1]
+    board_id = post['board_id']
 
     # 관리자는 다른 사람의 글도 삭제할 수 있도록 수정 (선택 사항)
-    if post[0] != session['user_id'] and (not g.user or g.user['role'] != 'admin'):
+    if post['author'] != session['user_id'] and (not g.user or g.user['role'] != 'admin'):
         return Response('<script>alert("삭제 권한이 없습니다."); history.back();</script>')
 
     try:
@@ -1818,7 +1820,7 @@ def post_delete(post_id):
         poll = cursor.fetchone()
         
         if poll:
-            poll_id = poll[0]
+            poll_id = poll['id']
             cursor.execute("DELETE FROM poll_history WHERE poll_id = ?", (poll_id,))
             cursor.execute("DELETE FROM poll_options WHERE poll_id = ?", (poll_id,))
             cursor.execute("DELETE FROM polls WHERE id = ?", (poll_id,))
