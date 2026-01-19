@@ -12,8 +12,8 @@
                 <li><a href="/board/2">정보게시판</a></li>
                 <li><a href="/board/3">익명게시판</a></li>
                 <li><a href="/board/4">공개게시판</a></li>
-                <li><a href="/etacon/request">에타콘 신청</a></li>
-                <li><a href="/etacon/shop">에타콘 상점</a></li>
+                <li><a href="/etacon/request">인곽콘 신청</a></li>
+                <li><a href="/etacon/shop">인곽콘 상점</a></li>
             </ul>
         </div>
         
@@ -47,46 +47,31 @@
         <div class="daily-meal">
             <div class="meal-item">
                 <h4><span>조식</span></h4>
-                <p class="meal-menu">{{ bob[0] |safe}}</p>
+                <p class="meal-menu" id="breakfast-menu"><span class="loading-spinner"></span></p>
             </div>
             <div class="meal-item">
                 <h4><span>중식</span></h4>
-                <p class="meal-menu">{{ bob[1] |safe}}</p>
+                <p class="meal-menu" id="lunch-menu"><span class="loading-spinner"></span></p>
             </div>
             <div class="meal-item">
                 <h4><span>석식</span></h4>
-                <p class="meal-menu">{{ bob[2] |safe}}</p>
+                <p class="meal-menu" id="dinner-menu"><span class="loading-spinner"></span></p>
             </div>
-<div class="meal-item timetable-widget">
-    <h4>
-        <span>시간표</span>
-        {% if user.hakbun %}
-            <span style="font-size: 0.8em; font-weight: normal; margin-left: 5px;">
-                ({{ (user.hakbun | string)[0] }}학년 {{ (user.hakbun | string)[1] }}반)
-            </span>
-        {% endif %}
-    </h4>
-    
-            <ol class="timetable-list">
-                {% if timetable %}
-                    {% for item in timetable %}
-                        <li class="{% if item.changed %}changed-schedule{% endif %}">
-                            <span class="period">{{ item.period }}교시</span>
-                            <span class="subject">
-                                {{ item.subject }}
-                                {% if item.teacher %}
-                                    <span class="teacher-name">({{ item.teacher }})</span>
-                                {% endif %}
-                            </span>
-                        </li>
-                    {% endfor %}
-                {% else %}
+            <div class="meal-item timetable-widget">
+                <h4>
+                    <span>시간표</span>
+                    {% if user.hakbun %}
+                        <span style="font-size: 0.8em; font-weight: normal; margin-left: 5px;">
+                            ({{ (user.hakbun | string)[0] }}학년 {{ (user.hakbun | string)[1] }}반)
+                        </span>
+                    {% endif %}
+                </h4>
+                <ol class="timetable-list" id="timetable-list">
                     <li class="no-data" style="text-align: center; padding: 20px; color: #888;">
-                        오늘의 시간표 정보가 없습니다.
+                        <span class="loading-spinner"></span> 불러오는 중...
                     </li>
-                {% endif %}
-            </ol>
-        </div>
+                </ol>
+            </div>
         </div>
         <div class="board-preview">
             <div class="board-column">
@@ -177,4 +162,70 @@
         </div>
     </aside>
 </main>
+
+<style>
+.loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 급식 정보 비동기 로드
+    fetch('/api/bob')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                document.getElementById('breakfast-menu').innerHTML = data.data.breakfast || '정보 없음';
+                document.getElementById('lunch-menu').innerHTML = data.data.lunch || '정보 없음';
+                document.getElementById('dinner-menu').innerHTML = data.data.dinner || '정보 없음';
+            } else {
+                document.getElementById('breakfast-menu').textContent = '불러오기 실패';
+                document.getElementById('lunch-menu').textContent = '불러오기 실패';
+                document.getElementById('dinner-menu').textContent = '불러오기 실패';
+            }
+        })
+        .catch(err => {
+            document.getElementById('breakfast-menu').textContent = '오류 발생';
+            document.getElementById('lunch-menu').textContent = '오류 발생';
+            document.getElementById('dinner-menu').textContent = '오류 발생';
+        });
+
+    // 시간표 비동기 로드
+    fetch('/api/timetable')
+        .then(response => response.json())
+        .then(data => {
+            const timetableList = document.getElementById('timetable-list');
+            if (data.status === 'success' && data.data && data.data.length > 0) {
+                let html = '';
+                data.data.forEach(item => {
+                    const changedClass = item.changed ? 'changed-schedule' : '';
+                    const teacherSpan = item.teacher ? `<span class="teacher-name">(${item.teacher})</span>` : '';
+                    html += `
+                        <li class="${changedClass}">
+                            <span class="period">${item.period}교시</span>
+                            <span class="subject">${item.subject} ${teacherSpan}</span>
+                        </li>
+                    `;
+                });
+                timetableList.innerHTML = html;
+            } else {
+                timetableList.innerHTML = '<li class="no-data" style="text-align: center; padding: 20px; color: #888;">오늘의 시간표 정보가 없습니다.</li>';
+            }
+        })
+        .catch(err => {
+            document.getElementById('timetable-list').innerHTML = '<li class="no-data" style="text-align: center; padding: 20px; color: #888;">시간표를 불러올 수 없습니다.</li>';
+        });
+});
+</script>
 {% endblock %}

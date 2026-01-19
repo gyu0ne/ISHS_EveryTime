@@ -65,8 +65,8 @@
                         <li><a href="/board/2">정보게시판</a></li>
                         <li><a href="/board/3">익명게시판</a></li>
                         <li><a href="/board/4">공개게시판</a></li>
-                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">에타콘 신청</a></li>
-                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">에타콘 상점</a></li>
+                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">인곽콘 신청</a></li>
+                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">인곽콘 상점</a></li>
                     </ul>
                 </nav>
             </div>
@@ -80,8 +80,8 @@
                         <li><a href="/board/2">정보게시판</a></li>
                         <li><a href="/board/3">익명게시판</a></li>
                         <li><a href="/board/4">공개게시판</a></li>
-                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">에타콘 신청</a></li>
-                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">에타콘 상점</a></li>
+                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">인곽콘 신청</a></li>
+                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">인곽콘 상점</a></li>
                     </ul>
                 </div>
                  <div class="widget login-widget-side">
@@ -95,15 +95,15 @@
                 <div class="daily-meal">
                     <div class="meal-item">
                         <h4><span>조식</span></h4>
-                        <p class="meal-menu">{{ bob[0] |safe}}</p>
+                        <p class="meal-menu" id="breakfast-menu"><span class="loading-spinner"></span></p>
                     </div>
                     <div class="meal-item">
                         <h4><span>중식</span></h4>
-                        <p class="meal-menu">{{ bob[1] |safe}}</p>
+                        <p class="meal-menu" id="lunch-menu"><span class="loading-spinner"></span></p>
                     </div>
                     <div class="meal-item">
                         <h4><span>석식</span></h4>
-                        <p class="meal-menu">{{ bob[2] |safe}}</p>
+                        <p class="meal-menu" id="dinner-menu"><span class="loading-spinner"></span></p>
                     </div>
                     <div class="meal-item timetable-widget">
                         <h4><span>시간표</span></h4>
@@ -157,7 +157,7 @@
 
         <footer>
             <p>&copy; 2025 Incheon Science HighSchool Community. All rights reserved.</p>
-            <p style="margin-top: 10px; color: #999;">Made By. 32nd Kim Gyuwon</p>
+            <p style="margin-top: 10px; color: #999;">Made By. 32nd Kim Gyuwon & 32nd Kim Junseo</p>
             <nav>
                 <a href="#">이용약관</a>
                 <a href="#">개인정보처리방침</a>
@@ -177,7 +177,42 @@
                     mobileNav.classList.toggle('active');
                 });
             }
+
+            // 급식 정보 비동기 로드
+            fetch('/api/bob')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('breakfast-menu').innerHTML = data.data.breakfast || '정보 없음';
+                        document.getElementById('lunch-menu').innerHTML = data.data.lunch || '정보 없음';
+                        document.getElementById('dinner-menu').innerHTML = data.data.dinner || '정보 없음';
+                    } else {
+                        document.getElementById('breakfast-menu').textContent = '불러오기 실패';
+                        document.getElementById('lunch-menu').textContent = '불러오기 실패';
+                        document.getElementById('dinner-menu').textContent = '불러오기 실패';
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('breakfast-menu').textContent = '오류 발생';
+                    document.getElementById('lunch-menu').textContent = '오류 발생';
+                    document.getElementById('dinner-menu').textContent = '오류 발생';
+                });
         });
     </script>
+    <style>
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </body>
 </html>

@@ -146,7 +146,7 @@
         {% if comment.etacon_path %}
             <div class="etacon-comment">
                 <img src="{{ url_for('static', filename=comment.etacon_path) }}" 
-                     alt="에타콘" 
+                     alt="인곽콘" 
                      style="max-width: 150px; max-height: 150px; border-radius: 8px;">
             </div>
         {% else %}
@@ -203,7 +203,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
             <div style="text-align: right; margin-bottom: 5px;">
-                <button type="button" style="background:none; border:1px solid #555; color:#ccc; cursor:pointer; padding:2px 5px; border-radius:4px;" onclick="openEtaconModal('#edit-textarea-{{ comment.id }}')">에타콘</button>
+                <button type="button" style="background:none; border:1px solid #555; color:#ccc; cursor:pointer; padding:2px 5px; border-radius:4px;" onclick="openEtaconModal('#edit-textarea-{{ comment.id }}')">인곽콘</button>
             </div>
 
             <textarea name="edit_content" required>{{ comment.content }}</textarea>
@@ -229,7 +229,7 @@
                         <button type="button" 
                             class="btn-etacon-trigger"
                             onclick="openEtaconModal({{ post.id }}, {{ comment.id }})">
-                            에타콘
+                            인곽콘
                         </button>
                     {% endif %}
                 </div>
@@ -468,7 +468,7 @@
                         <button type="button" 
                             class="btn-etacon-trigger"
                             onclick="openEtaconModal({{ post.id }}, null)">
-                            에타콘
+                            인곽콘
                         </button>
                     {% endif %}
                     </div>

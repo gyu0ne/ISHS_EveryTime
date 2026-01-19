@@ -142,7 +142,7 @@ $(document).ready(function() {
         // Summernote 내용 가져오기
         let content = $('#summernote-editor').summernote('code');
 
-        // --- [핵심 수정] 에타콘 변환 로직 통합 ---
+        // --- [핵심 수정] 인곽콘 변환 로직 통합 ---
         // 폼 제출 직전에 이미지 태그(<img data-code="~1_0">)를 텍스트(~1_0)로 변환
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = content;
@@ -160,8 +160,8 @@ $(document).ready(function() {
             return;
         }
 
-        // 이미지 개수 제한 검사 (에타콘 제외)
-        // tempDiv는 위에서 이미 에타콘이 텍스트로 변환되었으므로, 남은 img 태그는 순수 이미지임
+        // 이미지 개수 제한 검사 (인곽콘 제외)
+        // tempDiv는 위에서 이미 인곽콘이 텍스트로 변환되었으므로, 남은 img 태그는 순수 이미지임
         const imageCount = $(tempDiv).find('img').length; 
         
         if (imageCount > MAX_IMAGES) {

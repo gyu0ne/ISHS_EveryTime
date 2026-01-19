@@ -608,12 +608,54 @@ def get_trending_posts():
     cursor.execute(query, (one_day_ago,))
     return cursor.fetchall()
 
+# 급식 API 엔드포인트 (비동기 로딩용)
+@app.route('/api/bob')
+def api_bob():
+    bob_data = get_bob()
+    if bob_data:
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'breakfast': bob_data[0],
+                'lunch': bob_data[1],
+                'dinner': bob_data[2]
+            }
+        })
+    return jsonify({'status': 'error', 'message': '급식 정보를 불러올 수 없습니다.'})
+
+# 시간표 API 엔드포인트 (비동기 로딩용)
+@app.route('/api/timetable')
+def api_timetable():
+    # 로그인 체크
+    if 'user_id' not in session or not g.user:
+        return jsonify({'status': 'error', 'message': '로그인이 필요합니다.'}), 401
+    
+    user_data = g.user
+    timetable_today = []
+    
+    if user_data and user_data['hakbun']:
+        grade, class_num = get_grade_class(user_data['hakbun'])
+        
+        if grade and class_num:
+            full_timetable = get_timetable_data(grade, class_num)
+            
+            if full_timetable:
+                weekday_map = {0: '월', 1: '화', 2: '수', 3: '목', 4: '금'}
+                today_idx = datetime.datetime.now().weekday()
+                target_day = weekday_map.get(today_idx, '월')
+                timetable_today = full_timetable.get(target_day, [])
+    
+    return jsonify({
+        'status': 'success',
+        'data': timetable_today
+    })
+
 # Main Page
 @app.route('/')
 def main_page():
     if 'user_id' in session:
         conn = get_db()
-        conn.row_factory = sqlite3.Row  # 컬럼 이름으로 접근 가능하도록 설정
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         free_board_posts = get_recent_posts(1)
@@ -623,34 +665,15 @@ def main_page():
         
         user_data = g.user
 
-        bob_data = get_bob()
-
-        timetable_today = []
-        if user_data and user_data['hakbun']:
-            grade, class_num = get_grade_class(user_data['hakbun'])
-            
-            if grade and class_num:
-                full_timetable = get_timetable_data(grade, class_num)
-                
-                if full_timetable:
-                    # 오늘 요일 구하기 (0:월, 1:화, ... 4:금, 5~6:주말)
-                    weekday_map = {0: '월', 1: '화', 2: '수', 3: '목', 4: '금'}
-                    today_idx = datetime.datetime.now().weekday()
-                    
-                    # 주말이면 월요일 시간표를 보여주거나 빈 리스트 (여기선 월요일 예시)
-                    target_day = weekday_map.get(today_idx, '월') 
-                    
-                    timetable_today = full_timetable.get(target_day, [])
+        # 급식/시간표는 AJAX로 비동기 로딩하므로 제거
 
         if user_data:
             return render_template('main_logined.html', 
                                    user=user_data, 
-                                   bob=bob_data, 
-                                   timetable=timetable_today,
                                    free_posts=free_board_posts, 
                                    info_posts=info_board_posts,
                                    hot_posts=hot_posts,
-                                   trending_posts=trending_posts, # g.user 객체를 템플릿에 전달
+                                   trending_posts=trending_posts,
                            hakbun=user_data['hakbun'], 
                            name=user_data['name'], 
                            gen=user_data['gen'], 
@@ -665,14 +688,10 @@ def main_page():
                            hobby_clubs=HOBBY_CLUBS,
                            career_clubs=CAREER_CLUBS)
         else:
-            # 세션은 있는데 DB에 유저가 없는 경우 - 세션 정리 후 비로그인 페이지 렌더링
             session.clear()
-            bob_data = get_bob()
-            return render_template('main_notlogined.html', bob=bob_data)
+            return render_template('main_notlogined.html')
     else:
-        # 비로그인 시
-        bob_data = get_bob()
-        return render_template('main_notlogined.html', bob=bob_data)
+        return render_template('main_notlogined.html')
 
 googlebot_ip_cache = {}
 googlebot_ip_cache = TTLCache(maxsize=1000, ttl=3600)
@@ -2070,12 +2089,12 @@ def add_etacon_comment():
             pack_id = int(etacon_code.split('_')[0].replace('~', ''))
             cursor.execute("SELECT 1 FROM user_etacons WHERE user_id = ? AND pack_id = ?", (author_id, pack_id))
             if not cursor.fetchone():
-                return jsonify({'status': 'error', 'message': '보유하지 않은 에타콘입니다.'}), 403
+                return jsonify({'status': 'error', 'message': '보유하지 않은 인곽콘입니다.'}), 403
 
         elif is_public_board:
             # 비회원 검증
             if not guest_nickname or not guest_password:
-                return jsonify({'status': 'error', 'message': '비회원은 닉네임과 비밀번호 입력 후 에타콘을 선택해주세요.'}), 400
+                return jsonify({'status': 'error', 'message': '비회원은 닉네임과 비밀번호 입력 후 인곽콘을 선택해주세요.'}), 400
             if len(guest_password) < 4:
                 return jsonify({'status': 'error', 'message': '비밀번호는 4자 이상이어야 합니다.'}), 400
             
@@ -2106,7 +2125,7 @@ def add_etacon_comment():
             INSERT INTO comments 
             (post_id, author, content, etacon_code, created_at, updated_at, parent_comment_id,
              guest_nickname, guest_password, anonymous_seq)
-            VALUES (?, ?, '에타콘', ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, '인곽콘', ?, ?, ?, ?, ?, ?, ?)
         """
         cursor.execute(query, (
             post_id, author_id, etacon_code, created_at, created_at, parent_comment_id,
@@ -2138,10 +2157,10 @@ def add_etacon_comment():
             cursor.execute("UPDATE users SET comment_count = comment_count + 1 WHERE login_id = ?", (author_id,))
             update_exp_level(author_id, 10)
 
-        add_log('ADD_ETACON', log_user_id, f"게시글(id:{post_id})에 에타콘 댓글 작성.")
+        add_log('ADD_ETACON', log_user_id, f"게시글(id:{post_id})에 인곽콘 댓글 작성.")
         conn.commit()
         
-        return jsonify({'status': 'success', 'message': '에타콘이 등록되었습니다.'})
+        return jsonify({'status': 'success', 'message': '인곽콘이 등록되었습니다.'})
 
     except Exception as e:
         conn.rollback()
@@ -3157,15 +3176,15 @@ def etacon_request():
         if price < 0:
             return Response('<script>alert("가격은 0 이상이어야 합니다."); history.back();</script>')
 
-        # 썸네일 및 에타콘 이미지들
+        # 썸네일 및 인곽콘 이미지들
         thumbnail = request.files.get('thumbnail')
         etacon_files = request.files.getlist('etacon_files') # 다중 파일 업로드
 
         if not thumbnail or not etacon_files or len(etacon_files) == 0:
-             return Response('<script>alert("썸네일과 에타콘 이미지를 최소 1개 이상 업로드해야 합니다."); history.back();</script>')
+             return Response('<script>alert("썸네일과 인곽콘 이미지를 최소 1개 이상 업로드해야 합니다."); history.back();</script>')
         
         if len(etacon_files) > 10:
-            return Response('<script>alert("에타콘 이미지는 한 팩당 최대 10개까지만 등록할 수 있습니다."); history.back();</script>')
+            return Response('<script>alert("인곽콘 이미지는 한 팩당 최대 10개까지만 등록할 수 있습니다."); history.back();</script>')
 
         def validate_image_ratio(file_obj):
             """이미지가 1:1 비율인지 확인합니다."""
@@ -3185,7 +3204,7 @@ def etacon_request():
         for file in etacon_files:
             if file and allowed_etacon_file(file.filename):
                 if not validate_image_ratio(file):
-                    return Response(f'<script>alert("모든 에타콘 이미지는 1:1 비율이어야 합니다.\\n확인 필요: {file.filename}"); history.back();</script>')
+                    return Response(f'<script>alert("모든 인곽콘 이미지는 1:1 비율이어야 합니다.\\n확인 필요: {file.filename}"); history.back();</script>')
 
         conn = get_db()
         cursor = conn.cursor()
@@ -3208,7 +3227,7 @@ def etacon_request():
             
             cursor.execute("UPDATE etacon_packs SET thumbnail = ? WHERE id = ?", (thumb_path, pack_id))
 
-            # 3. 개별 에타콘 이미지 저장
+            # 3. 개별 인곽콘 이미지 저장
             for idx, file in enumerate(etacon_files):
                 if file and allowed_etacon_file(file.filename):
                     img_path = save_etacon_image(file, pack_folder)
@@ -3219,12 +3238,12 @@ def etacon_request():
                                        (pack_id, img_path, code))
 
             conn.commit()
-            add_log('REQUEST_ETACON', g.user['login_id'], f"에타콘 패키지 '{name}' 등록을 요청했습니다.")
-            return Response('<script>alert("에타콘 등록 요청이 완료되었습니다. 관리자 승인 후 상점에 공개됩니다."); location.href="/mypage";</script>')
+            add_log('REQUEST_ETACON', g.user['login_id'], f"인곽콘 패키지 '{name}' 등록을 요청했습니다.")
+            return Response('<script>alert("인곽콘 등록 요청이 완료되었습니다. 관리자 승인 후 상점에 공개됩니다."); location.href="/mypage";</script>')
 
         except Exception as e:
             conn.rollback()
-            print(f"에타콘 등록 중 오류: {e}")
+            print(f"인곽콘 등록 중 오류: {e}")
             return Response(f'<script>alert("오류가 발생했습니다."); history.back();</script>')
 
     return render_template('etacon/request.html', user=g.user)
@@ -3243,7 +3262,7 @@ def admin_etacon_requests():
     
     requests_data = []
     
-    # 2. 각 패키지에 포함된 에타콘 이미지 리스트 조회 및 병합
+    # 2. 각 패키지에 포함된 인곽콘 이미지 리스트 조회 및 병합
     for row in pack_rows:
         pack = dict(row) # Row 객체를 dict로 변환 (데이터 추가를 위해)
         
@@ -3275,7 +3294,7 @@ def approve_etacon(pack_id):
                        (uploader_id, pack_id, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
     
     conn.commit()
-    add_log('APPROVE_ETACON', g.user['login_id'], f"에타콘 패키지 {pack_id}번을 승인했습니다.")
+    add_log('APPROVE_ETACON', g.user['login_id'], f"인곽콘 패키지 {pack_id}번을 승인했습니다.")
     return jsonify({'status': 'success'})
 
 @app.route('/admin/etacon/reject/<int:pack_id>', methods=['POST'])
@@ -3294,7 +3313,7 @@ def reject_etacon(pack_id):
     except:
         pass
 
-    add_log('REJECT_ETACON', g.user['login_id'], f"에타콘 패키지 {pack_id}번을 거절(삭제)했습니다.")
+    add_log('REJECT_ETACON', g.user['login_id'], f"인곽콘 패키지 {pack_id}번을 거절(삭제)했습니다.")
     return jsonify({'status': 'success'})
 
 @app.route('/etacon/shop')
@@ -3313,7 +3332,7 @@ def etacon_shop():
     """, (g.user['login_id'],))
     pack_rows = cursor.fetchall()
 
-    # [추가] "에타콘 승인" 로직과 동일하게, 각 패키지별 상세 이미지 목록을 조회하여 병합
+    # [추가] "인곽콘 승인" 로직과 동일하게, 각 패키지별 상세 이미지 목록을 조회하여 병합
     packs = []
     for row in pack_rows:
         pack = dict(row) # Row 객체를 dict로 변환
@@ -3358,7 +3377,7 @@ def buy_etacon(pack_id):
                        (g.user['login_id'], pack_id, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
         conn.commit()
         
-        add_log('BUY_ETACON', g.user['login_id'], f"에타콘 패키지 '{pack['name']}'을 구매했습니다. (-{pack['price']}P)")
+        add_log('BUY_ETACON', g.user['login_id'], f"인곽콘 패키지 '{pack['name']}'을 구매했습니다. (-{pack['price']}P)")
         return jsonify({'status': 'success', 'message': '구매가 완료되었습니다!'})
         
     except Exception as e:
@@ -3372,7 +3391,7 @@ def my_etacons():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # 사용자가 보유한 패키지의 모든 에타콘 조회
+    # 사용자가 보유한 패키지의 모든 인곽콘 조회
     query = """
         SELECT e.code, e.image_path, p.name as pack_name, p.id as pack_id
         FROM etacons e

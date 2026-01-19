@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}log인곽 - 에타콘 등록{% endblock %}
+{% block title %}log인곽 - 인곽콘 등록{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/etacon_request.css') }}">
@@ -12,7 +12,7 @@
         <button type="button" class="back-button" onclick="history.back()">
             <i class="fas fa-arrow-left"></i>
         </button>
-        <h1>에타콘 등록 요청</h1>
+        <h1>인곽콘 등록 요청</h1>
     </header>
 
     <form method="POST" enctype="multipart/form-data" class="etacon-form">
@@ -43,7 +43,7 @@
         </div>
 
         <div class="form-group">
-            <label for="etacon_files">에타콘 이미지 (여러 개 선택 가능)</label>
+            <label for="etacon_files">인곽콘 이미지 (여러 개 선택 가능)</label>
             <div class="file-input-wrapper">
                 <input type="file" name="etacon_files" id="etacon_files" accept="image/png, image/jpeg, image/gif" multiple required>
                 <span class="file-label">이미지들을 선택해주세요...</span>

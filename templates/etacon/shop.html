@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}에타콘 상점{% endblock %}
+{% block title %}인곽콘 상점{% endblock %}
 
 {% block head %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/etacon_shop.css') }}">
@@ -41,7 +41,7 @@
 {% block content %}
 <div class="shop-container">
     <header class="shop-header">
-        <h2>에타콘 상점</h2>
+        <h2>인곽콘 상점</h2>
         <div class="user-point">
             <span>내 포인트: <strong>{{ user.point }} P</strong></span>
             <a href="{{ url_for('etacon_request') }}" class="btn-request">등록 요청</a>
@@ -104,7 +104,7 @@
         </div>
         {% else %}
         <div class="no-packs">
-            <p>등록된 에타콘이 없습니다.</p>
+            <p>등록된 인곽콘이 없습니다.</p>
         </div>
         {% endfor %}
     </div>

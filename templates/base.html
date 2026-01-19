@@ -40,8 +40,8 @@
                         <li><a href="/board/2">정보게시판</a></li>
                         <li><a href="/board/3">익명게시판</a></li>
                         <li><a href="/board/4">공개게시판</a></li>
-                        <li><a href="/etacon/request">에타콘 신청</a></li>
-                        <li><a href="/etacon/shop">에타콘</a></li>
+                        <li><a href="/etacon/request">인곽콘 신청</a></li>
+                        <li><a href="/etacon/shop">인곽콘</a></li>
                     </ul>
                 </nav>
                 <div class="user-menu" style="display: flex; align-items: center;">
@@ -67,7 +67,7 @@
                                 <a href="{{ url_for('mypage') }}">마이페이지</a>
                                 <a href="{{ url_for('logout') }}">로그아웃</a>
                                 {% if user and user.role == 'admin' %}
-                                <a href="/admin/etacon/requests">에타콘 신청 관리</a>
+                                <a href="/admin/etacon/requests">인곽콘 신청 관리</a>
                                 <a href="/admin/users">유저 관리</a>
                                 {% endif %}
                             </div>
@@ -91,8 +91,8 @@
                     <li><a href="/board/2">정보게시판</a></li>
                     <li><a href="/board/3">익명게시판</a></li>
                     <li><a href="/board/4">공개게시판</a></li>
-                    <li><a href="/etacon/request">에타콘 신청</a></li>
-                    <li><a href="/etacon/shop">에타콘</a></li>
+                    <li><a href="/etacon/request">인곽콘 신청</a></li>
+                    <li><a href="/etacon/shop">인곽콘</a></li>
                 </ul>
             </nav>
             <div class="mobile-user-links">
@@ -104,7 +104,7 @@
 
         <footer class="base-footer">
             <p>&copy; 2025 Incheon Science HighSchool Community. All rights reserved.</p>
-            <p style="margin-top: 10px; color: #999;">Made By. 32nd Kim Gyuwon</p>
+            <p style="margin-top: 10px; color: #999;">Made By. 32nd Kim Gyuwon & 32nd Kim Junseo</p>
             <nav>
                 <a href="{{ url_for('yakgwan_view') }}">이용약관</a>
                 <a href="{{ url_for('yakgwan_view') }}">개인정보처리방침</a>
