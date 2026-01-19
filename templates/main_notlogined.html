@@ -28,7 +28,7 @@
     <div class="container">
             <header>
                 <div class="top-bar">
-                    <div class="logo">ISHS</div>
+                    <div class="logo">LOG인곽</div>
                     <nav class="main-nav">
                         <ul>
                             <li><a href="/board/1">자유게시판</a></li>
@@ -178,25 +178,45 @@
                 });
             }
 
-            // 급식 정보 비동기 로드
-            fetch('/api/bob')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        document.getElementById('breakfast-menu').innerHTML = data.data.breakfast || '정보 없음';
-                        document.getElementById('lunch-menu').innerHTML = data.data.lunch || '정보 없음';
-                        document.getElementById('dinner-menu').innerHTML = data.data.dinner || '정보 없음';
-                    } else {
-                        document.getElementById('breakfast-menu').textContent = '불러오기 실패';
-                        document.getElementById('lunch-menu').textContent = '불러오기 실패';
-                        document.getElementById('dinner-menu').textContent = '불러오기 실패';
-                    }
-                })
-                .catch(err => {
-                    document.getElementById('breakfast-menu').textContent = '오류 발생';
-                    document.getElementById('lunch-menu').textContent = '오류 발생';
-                    document.getElementById('dinner-menu').textContent = '오류 발생';
-                });
+            // 급식 정보 비동기 로드 (캐시 우선)
+            const today = new Date().toISOString().split('T')[0];
+            const cachedBob = localStorage.getItem('bob_' + today);
+            
+            if (cachedBob) {
+                // 캐시된 데이터가 있으면 즉시 표시
+                const bobData = JSON.parse(cachedBob);
+                document.getElementById('breakfast-menu').innerHTML = bobData.breakfast || '정보 없음';
+                document.getElementById('lunch-menu').innerHTML = bobData.lunch || '정보 없음';
+                document.getElementById('dinner-menu').innerHTML = bobData.dinner || '정보 없음';
+            } else {
+                // 캐시 없으면 서버에서 로드
+                fetch('/api/bob')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            // localStorage에 저장
+                            localStorage.setItem('bob_' + today, JSON.stringify(data.data));
+                            // 이전 날짜 캐시 삭제
+                            Object.keys(localStorage).forEach(key => {
+                                if (key.startsWith('bob_') && key !== 'bob_' + today) {
+                                    localStorage.removeItem(key);
+                                }
+                            });
+                            document.getElementById('breakfast-menu').innerHTML = data.data.breakfast || '정보 없음';
+                            document.getElementById('lunch-menu').innerHTML = data.data.lunch || '정보 없음';
+                            document.getElementById('dinner-menu').innerHTML = data.data.dinner || '정보 없음';
+                        } else {
+                            document.getElementById('breakfast-menu').textContent = '불러오기 실패';
+                            document.getElementById('lunch-menu').textContent = '불러오기 실패';
+                            document.getElementById('dinner-menu').textContent = '불러오기 실패';
+                        }
+                    })
+                    .catch(err => {
+                        document.getElementById('breakfast-menu').textContent = '오류 발생';
+                        document.getElementById('lunch-menu').textContent = '오류 발생';
+                        document.getElementById('dinner-menu').textContent = '오류 발생';
+                    });
+            }
         });
     </script>
     <style>

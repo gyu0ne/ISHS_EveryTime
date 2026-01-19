@@ -181,51 +181,95 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 급식 정보 비동기 로드
-    fetch('/api/bob')
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                document.getElementById('breakfast-menu').innerHTML = data.data.breakfast || '정보 없음';
-                document.getElementById('lunch-menu').innerHTML = data.data.lunch || '정보 없음';
-                document.getElementById('dinner-menu').innerHTML = data.data.dinner || '정보 없음';
-            } else {
-                document.getElementById('breakfast-menu').textContent = '불러오기 실패';
-                document.getElementById('lunch-menu').textContent = '불러오기 실패';
-                document.getElementById('dinner-menu').textContent = '불러오기 실패';
-            }
-        })
-        .catch(err => {
-            document.getElementById('breakfast-menu').textContent = '오류 발생';
-            document.getElementById('lunch-menu').textContent = '오류 발생';
-            document.getElementById('dinner-menu').textContent = '오류 발생';
-        });
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD 형식
+    
+    // === 급식 정보 로드 (캐시 우선) ===
+    const cachedBob = localStorage.getItem('bob_' + today);
+    if (cachedBob) {
+        // 캐시된 데이터가 있으면 즉시 표시
+        const bobData = JSON.parse(cachedBob);
+        document.getElementById('breakfast-menu').innerHTML = bobData.breakfast || '정보 없음';
+        document.getElementById('lunch-menu').innerHTML = bobData.lunch || '정보 없음';
+        document.getElementById('dinner-menu').innerHTML = bobData.dinner || '정보 없음';
+    } else {
+        // 캐시 없으면 서버에서 로드
+        fetch('/api/bob')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // localStorage에 저장
+                    localStorage.setItem('bob_' + today, JSON.stringify(data.data));
+                    // 이전 날짜 캐시 삭제
+                    Object.keys(localStorage).forEach(key => {
+                        if (key.startsWith('bob_') && key !== 'bob_' + today) {
+                            localStorage.removeItem(key);
+                        }
+                    });
+                    document.getElementById('breakfast-menu').innerHTML = data.data.breakfast || '정보 없음';
+                    document.getElementById('lunch-menu').innerHTML = data.data.lunch || '정보 없음';
+                    document.getElementById('dinner-menu').innerHTML = data.data.dinner || '정보 없음';
+                } else {
+                    document.getElementById('breakfast-menu').textContent = '불러오기 실패';
+                    document.getElementById('lunch-menu').textContent = '불러오기 실패';
+                    document.getElementById('dinner-menu').textContent = '불러오기 실패';
+                }
+            })
+            .catch(err => {
+                document.getElementById('breakfast-menu').textContent = '오류 발생';
+                document.getElementById('lunch-menu').textContent = '오류 발생';
+                document.getElementById('dinner-menu').textContent = '오류 발생';
+            });
+    }
 
-    // 시간표 비동기 로드
-    fetch('/api/timetable')
-        .then(response => response.json())
-        .then(data => {
-            const timetableList = document.getElementById('timetable-list');
-            if (data.status === 'success' && data.data && data.data.length > 0) {
-                let html = '';
-                data.data.forEach(item => {
-                    const changedClass = item.changed ? 'changed-schedule' : '';
-                    const teacherSpan = item.teacher ? `<span class="teacher-name">(${item.teacher})</span>` : '';
-                    html += `
-                        <li class="${changedClass}">
-                            <span class="period">${item.period}교시</span>
-                            <span class="subject">${item.subject} ${teacherSpan}</span>
-                        </li>
-                    `;
-                });
-                timetableList.innerHTML = html;
-            } else {
-                timetableList.innerHTML = '<li class="no-data" style="text-align: center; padding: 20px; color: #888;">오늘의 시간표 정보가 없습니다.</li>';
-            }
-        })
-        .catch(err => {
-            document.getElementById('timetable-list').innerHTML = '<li class="no-data" style="text-align: center; padding: 20px; color: #888;">시간표를 불러올 수 없습니다.</li>';
-        });
+    // === 시간표 정보 로드 (캐시 우선) ===
+    const cachedTimetable = localStorage.getItem('timetable_' + today);
+    if (cachedTimetable) {
+        // 캐시된 데이터가 있으면 즉시 표시
+        const timetableData = JSON.parse(cachedTimetable);
+        renderTimetable(timetableData);
+    } else {
+        // 캐시 없으면 서버에서 로드
+        fetch('/api/timetable')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // localStorage에 저장
+                    localStorage.setItem('timetable_' + today, JSON.stringify(data.data));
+                    // 이전 날짜 캐시 삭제
+                    Object.keys(localStorage).forEach(key => {
+                        if (key.startsWith('timetable_') && key !== 'timetable_' + today) {
+                            localStorage.removeItem(key);
+                        }
+                    });
+                    renderTimetable(data.data);
+                } else {
+                    document.getElementById('timetable-list').innerHTML = '<li class="no-data" style="text-align: center; padding: 20px; color: #888;">오늘의 시간표 정보가 없습니다.</li>';
+                }
+            })
+            .catch(err => {
+                document.getElementById('timetable-list').innerHTML = '<li class="no-data" style="text-align: center; padding: 20px; color: #888;">시간표를 불러올 수 없습니다.</li>';
+            });
+    }
+
+    function renderTimetable(data) {
+        const timetableList = document.getElementById('timetable-list');
+        if (data && data.length > 0) {
+            let html = '';
+            data.forEach(item => {
+                const changedClass = item.changed ? 'changed-schedule' : '';
+                const teacherSpan = item.teacher ? `<span class="teacher-name">(${item.teacher})</span>` : '';
+                html += `
+                    <li class="${changedClass}">
+                        <span class="period">${item.period}교시</span>
+                        <span class="subject">${item.subject} ${teacherSpan}</span>
+                    </li>
+                `;
+            });
+            timetableList.innerHTML = html;
+        } else {
+            timetableList.innerHTML = '<li class="no-data" style="text-align: center; padding: 20px; color: #888;">오늘의 시간표 정보가 없습니다.</li>';
+        }
+    }
 });
 </script>
 {% endblock %}
