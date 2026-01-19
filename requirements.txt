@@ -3,6 +3,7 @@ gevent
 bleach
 Flask-SQLAlchemy
 Flask-WTF
+Flask-Caching
 cachetools
 Flask-Bcrypt
 python-dotenv

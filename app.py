@@ -11,6 +11,7 @@ from gevent.queue import Queue, Empty
 from nfcl.core import ComciganAPI
 from cachetools import TTLCache
 from flask_bcrypt import Bcrypt
+from flask_caching import Cache
 from dotenv import load_dotenv
 from functools import wraps
 from flask import jsonify
@@ -34,6 +35,11 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+
+# 캐시 설정 추가 - 성능 향상을 위한 핵심
+app.config['CACHE_TYPE'] = 'SimpleCache'  # 메모리 기반 캐시
+app.config['CACHE_DEFAULT_TIMEOUT'] = 300  # 5분 캐시
+cache = Cache(app)
 
 bcrypt = Bcrypt(app)
 csrf = CSRFProtect(app)
@@ -415,7 +421,8 @@ def check_auto_login():
             session['user_id'] = user[0]
             session.permanent = True
 
-# Bob (School Meal Information)
+# Bob (School Meal Information) - 캐시 적용 (하루 단위로 변경되므로 30분 캐시)
+@cache.memoize(timeout=1800)  # 30분 캐시
 def get_bob():
         date = (datetime.datetime.now()).strftime('%Y%m%d')
 
@@ -531,7 +538,8 @@ def format_datetime(value):
 # 위에서 만든 함수를 템플릿에서 'datetime'이라는 이름의 필터로 사용할 수 있도록 등록
 app.jinja_env.filters['datetime'] = format_datetime
 
-# Get Recent Posts from board id
+# Get Recent Posts from board id (캐시 적용)
+@cache.memoize(timeout=60)  # 1분 캐시
 def get_recent_posts(board_id):
     """
     특정 게시판 ID를 받아 해당 게시판의 게시글을 최신순으로 5개 가져옵니다.
@@ -541,8 +549,6 @@ def get_recent_posts(board_id):
     cursor = conn.cursor()
 
     try:
-        # board_id에 해당하는 게시글을 updated_at 기준으로 내림차순(최신순) 정렬하여 상위 5개를 선택합니다.
-        # users 테이블과 JOIN하여 작성자 닉네임도 함께 가져옵니다.
         query = """
             SELECT p.id, p.title, u.nickname, p.updated_at
             FROM posts p
@@ -558,13 +564,13 @@ def get_recent_posts(board_id):
         add_log('ERROR', 'SYSTEM', f"Error fetching recent posts for board_id {board_id}: {e}")
         return []
 
+@cache.memoize(timeout=120)  # 2분 캐시
 def get_hot_posts():
     """최근 7일간 추천 수가 10개 이상인 게시글을 상위 5개까지 가져옵니다."""
     conn = get_db()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # 7일 전 날짜 계산
     seven_days_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
     
     query = """
@@ -582,13 +588,13 @@ def get_hot_posts():
     cursor.execute(query, (seven_days_ago,))
     return cursor.fetchall()
 
+@cache.memoize(timeout=120)  # 2분 캐시
 def get_trending_posts():
     """최근 24시간 동안 조회수가 10 이상인 게시글 중 가장 높은 글을 상위 5개까지 가져옵니다."""
     conn = get_db()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # 24시간 전 날짜 계산
     one_day_ago = (datetime.datetime.now() - datetime.timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
     
     # 수정: WHERE 절에 view_count >= 10 조건 추가
