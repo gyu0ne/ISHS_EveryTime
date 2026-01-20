@@ -91,7 +91,7 @@ body {
 }
 
 .container {
-    width: 900px; /* 게시글 페이지는 가독성을 위해 너비를 약간 좁게 설정 */
+    width: 1100px; /* 게시글 페이지는 가독성을 위해 너비를 약간 좁게 설정 */
     margin: 0 auto;
 }
 
@@ -547,7 +547,7 @@ body {
 /* 1. 기본 container 유동적으로 변경 */
 .container {
     width: 95%;
-    max-width: 900px; /* 데스크톱 최대 너비는 900px 유지 */
+    max-width: 1100px; /* 데스크톱 최대 너비는 900px 유지 */
 }
 
 /* 2. 태블릿 (900px 이하) 

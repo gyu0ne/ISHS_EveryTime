@@ -322,7 +322,7 @@ class NotificationChannel:
 notification_channel = NotificationChannel()
 
 def create_notification(recipient_id, actor_id, action, target_type, target_id, post_id):
-    """알림을 생성하고 DB에 저장하는 함수"""
+    """알림을 생성하고 DB에 저장하는 함수 (익명 게시판 처리 추가)"""
     # 자기 자신에게는 알림을 보내지 않음
     if recipient_id == actor_id:
         return
@@ -331,31 +331,49 @@ def create_notification(recipient_id, actor_id, action, target_type, target_id, 
     cursor = conn.cursor()
     created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
+    # 1. 알림 DB 저장
     cursor.execute("""
         INSERT INTO notifications 
         (recipient_id, actor_id, action, target_type, target_id, post_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (recipient_id, actor_id, action, target_type, target_id, post_id, created_at))
     conn.commit()
+    notification_id = cursor.lastrowid 
 
-    # 1. 알림 행위자(actor)의 닉네임을 조회합니다.
-    cursor.execute("SELECT nickname FROM users WHERE login_id = ?", (actor_id,))
-    actor = cursor.fetchone()
+    # --- ▼ [수정] 익명 게시판 여부 확인 및 닉네임 마스킹 처리 ▼ ---
     
-    # 2. 만약의 경우를 대비해 actor가 없을 경우를 처리합니다.
-    actor_nickname = actor['nickname'] if actor else '알 수 없는 사용자'
+    # 해당 게시글이 어떤 게시판에 속해 있는지 조회
+    cursor.execute("SELECT board_id FROM posts WHERE id = ?", (post_id,))
+    post_row = cursor.fetchone()
+    
+    actor_nickname = '알 수 없는 사용자'
+
+    # 게시판 ID가 3(익명게시판)인 경우, 닉네임을 '익명'으로 고정
+    if post_row and post_row[0] == 3:
+        actor_nickname = '익명'
+    else:
+        # 일반 게시판인 경우, 실제 유저 닉네임 조회
+        if actor_id == GUEST_USER_ID:
+            actor_nickname = '익명(비회원)'
+        else:
+            cursor.execute("SELECT nickname FROM users WHERE login_id = ?", (actor_id,))
+            actor = cursor.fetchone()
+            if actor:
+                # row_factory 설정에 따라 인덱스 또는 키로 접근 (안전하게 인덱스 0 사용)
+                actor_nickname = actor[0]
+
+    # --- ▲ [수정] ---
 
     # 3. 클라이언트(브라우저)로 보낼 메시지 객체를 생성합니다.
-    #    - 이 객체에는 ID 대신 사용자에게 보여줄 닉네임만 포함합니다.
     message_to_send = {
         'action': action,
-        'actor_nickname': actor_nickname,
+        'actor_nickname': actor_nickname, # 수정된 닉네임 사용
         'post_id': post_id,
         'is_read': 0, 
-        'id': cursor.lastrowid 
+        'id': notification_id
     }
 
-    # 3. 알림 채널을 통해 해당 사용자에게 메시지 발행(publish)
+    # 4. 알림 채널을 통해 해당 사용자에게 메시지 발행(publish)
     notification_channel.publish(recipient_id, message_to_send)
 
 # Add Log to log.db
@@ -1230,6 +1248,10 @@ def post_write():
         # 2. 서버 사이드 유효성 검사
         if not title or not content or not board_id:
             return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
+        
+        is_valid_size, img_idx = check_content_image_size(content, 15)
+        if not is_valid_size:
+            return Response(f'<script>alert("{img_idx}번째 이미지의 용량이 15MB를 초과합니다.\n"); history.back();</script>')
 
         plain_text_content = bleach.clean(content, tags=[], strip=True)
         if len(plain_text_content) > 5000:
@@ -1265,8 +1287,8 @@ def post_write():
         # data URI를 허용하도록 protocols에 'data' 추가
         sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'], css_sanitizer=css_sanitizer)
 
-        if sanitized_content.count('<img') > 5:
-            return Response('<script>alert("이미지는 최대 5개까지 첨부할 수 있습니다."); history.back();</script>')
+        if sanitized_content.count('<img') > 10:
+            return Response('<script>alert("이미지는 최대 10개까지 첨부할 수 있습니다."); history.back();</script>')
 
         final_content = sanitized_content
 
@@ -1764,6 +1786,10 @@ def post_edit(post_id):
         # --- ▼ [수정] 서버 사이드 유효성 검사 강화 ---
         if not title or not content or not board_id:
             return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
+        
+        is_valid_size, img_idx = check_content_image_size(content, 15)
+        if not is_valid_size:
+            return Response(f'<script>alert("{img_idx}번째 이미지의 용량이 15MB를 초과합니다.\n"); history.back();</script>')
         
         # board_id가 실제 DB에 존재하는지 확인
         cursor.execute("SELECT COUNT(*) FROM board WHERE board_id = ?", (board_id,))
@@ -2424,7 +2450,7 @@ def yakgwan_view():
 UPLOAD_FOLDER = 'static/images/profiles'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -3601,6 +3627,32 @@ def admin_unban_user():
     add_log('UNBAN_USER', g.user['login_id'], f"사용자 차단 해제: {nickname}({name}, {hakbun})")
     
     return Response(f'<script>alert("{nickname}님의 차단을 해제했습니다."); location.href="/admin/users";</script>')
+
+def check_content_image_size(content, max_mb=15):
+    """
+    HTML 본문(content) 내의 Base64 이미지들의 실제 용량을 계산하여
+    지정된 크기(max_mb)를 초과하는지 검사합니다.
+    """
+    if not content:
+        return True, 0
+
+    # 이미지 태그에서 Base64 데이터 추출 (data:image/...;base64, 부분 이후)
+    # 정규식으로 src 속성의 값을 찾습니다.
+    base64_images = re.findall(r'src=["\']data:image/[a-zA-Z]+;base64,([^"\']+)["\']', content)
+    
+    limit_bytes = max_mb * 1024 * 1024 # 5MB를 바이트로 변환
+    
+    for idx, b64_data in enumerate(base64_images):
+        # Base64 문자열 길이로 실제 파일 크기 추산
+        # 공식: (Base64 길이 * 3) / 4
+        # (패딩 '=' 처리는 오차가 미미하므로 생략)
+        real_size = (len(b64_data) * 3) / 4
+        
+        if real_size > limit_bytes:
+            # 용량 초과 시, 몇 번째 이미지인지 반환 (False, 순서)
+            return False, idx + 1
+            
+    return True, 0
 
 # Server Drive Unit
 if __name__ == '__main__':
