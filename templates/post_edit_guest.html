@@ -69,6 +69,30 @@
 
     <script>
     $(document).ready(function() {
+        // 이미지 파일 크기 제한 (MB 단위)
+        const MAX_IMAGE_SIZE_MB = 5;  // 개별 이미지 최대 5MB
+        const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+
+        // 이미지 삽입 공통 함수
+        function insertImageWithValidation(editor, file, fileName) {
+            if (!file.type.startsWith('image/')) {
+                alert('이미지 파일만 업로드할 수 있습니다.');
+                return;
+            }
+            if (file.size > MAX_IMAGE_SIZE_BYTES) {
+                alert(`이미지 "${fileName}"의 크기가 너무 큽니다.\n\n` +
+                      `• 현재 크기: ${(file.size / 1024 / 1024).toFixed(2)}MB\n` +
+                      `• 최대 허용: ${MAX_IMAGE_SIZE_MB}MB\n\n` +
+                      `이미지를 압축하거나 더 작은 이미지를 사용해주세요.`);
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = function() {
+                editor.summernote('insertImage', reader.result);
+            };
+            reader.readAsDataURL(file);
+        }
+
         // post_write.js는 board-select가 있는지 검사하므로,
         // 비회원 페이지에서도 검사를 통과하도록 가짜 hidden input을 추가합니다.
         if ($('#board-select').length === 0) {
@@ -95,7 +119,32 @@
                 ['para', ['ul', 'ol', 'paragraph']],
                 ['table', ['table']],
                 ['insert', ['link', 'picture', 'video']]
-            ]
+            ],
+            callbacks: {
+                onPaste: function(e) {
+                    const clipboardData = e.originalEvent.clipboardData;
+                    if (clipboardData && clipboardData.items) {
+                        for (let i = 0; i < clipboardData.items.length; i++) {
+                            const item = clipboardData.items[i];
+                            if (item.type.indexOf('image') !== -1) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const file = item.getAsFile();
+                                if (file) {
+                                    insertImageWithValidation($(this), file, '붙여넣은 이미지');
+                                }
+                                return;
+                            }
+                        }
+                    }
+                },
+                onImageUpload: function(files) {
+                    const editor = $(this);
+                    for (let i = 0; i < files.length; i++) {
+                        insertImageWithValidation(editor, files[i], files[i].name);
+                    }
+                }
+            }
         });
     });
     </script>
