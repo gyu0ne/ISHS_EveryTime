@@ -8,20 +8,17 @@
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-5QFZNJVP');</script>
     <!-- End Google Tag Manager -->
-    <script src=""></script>
     <meta charset="utf-8">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login_form.css') }}">
     <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
     <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
     <meta property="og:title" content="log인곽">
-    <link rel="shortcut icon" href=""> <!-- 파비콘 설정 -->
+    <link rel="shortcut icon" href="">
     <meta name="title" content="log인곽">
     <meta name="keywords" content="log인곽">
     <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>log인곽 - 로그인</title>
+    <title>log인곽 - 아이디 찾기</title>
 </head>
 <body>
     <!-- Google Tag Manager (noscript) -->
@@ -33,28 +30,24 @@
             <p>함께하는 인곽생활</p>
             <h1>log인곽</h1>
         </header>
+
+        <p style="color: #ccc; margin-bottom: 20px; font-size: 14px;">
+            리로스쿨 인증을 통해 아이디를 찾을 수 있습니다.
+        </p>
         
         <form class="register-form" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
-            <input type="text" name="login_id" placeholder="아이디" required>
-            <span id="hakbun-check-msg" class="like-input-invisible">nice try diddy</span>
-            <input type="password" name="password" placeholder="비밀번호" required>
-            <span id="name-check-msg" class="like-input-invisible">nice try diddy</span>
+            <input type="text" name="user_id" placeholder="리로스쿨 아이디 (ex. 25-10307)" required>
+            <span class="like-input-invisible">　</span>
+            <input type="password" name="user_pw" placeholder="리로스쿨 비밀번호" required>
+            <span class="like-input-invisible">　</span>
 
-            <div class="remember-me">
-                <label>
-                    <input type="checkbox" name="remember"> 자동 로그인
-                </label>
-            </div>
-
-            <button type="submit" class="register-btn" id="auth_btn">로그인</button>
+            <button type="submit" class="register-btn">아이디 찾기</button>
         </form>
 
-        <div class="find-account-links" style="margin-top: 15px;">
-            <a href="{{ url_for('find_id') }}" style="color: #888; font-size: 14px;">아이디 찾기</a>
-            <span style="color: #555; margin: 0 10px;">|</span>
-            <a href="{{ url_for('find_password') }}" style="color: #888; font-size: 14px;">비밀번호 찾기</a>
+        <div style="margin-top: 20px;">
+            <a href="{{ url_for('login') }}" style="color: #d9534f;">로그인으로 돌아가기</a>
         </div>
 
         <footer>
@@ -67,5 +60,4 @@
         </footer>
     </div>
 </body>
-    <script src="{{ url_for('static', filename='js/login_form.js') }}"></script>
 </html>

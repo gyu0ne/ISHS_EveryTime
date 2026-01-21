@@ -1089,6 +1089,237 @@ def login():
 
     return render_template('login_form.html') # GET
 
+# Find ID (아이디 찾기)
+@app.route('/find-id', methods=['GET', 'POST'])
+def find_id():
+    if 'user_id' in session:
+        return redirect("/")
+
+    if request.method == 'POST':
+        id = request.form['user_id']
+        pw = request.form['user_pw']
+        
+        base_url = "http://localhost:3000"
+        endpoint = "/api/riro_login"
+
+        payload = {
+            'id': id,
+            'password': pw
+        }
+
+        try:
+            response = requests.post(f"{base_url}{endpoint}", json=payload)
+            response.raise_for_status()
+            api_result = response.json()
+
+            if api_result['status'] != 'success':
+                return Response(f'''
+        <script>
+            alert("{api_result['message']}")
+            history.back();
+        </script>
+    ''')
+
+            # 리로스쿨 인증 성공 - 해당 이름과 학번으로 가입된 계정 찾기
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT login_id FROM users WHERE name = ? AND hakbun = ? AND status = "active"', 
+                          (api_result['name'], api_result['student_number']))
+            user = cursor.fetchone()
+
+            if user:
+                found_id = user[0]
+                # 아이디 일부 마스킹 처리 (예: abc123 -> ab***3)
+                if len(found_id) > 3:
+                    masked_id = found_id[:2] + '*' * (len(found_id) - 3) + found_id[-1]
+                else:
+                    masked_id = found_id[0] + '*' * (len(found_id) - 1)
+                
+                return render_template('find_id_result.html', found_id=found_id, masked_id=masked_id)
+            else:
+                return Response('''
+        <script>
+            alert("해당 정보로 가입된 계정이 없습니다.");
+            history.back();
+        </script>
+    ''')
+
+        except requests.exceptions.HTTPError as http_err:
+            add_log('ERROR', 'SYSTEM', f"HTTP error during Find ID: {http_err}")
+            return Response('''
+    <script>
+        alert("HTTP 오류가 발생했습니다.")
+        history.back();
+    </script>
+''')
+        except requests.exceptions.RequestException as req_err:
+            add_log('ERROR', 'SYSTEM', f"Request error during Find ID: {req_err}")
+            return Response('''
+    <script>
+        alert("요청 중 오류가 발생했습니다.")
+        history.back();
+    </script>
+''')
+
+    return render_template('find_id.html')
+
+# Find Password (비밀번호 찾기) - Step 1: 아이디 입력
+@app.route('/find-password', methods=['GET', 'POST'])
+def find_password():
+    if 'user_id' in session:
+        return redirect("/")
+
+    if request.method == 'POST':
+        login_id = request.form['login_id']
+        
+        # 해당 아이디가 존재하는지 확인
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT login_id, name, hakbun FROM users WHERE login_id = ? AND status = "active"', (login_id,))
+        user = cursor.fetchone()
+
+        if user:
+            session['find_pw_login_id'] = login_id
+            session['find_pw_name'] = user[1]
+            session['find_pw_hakbun'] = user[2]
+            return redirect('/find-password/verify')
+        else:
+            return Response('''
+        <script>
+            alert("해당 아이디로 가입된 계정이 없습니다.");
+            history.back();
+        </script>
+    ''')
+
+    return render_template('find_password.html')
+
+# Find Password (비밀번호 찾기) - Step 2: 리로스쿨 인증
+@app.route('/find-password/verify', methods=['GET', 'POST'])
+def find_password_verify():
+    if 'user_id' in session:
+        return redirect("/")
+    
+    if 'find_pw_login_id' not in session:
+        return redirect('/find-password')
+
+    if request.method == 'POST':
+        id = request.form['user_id']
+        pw = request.form['user_pw']
+        
+        base_url = "http://localhost:3000"
+        endpoint = "/api/riro_login"
+
+        payload = {
+            'id': id,
+            'password': pw
+        }
+
+        try:
+            response = requests.post(f"{base_url}{endpoint}", json=payload)
+            response.raise_for_status()
+            api_result = response.json()
+
+            if api_result['status'] != 'success':
+                return Response(f'''
+        <script>
+            alert("{api_result['message']}")
+            history.back();
+        </script>
+    ''')
+
+            # 리로스쿨 인증 성공 - 이름과 학번이 일치하는지 확인
+            # 공백 제거 및 문자열 변환하여 비교
+            riro_name = str(api_result['name']).strip()
+            riro_hakbun = str(api_result['student_number']).strip()
+            db_name = str(session['find_pw_name']).strip()
+            db_hakbun = str(session['find_pw_hakbun']).strip()
+            
+            if (riro_name == db_name and riro_hakbun == db_hakbun):
+                session['find_pw_verified'] = True
+                return redirect('/find-password/reset')
+            else:
+                return Response(f'''
+        <script>
+            alert("해당 계정의 정보와 일치하지 않습니다.\\n(리로스쿨: {riro_name}, {riro_hakbun} / 가입정보: {db_name}, {db_hakbun})");
+            history.back();
+        </script>
+    ''')
+
+        except requests.exceptions.HTTPError as http_err:
+            add_log('ERROR', 'SYSTEM', f"HTTP error during Find Password verify: {http_err}")
+            return Response('''
+    <script>
+        alert("HTTP 오류가 발생했습니다.")
+        history.back();
+    </script>
+''')
+        except requests.exceptions.RequestException as req_err:
+            add_log('ERROR', 'SYSTEM', f"Request error during Find Password verify: {req_err}")
+            return Response('''
+    <script>
+        alert("요청 중 오류가 발생했습니다.")
+        history.back();
+    </script>
+''')
+
+    return render_template('find_password_verify.html')
+
+# Find Password (비밀번호 찾기) - Step 3: 새 비밀번호 설정
+@app.route('/find-password/reset', methods=['GET', 'POST'])
+def find_password_reset():
+    if 'user_id' in session:
+        return redirect("/")
+    
+    if not session.get('find_pw_verified') or 'find_pw_login_id' not in session:
+        return redirect('/find-password')
+
+    if request.method == 'POST':
+        new_password = request.form['new_password']
+        confirm_password = request.form['confirm_password']
+
+        if new_password != confirm_password:
+            return Response('''
+        <script>
+            alert("비밀번호가 일치하지 않습니다.");
+            history.back();
+        </script>
+    ''')
+
+        if len(new_password) < 6:
+            return Response('''
+        <script>
+            alert("비밀번호는 6자 이상이어야 합니다.");
+            history.back();
+        </script>
+    ''')
+
+        # 비밀번호 업데이트
+        conn = get_db()
+        cursor = conn.cursor()
+        hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        
+        cursor.execute('UPDATE users SET pw = ? WHERE login_id = ?', 
+                      (hashed_password, session['find_pw_login_id']))
+        conn.commit()
+
+        add_log('RESET_PASSWORD', session['find_pw_login_id'], f"비밀번호가 재설정되었습니다.")
+
+        # 세션 정리
+        session.pop('find_pw_login_id', None)
+        session.pop('find_pw_name', None)
+        session.pop('find_pw_hakbun', None)
+        session.pop('find_pw_verified', None)
+
+        return Response('''
+        <script>
+            alert("비밀번호가 성공적으로 변경되었습니다.");
+            window.location.href = "/login";
+        </script>
+    ''')
+
+    return render_template('find_password_reset.html')
+
 # logout
 @app.route('/logout')
 def logout():
