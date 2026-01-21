@@ -22,7 +22,7 @@ $(document).ready(function() {
     // 사용자 혼란 방지를 위해 10진법 기준으로 계산
     const MAX_IMAGE_SIZE_MB = 5;  // 개별 이미지 최대 5MB
     const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1000 * 1000;  // 10진법 기준 (Windows 탐색기와 동일)
-    const MAX_TOTAL_IMAGE_SIZE_MB = 15;  // 총 이미지 용량 최대 15MB
+    const MAX_TOTAL_IMAGE_SIZE_MB = 25;  // 총 이미지 용량 최대 25MB (5개 × 5MB)
     const MAX_TOTAL_IMAGE_SIZE_BYTES = MAX_TOTAL_IMAGE_SIZE_MB * 1000 * 1000;
 
     // 바이트를 MB로 변환 (10진법, Windows 탐색기와 동일)
@@ -99,6 +99,7 @@ $(document).ready(function() {
             },
             onChange: function(contents, $editable) {
                 updateCharCount(this);
+                updateImageSizeDisplay(this);
             },
             onImageUpload: function(files) {
                 // 드래그앤드롭 또는 파일 선택으로 이미지 업로드 시 크기 검사
@@ -113,6 +114,7 @@ $(document).ready(function() {
     
     $('#max-chars').text(MAX_CHARS.toLocaleString());
     updateCharCount($('#summernote-editor'));
+    updateImageSizeDisplay($('#summernote-editor'));
 
     function updateCharCount(editorInstance) {
         const content = $(editorInstance).summernote('code');
@@ -128,6 +130,46 @@ $(document).ready(function() {
             counterWrapper.addClass('limit-exceeded');
         } else {
             counterWrapper.removeClass('limit-exceeded');
+        }
+    }
+
+    // 이미지 용량 표시 업데이트 함수
+    function updateImageSizeDisplay(editorInstance) {
+        const content = $(editorInstance).summernote('code');
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        
+        // 인곽콘(이모티콘) 제외하고 순수 이미지만 카운트
+        const images = $(tempDiv).find('img').not('[data-code]');
+        const imageCount = images.length;
+        
+        let totalImageSize = 0;
+        images.each(function() {
+            const src = $(this).attr('src');
+            if (src && src.startsWith('data:image')) {
+                const base64Data = src.split(',')[1];
+                if (base64Data) {
+                    totalImageSize += (base64Data.length * 3) / 4;
+                }
+            }
+        });
+        
+        const totalSizeMB = totalImageSize / 1000 / 1000;
+        
+        // UI 업데이트
+        $('#current-image-count').text(imageCount);
+        $('#max-image-count').text(MAX_IMAGES);
+        $('#current-image-size').text(totalSizeMB.toFixed(2));
+        $('#max-image-size').text(MAX_TOTAL_IMAGE_SIZE_MB);
+        
+        // 제한 초과 시 경고 색상
+        const sizeCounter = $('.image-size-counter');
+        if (imageCount > MAX_IMAGES || totalImageSize > MAX_TOTAL_IMAGE_SIZE_BYTES) {
+            sizeCounter.css('color', '#ff6b6b');
+        } else if (imageCount > 0) {
+            sizeCounter.css('color', '#5cb85c');
+        } else {
+            sizeCounter.css('color', '#888');
         }
     }
 

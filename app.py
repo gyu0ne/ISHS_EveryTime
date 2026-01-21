@@ -1,7 +1,7 @@
 from gevent import monkey
 monkey.patch_all()
 
-from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response, make_response
+from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response, make_response, Request
 from werkzeug.middleware.proxy_fix import ProxyFix
 from bleach.css_sanitizer import CSSSanitizer
 from werkzeug.utils import secure_filename
@@ -33,8 +33,15 @@ import re
 
 load_dotenv()
 
+# Werkzeug 2.2+에서 max_form_memory_size 기본값이 500KB로 변경됨
+# Base64 이미지 데이터를 처리하려면 이 값을 늘려야 함
+class CustomRequest(Request):
+    max_form_memory_size = 50 * 1024 * 1024  # 50MB
+
 app = Flask(__name__)
+app.request_class = CustomRequest
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB - 반드시 앱 초기화 직후에 설정
 
 # 캐시 설정 추가 - 성능 향상을 위한 핵심
 app.config['CACHE_TYPE'] = 'SimpleCache'  # 메모리 기반 캐시
@@ -1483,9 +1490,12 @@ def post_write():
         if not title or not content or not board_id:
             return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
         
-        is_valid_size, img_idx = check_content_image_size(content, 15)
+        is_valid_size, img_idx = check_content_image_size(content)
         if not is_valid_size:
-            return Response(f'<script>alert("{img_idx}번째 이미지의 용량이 15MB를 초과합니다.\n"); history.back();</script>')
+            if img_idx == -1:
+                return Response('<script>alert("총 이미지 용량이 25MB를 초과합니다."); history.back();</script>')
+            else:
+                return Response(f'<script>alert("{img_idx}번째 이미지의 용량이 5MB를 초과합니다."); history.back();</script>')
 
         plain_text_content = bleach.clean(content, tags=[], strip=True)
         if len(plain_text_content) > 5000:
@@ -2021,9 +2031,12 @@ def post_edit(post_id):
         if not title or not content or not board_id:
             return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
         
-        is_valid_size, img_idx = check_content_image_size(content, 15)
+        is_valid_size, img_idx = check_content_image_size(content)
         if not is_valid_size:
-            return Response(f'<script>alert("{img_idx}번째 이미지의 용량이 15MB를 초과합니다.\n"); history.back();</script>')
+            if img_idx == -1:
+                return Response('<script>alert("총 이미지 용량이 25MB를 초과합니다."); history.back();</script>')
+            else:
+                return Response(f'<script>alert("{img_idx}번째 이미지의 용량이 5MB를 초과합니다."); history.back();</script>')
         
         # board_id가 실제 DB에 존재하는지 확인
         cursor.execute("SELECT COUNT(*) FROM board WHERE board_id = ?", (board_id,))
@@ -2684,7 +2697,6 @@ def yakgwan_view():
 UPLOAD_FOLDER = 'static/images/profiles'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -3085,7 +3097,7 @@ def read_notification(notification_id):
 
 @app.errorhandler(413)
 def request_entity_too_large(error):
-    return Response('<script>alert("업로드할 수 있는 파일의 최대 크기는 5MB입니다."); history.back();</script>'), 413
+    return Response('<script>alert("요청 크기가 너무 큽니다. 이미지 용량을 줄여주세요.\\n(개별 이미지: 최대 5MB, 총 용량: 최대 25MB)"); history.back();</script>'), 413
 
 @app.errorhandler(404)
 def page_not_found(error):
@@ -3870,29 +3882,44 @@ def admin_unban_user():
     
     return Response(f'<script>alert("{nickname}님의 차단을 해제했습니다."); location.href="/admin/users";</script>')
 
-def check_content_image_size(content, max_mb=15):
+def check_content_image_size(content, max_total_mb=25, max_single_mb=5):
     """
     HTML 본문(content) 내의 Base64 이미지들의 실제 용량을 계산하여
-    지정된 크기(max_mb)를 초과하는지 검사합니다.
+    개별 이미지 크기 및 총 용량이 제한을 초과하는지 검사합니다.
+    
+    Args:
+        content: HTML 본문
+        max_total_mb: 총 이미지 용량 제한 (기본 25MB)
+        max_single_mb: 개별 이미지 용량 제한 (기본 5MB)
+    
+    Returns:
+        (True, 0) - 정상
+        (False, idx) - idx번째 이미지가 개별 제한 초과
+        (False, -1) - 총 용량 초과
     """
     if not content:
         return True, 0
 
     # 이미지 태그에서 Base64 데이터 추출 (data:image/...;base64, 부분 이후)
-    # 정규식으로 src 속성의 값을 찾습니다.
     base64_images = re.findall(r'src=["\']data:image/[a-zA-Z]+;base64,([^"\']+)["\']', content)
     
-    limit_bytes = max_mb * 1024 * 1024 # 5MB를 바이트로 변환
+    single_limit_bytes = max_single_mb * 1000 * 1000  # 10진법 기준 (Windows 탐색기와 동일)
+    total_limit_bytes = max_total_mb * 1000 * 1000
     
+    total_size = 0
     for idx, b64_data in enumerate(base64_images):
         # Base64 문자열 길이로 실제 파일 크기 추산
         # 공식: (Base64 길이 * 3) / 4
-        # (패딩 '=' 처리는 오차가 미미하므로 생략)
         real_size = (len(b64_data) * 3) / 4
+        total_size += real_size
         
-        if real_size > limit_bytes:
-            # 용량 초과 시, 몇 번째 이미지인지 반환 (False, 순서)
+        # 개별 이미지 크기 검사
+        if real_size > single_limit_bytes:
             return False, idx + 1
+    
+    # 총 용량 검사
+    if total_size > total_limit_bytes:
+        return False, -1
             
     return True, 0
 
