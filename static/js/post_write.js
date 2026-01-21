@@ -17,9 +17,18 @@ $(document).ready(function() {
     });
 
     // 이미지 파일 크기 제한 (MB 단위)
+    // Windows 탐색기는 1MB = 1,000,000 바이트(10진법)로 표시하지만
+    // 프로그래밍에서는 1MB = 1,048,576 바이트(2진법)를 사용
+    // 사용자 혼란 방지를 위해 10진법 기준으로 계산
     const MAX_IMAGE_SIZE_MB = 5;  // 개별 이미지 최대 5MB
-    const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+    const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1000 * 1000;  // 10진법 기준 (Windows 탐색기와 동일)
     const MAX_TOTAL_IMAGE_SIZE_MB = 15;  // 총 이미지 용량 최대 15MB
+    const MAX_TOTAL_IMAGE_SIZE_BYTES = MAX_TOTAL_IMAGE_SIZE_MB * 1000 * 1000;
+
+    // 바이트를 MB로 변환 (10진법, Windows 탐색기와 동일)
+    function bytesToMB(bytes) {
+        return (bytes / 1000 / 1000).toFixed(2);
+    }
 
     // 이미지 삽입 공통 함수
     function insertImageWithValidation(editor, file, fileName) {
@@ -32,7 +41,7 @@ $(document).ready(function() {
         // 파일 크기 검사
         if (file.size > MAX_IMAGE_SIZE_BYTES) {
             alert(`이미지 "${fileName}"의 크기가 너무 큽니다.\n\n` +
-                  `• 현재 크기: ${(file.size / 1024 / 1024).toFixed(2)}MB\n` +
+                  `• 현재 크기: ${bytesToMB(file.size)}MB\n` +
                   `• 최대 허용: ${MAX_IMAGE_SIZE_MB}MB\n\n` +
                   `이미지를 압축하거나 더 작은 이미지를 사용해주세요.`);
             return;
@@ -239,10 +248,9 @@ $(document).ready(function() {
             }
         });
 
-        const totalImageSizeMB = totalImageSize / (1024 * 1024);
-        if (totalImageSizeMB > MAX_TOTAL_IMAGE_SIZE_MB) {
+        if (totalImageSize > MAX_TOTAL_IMAGE_SIZE_BYTES) {
             alert(`총 이미지 용량이 너무 큽니다.\n\n` +
-                  `• 현재 총 용량: ${totalImageSizeMB.toFixed(2)}MB\n` +
+                  `• 현재 총 용량: ${bytesToMB(totalImageSize)}MB\n` +
                   `• 최대 허용: ${MAX_TOTAL_IMAGE_SIZE_MB}MB\n\n` +
                   `일부 이미지를 삭제하거나 압축해주세요.`);
             return;

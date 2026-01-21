@@ -89,8 +89,14 @@
     <script>
     $(document).ready(function() {
         // 이미지 파일 크기 제한 (MB 단위)
+        // Windows 탐색기는 1MB = 1,000,000 바이트(10진법)로 표시
         const MAX_IMAGE_SIZE_MB = 5;  // 개별 이미지 최대 5MB
-        const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+        const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1000 * 1000;  // 10진법 기준
+
+        // 바이트를 MB로 변환 (10진법)
+        function bytesToMB(bytes) {
+            return (bytes / 1000 / 1000).toFixed(2);
+        }
 
         // 이미지 삽입 공통 함수
         function insertImageWithValidation(editor, file, fileName) {
@@ -100,7 +106,7 @@
             }
             if (file.size > MAX_IMAGE_SIZE_BYTES) {
                 alert(`이미지 "${fileName}"의 크기가 너무 큽니다.\n\n` +
-                      `• 현재 크기: ${(file.size / 1024 / 1024).toFixed(2)}MB\n` +
+                      `• 현재 크기: ${bytesToMB(file.size)}MB\n` +
                       `• 최대 허용: ${MAX_IMAGE_SIZE_MB}MB\n\n` +
                       `이미지를 압축하거나 더 작은 이미지를 사용해주세요.`);
                 return;
