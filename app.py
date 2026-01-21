@@ -2819,16 +2819,24 @@ def get_notifications():
     conn = get_db()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+    # 게시글의 board_id를 함께 조회하여 익명게시판 여부 확인
     query = """
-        SELECT n.*, u.nickname as actor_nickname
+        SELECT n.*, u.nickname as actor_nickname, p.board_id
         FROM notifications n
         JOIN users u ON n.actor_id = u.login_id
+        LEFT JOIN posts p ON n.post_id = p.id
         WHERE n.recipient_id = ?
         ORDER BY n.created_at DESC
         LIMIT 10
     """
     cursor.execute(query, (g.user['login_id'],))
-    notifications = [dict(row) for row in cursor.fetchall()]
+    notifications = []
+    for row in cursor.fetchall():
+        notification = dict(row)
+        # 익명게시판(board_id=3)인 경우 닉네임을 '익명'으로 마스킹
+        if notification.get('board_id') == 3:
+            notification['actor_nickname'] = '익명'
+        notifications.append(notification)
     return jsonify(notifications)
 
 @app.route('/notifications/read/<int:notification_id>', methods=['POST'])
@@ -2836,8 +2844,8 @@ def get_notifications():
 def read_notification(notification_id):
     conn = get_db()
     cursor = conn.cursor()
-    # 본인의 알림이 맞는지 확인 후 읽음 처리
-    cursor.execute("UPDATE notifications SET is_read = 1 WHERE id = ? AND recipient_id = ?", (notification_id, g.user['login_id']))
+    # 본인의 알림이 맞는지 확인 후 삭제 처리 (한번 본 알림은 사라지게 함)
+    cursor.execute("DELETE FROM notifications WHERE id = ? AND recipient_id = ?", (notification_id, g.user['login_id']))
     conn.commit()
     return jsonify({'status': 'success'})
 
