@@ -577,7 +577,8 @@ def get_recent_posts(board_id):
         """
         cursor.execute(query, (board_id,))
         posts = cursor.fetchall()
-        return posts
+        # sqlite3.Row를 dict로 변환 (캐시 가능하도록)
+        return [dict(row) for row in posts]
     except Exception as e:
         add_log('ERROR', 'SYSTEM', f"Error fetching recent posts for board_id {board_id}: {e}")
         return []
@@ -604,7 +605,8 @@ def get_hot_posts():
         LIMIT 5
     """
     cursor.execute(query, (seven_days_ago,))
-    return cursor.fetchall()
+    # sqlite3.Row를 dict로 변환 (캐시 가능하도록)
+    return [dict(row) for row in cursor.fetchall()]
 
 @cache.memoize(timeout=120)  # 2분 캐시
 def get_trending_posts():
@@ -624,7 +626,8 @@ def get_trending_posts():
         LIMIT 5
     """
     cursor.execute(query, (one_day_ago,))
-    return cursor.fetchall()
+    # sqlite3.Row를 dict로 변환 (캐시 가능하도록)
+    return [dict(row) for row in cursor.fetchall()]
 
 # 급식 API 엔드포인트 (비동기 로딩용)
 @app.route('/api/bob')
