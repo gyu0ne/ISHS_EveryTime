@@ -121,13 +121,13 @@
             {# --- ▼▼▼ [핵심 수정] 닉네임 분기 처리 (post.board_id 대신 comment.nickname 사용) --- #}
             {% if comment.author == GUEST_USER_ID or post.board_id == 3 %}
                 <div class="comment-author">
-                    <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진">
+                    <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진" loading="lazy" decoding="async">
                     <span class="author-name">{{ comment.nickname }}</span>
                 </div>
             {% else %}
                 <a href="{{ url_for('user_profile', nickname=comment.nickname) }}" class="author-info-link">
                     <div class="comment-author">
-                        <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진">
+                        <img src="{{ url_for('static', filename=comment.profile_image) }}" alt="프로필 사진" loading="lazy" decoding="async">
                         <span class="author-name">{{ comment.nickname }}</span>
                     </div>
                 </a>
@@ -146,7 +146,9 @@
         {% if comment.etacon_path %}
             <div class="etacon-comment">
                 <img src="{{ url_for('static', filename=comment.etacon_path) }}" 
-                     alt="인곽콘" 
+                     alt="에타콘" 
+                     loading="lazy"
+                     decoding="async"
                      style="max-width: 150px; max-height: 150px; border-radius: 8px;">
             </div>
         {% else %}
@@ -206,7 +208,7 @@
                 <button type="button" style="background:none; border:1px solid #555; color:#ccc; cursor:pointer; padding:2px 5px; border-radius:4px;" onclick="openEtaconModal('#edit-textarea-{{ comment.id }}')">인곽콘</button>
             </div>
 
-            <textarea name="edit_content" required>{{ comment.content }}</textarea>
+            <textarea name="edit_content" required maxlength="1000">{{ comment.content }}</textarea>
             <div class="edit-actions">
                 <button type="button" class="btn-cancel" onclick="toggleEdit('{{ comment.id }}'); return false;">취소</button>
                 <button type="submit" class="btn-save">저장</button>
@@ -222,7 +224,7 @@
             <input type="hidden" name="parent_comment_id" value="{{ comment.id }}">
             
             {% if g.user %}
-                <textarea name="comment_content" placeholder="{{ comment.nickname }}님에게 답글 남기기..." required minlength="1"></textarea>
+                <textarea name="comment_content" placeholder="{{ comment.nickname }}님에게 답글 남기기..." required minlength="1" maxlength="1000"></textarea>
 
                 <div>
                     {% if g.user %}
@@ -238,7 +240,7 @@
                     <input type="text" name="guest_nickname" class="form-control" placeholder="닉네임" required maxlength="20">
                     <input type="password" name="guest_password" class="form-control" placeholder="비밀번호" required>
                 </div>
-                <textarea name="comment_content" placeholder="{{ comment.nickname }}님에게 답글 남기기..." required minlength="1"></textarea>
+                <textarea name="comment_content" placeholder="{{ comment.nickname }}님에게 답글 남기기..." required minlength="1" maxlength="1000"></textarea>
             {% else %}
                 <textarea name="comment_content" placeholder="로그인이 필요한 게시판입니다." disabled></textarea>
             {% endif %}
@@ -277,13 +279,13 @@
                         {# --- ▼▼▼ [핵심 수정] 게시글 작성자 닉네임 분기 --- #}
                         {% if post.author == GUEST_USER_ID or post.board_id == 3 %}
                             <div class="author-info">
-                                <img src="{{ url_for('static', filename=post.profile_image) }}" alt="프로필 사진">
+                                <img src="{{ url_for('static', filename=post.profile_image) }}" alt="프로필 사진" loading="eager" decoding="async" fetchpriority="high">
                                 <span class="author-name">{{ post.nickname }}</span>
                             </div>
                         {% else %}
                             <a href="{{ url_for('user_profile', nickname=post.nickname) }}" class="author-info-link">
                                 <div class="author-info">
-                                    <img src="{{ url_for('static', filename=post.profile_image) }}" alt="프로필 사진">
+                                    <img src="{{ url_for('static', filename=post.profile_image) }}" alt="프로필 사진" loading="eager" decoding="async" fetchpriority="high">
                                     <span class="author-name">{{ post.nickname }}</span>
                                 </div>
                             </a>
@@ -461,7 +463,7 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
                 {% if g.user %}
-                    <textarea name="comment_content" placeholder="댓글을 입력하세요..." required minlength="1"></textarea>
+                    <textarea name="comment_content" placeholder="댓글을 입력하세요..." required minlength="1" maxlength="1000"></textarea>
 
                     <div>
                     {% if g.user %}
@@ -477,7 +479,7 @@
                         <input type="text" name="guest_nickname" class="form-control" placeholder="닉네임" required maxlength="20">
                         <input type="password" name="guest_password" class="form-control" placeholder="비밀번호" required>
                     </div>
-                    <textarea name="comment_content" placeholder="비회원으로 댓글을 작성합니다..." required minlength="1" style="width: 100%;"></textarea>
+                    <textarea name="comment_content" placeholder="비회원으로 댓글을 작성합니다..." required minlength="1" maxlength="1000" style="width: 100%;"></textarea>
                 {% else %}
                     <textarea name="comment_content" placeholder="로그인이 필요한 게시판입니다." disabled></textarea>
                 {% endif %}

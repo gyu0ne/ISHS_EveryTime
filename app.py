@@ -15,7 +15,8 @@ from flask_caching import Cache
 from dotenv import load_dotenv
 from functools import wraps
 from flask import jsonify
-from PIL import Image
+from PIL import Image, ImageOps
+from urllib.parse import urlparse
 import datetime
 import requests
 import hashlib
@@ -56,9 +57,49 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000
 
 DATABASE = 'data.db'
 LOG_DATABASE = 'log.db'
+
+EXP_PER_LEVEL = 1000
+LEVEL_UP_POINT_REWARD = 100
+MAX_POST_CONTENT_CHARS = 5000
+MAX_COMMENT_CONTENT_CHARS = 1000
+MAX_POST_IMAGES = 5
+MAX_ETACONS_PER_PACK = 100
+PROFILE_IMAGE_MAX_SIZE = (300, 300)
+ETACON_IMAGE_MAX_SIZE = (512, 512)
+TRUSTED_IFRAME_HOSTS = {
+    'www.youtube.com',
+    'youtube.com',
+    'www.youtube-nocookie.com',
+    'player.vimeo.com',
+    'vimeo.com'
+}
+ETACON_CODE_PATTERN = re.compile(r'^~\d+_\d+$')
+RESAMPLING_LANCZOS = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
+
+RICH_CONTENT_ALLOWED_TAGS = [
+    'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3',
+    'img', 'a', 'video', 'source', 'iframe',
+    'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
+    'ol', 'ul', 'li', 'blockquote', 'span', 'font'
+]
+RICH_CONTENT_ALLOWED_ATTRS = {
+    '*': ['class', 'style'],
+    'a': ['href', 'target', 'rel'],
+    'img': ['src', 'alt', 'width', 'height'],
+    'video': ['src', 'width', 'height', 'controls', 'preload', 'playsinline'],
+    'source': ['src', 'type'],
+    'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+    'font': ['color', 'face']
+}
+RICH_CONTENT_ALLOWED_CSS_PROPERTIES = [
+    'color', 'background-color', 'font-family', 'font-size',
+    'font-weight', 'text-align', 'text-decoration'
+]
+RICH_CONTENT_PROTOCOLS = ['http', 'https', 'data']
 
 ACADEMIC_CLUBS = ["WIN", "TNT", "PLUTONIUM", "LOGIC", "LOTTOL", "RAIBIT", "QUASAR"]
 HOBBY_CLUBS = ["책톡", "픽쳐스", "메카", "퓨전", "차랑", "스포츠문화부", "체력단련부", "I-FLOW", "아마빌레"]
@@ -74,50 +115,140 @@ def allowed_etacon_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_ETACON_EXTENSIONS
 
+def get_client_identifier():
+    current_user = getattr(g, 'user', None)
+    if current_user and current_user['login_id']:
+        return f"user:{g.user['login_id']}"
+    if request.access_route:
+        return f"ip:{request.access_route[0]}"
+    return f"ip:{request.remote_addr or 'unknown'}"
+
+
+def rate_limit(limit, window_seconds, methods=('POST',)):
+    cache = TTLCache(maxsize=10000, ttl=window_seconds)
+
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            if methods and request.method not in methods:
+                return f(*args, **kwargs)
+
+            key = f"{f.__name__}:{get_client_identifier()}"
+            hit_count = cache.get(key, 0) + 1
+            cache[key] = hit_count
+
+            if hit_count > limit:
+                retry_after = max(window_seconds, 1)
+                message = f"요청이 너무 빠릅니다. {retry_after}초 뒤 다시 시도해주세요."
+                if request.is_json or request.path.startswith('/api/') or request.path.startswith('/react/'):
+                    response = jsonify({'status': 'error', 'message': message})
+                    response.status_code = 429
+                    response.headers['Retry-After'] = str(retry_after)
+                    return response
+
+                response = Response(f'<script>alert("{message}"); history.back();</script>', status=429)
+                response.headers['Retry-After'] = str(retry_after)
+                return response
+
+            return f(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
+def set_html_tag_attr(tag_html, attr_name, attr_value):
+    pattern = rf'(\s{attr_name}\s*=\s*")[^"]*(")'
+    if re.search(pattern, tag_html, flags=re.IGNORECASE):
+        return re.sub(pattern, rf'\1{attr_value}\2', tag_html, flags=re.IGNORECASE)
+    return tag_html[:-1] + f' {attr_name}="{attr_value}">'
+
+
+def normalize_rich_media_tags(content):
+    def replace_img(match):
+        tag = match.group(0)
+        tag = set_html_tag_attr(tag, 'loading', 'lazy')
+        tag = set_html_tag_attr(tag, 'decoding', 'async')
+        return tag
+
+    def replace_iframe(match):
+        tag = match.group(0)
+        src_match = re.search(r'\bsrc="([^"]+)"', tag, flags=re.IGNORECASE)
+        if not src_match:
+            return ''
+
+        src = html.unescape(src_match.group(1)).strip()
+        parsed = urlparse(src)
+        host = (parsed.netloc or '').lower()
+
+        if parsed.scheme != 'https' or host not in TRUSTED_IFRAME_HOSTS:
+            return ''
+
+        tag = set_html_tag_attr(tag, 'loading', 'lazy')
+        tag = set_html_tag_attr(tag, 'referrerpolicy', 'no-referrer')
+        tag = set_html_tag_attr(tag, 'sandbox', 'allow-scripts allow-same-origin allow-presentation')
+        return tag
+
+    content = re.sub(r'<img\b[^>]*>', replace_img, content, flags=re.IGNORECASE)
+    content = re.sub(r'<iframe\b[^>]*>(?:\s*</iframe>)?', replace_iframe, content, flags=re.IGNORECASE)
+    return content
+
+
+def sanitize_rich_content(content):
+    css_sanitizer = CSSSanitizer(allowed_css_properties=RICH_CONTENT_ALLOWED_CSS_PROPERTIES)
+    sanitized_content = bleach.clean(
+        content,
+        tags=RICH_CONTENT_ALLOWED_TAGS,
+        attributes=RICH_CONTENT_ALLOWED_ATTRS,
+        protocols=RICH_CONTENT_PROTOCOLS,
+        css_sanitizer=css_sanitizer
+    )
+    return normalize_rich_media_tags(sanitized_content)
+
+
+def sanitize_plain_text_content(content, max_length=MAX_COMMENT_CONTENT_CHARS):
+    cleaned = bleach.clean(content or '', tags=[], strip=True).strip()
+    if len(cleaned) > max_length:
+        raise ValueError(max_length)
+    return cleaned
+
+
+def optimize_and_save_image(file_obj, save_path, max_size, keep_gif=False):
+    file_obj.stream.seek(0)
+    image = Image.open(file_obj.stream)
+
+    if keep_gif and getattr(image, 'is_animated', False) and image.format == 'GIF':
+        image.save(save_path, save_all=True, optimize=True, loop=0)
+        file_obj.stream.seek(0)
+        return
+
+    image = ImageOps.exif_transpose(image)
+    image.thumbnail(max_size, RESAMPLING_LANCZOS)
+
+    if image.mode not in ('RGB', 'RGBA'):
+        image = image.convert('RGBA' if 'transparency' in image.info else 'RGB')
+
+    save_kwargs = {'optimize': True}
+    if image.mode == 'RGBA':
+        image.save(save_path, format='WEBP', quality=82, method=6, lossless=False, **save_kwargs)
+    else:
+        image = image.convert('RGB')
+        image.save(save_path, format='WEBP', quality=82, method=6, **save_kwargs)
+
+    file_obj.stream.seek(0)
+
+
 def save_etacon_image(file, sub_folder):
-    """
-    이미지를 저장하고 경로를 반환합니다.
-    GIF는 최적화하여 저장하고, 정적 이미지는 포맷을 유지합니다.
-    JPG 저장 시 투명 배경(RGBA) 오류를 방지합니다.
-    sub_folder: 패키지별 폴더 (예: 'pack_1')
-    """
     filename = secure_filename(file.filename)
+    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else 'webp'
+    final_ext = 'gif' if ext == 'gif' else 'webp'
+    unique_filename = f"{uuid.uuid4().hex[:8]}.{final_ext}"
 
-    try:
-        ext = filename.rsplit('.', 1)[1].lower()
-    except IndexError:
-        ext = 'jpg' # 확장자가 없는 예외적인 경우 기본값
-
-    unique_filename = f"{uuid.uuid4().hex[:8]}.{ext}"
-    
     save_dir = os.path.join(ETACON_UPLOAD_FOLDER, sub_folder)
     os.makedirs(save_dir, exist_ok=True)
-    
+
     save_path = os.path.join(save_dir, unique_filename)
-    
-    # Pillow로 이미지 처리 (GIF 지원)
+
     try:
-        img = Image.open(file)
-        
-        # GIF인 경우 save_all=True로 애니메이션 유지
-        if file.filename.lower().endswith('.gif'):
-            img.save(save_path, save_all=True, optimize=True, loop=0)
-        else:
-            # 정적 이미지는 포맷에 맞게 저장
-            # [수정] JPG/JPEG 저장 시 RGBA 모드 오류 해결 로직 추가
-            if ext in ['jpg', 'jpeg']:
-                if img.mode in ('RGBA', 'LA'):
-                    # 투명한 배경을 흰색으로 채워서 RGB로 변환 (투명->검은색 방지)
-                    background = Image.new("RGB", img.size, (255, 255, 255))
-                    # 이미지의 알파 채널을 마스크로 사용하여 붙여넣기
-                    background.paste(img, mask=img.split()[-1])
-                    img = background
-                elif img.mode == 'P':
-                    # 팔레트 모드일 경우 RGB로 변환
-                    img = img.convert('RGB')
-            
-            img.save(save_path, optimize=True)
-            
+        optimize_and_save_image(file, save_path, ETACON_IMAGE_MAX_SIZE, keep_gif=True)
         return f"images/etacons/{sub_folder}/{unique_filename}"
     except Exception as e:
         print(f"이미지 저장 실패: {e}")
@@ -280,6 +411,36 @@ def block_banned_users():
                         window.location.reload(); 
                     </script>
                 ''')
+
+
+@app.after_request
+def apply_security_headers(response):
+    response.headers.setdefault('X-Frame-Options', 'DENY')
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    response.headers.setdefault('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+    response.headers.setdefault(
+        'Content-Security-Policy',
+        "default-src 'self' https: data: blob:; "
+        "script-src 'self' 'unsafe-inline' https://code.jquery.com https://stackpath.bootstrapcdn.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://stackpath.bootstrapcdn.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "img-src 'self' data: https: blob:; "
+        "font-src 'self' data: https://cdnjs.cloudflare.com; "
+        "connect-src 'self' https:; "
+        "media-src 'self' data: https: blob:; "
+        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; "
+        "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    )
+
+    if request.path.startswith('/static/'):
+        response.cache_control.public = True
+        response.cache_control.max_age = app.config['SEND_FILE_MAX_AGE_DEFAULT']
+        response.cache_control.immutable = True
+
+    if request.is_secure:
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+
+    return response
 
 # --- 👇 [추가] 제재된 사용자의 활동을 제한하는 데코레이터 ---
 def check_banned(f):
@@ -511,31 +672,44 @@ def update_exp_level(user_id, exp_change, commit=True):
     cursor.execute("SELECT level, exp FROM users WHERE login_id = ?", (user_id,))
     user = cursor.fetchone()
     if not user:
-        return
+        return {'level_gained': 0, 'point_reward': 0}
 
     current_level, current_exp = user
     new_exp = current_exp + exp_change
 
     # 레벨업/레벨다운 계산
-    # 실제 서비스에서는 레벨별 필요 경험치를 다르게 설정하는 것이 좋습니다.
-    exp_per_level = 1000
-    level_change = new_exp // exp_per_level
+    level_change = new_exp // EXP_PER_LEVEL
     final_level = current_level + level_change
-    final_exp = new_exp % exp_per_level
+    final_exp = new_exp % EXP_PER_LEVEL
 
     # 레벨은 최소 1로 유지
     if final_level < 1:
         final_level = 1
         final_exp = 0
 
-    # DB 업데이트
-    cursor.execute(
-        "UPDATE users SET level = ?, exp = ? WHERE login_id = ?",
-        (final_level, final_exp, user_id)
-    )
+    level_gained = max(final_level - current_level, 0)
+    point_reward = level_gained * LEVEL_UP_POINT_REWARD
+
+    if point_reward > 0:
+        cursor.execute(
+            "UPDATE users SET level = ?, exp = ?, point = point + ? WHERE login_id = ?",
+            (final_level, final_exp, point_reward, user_id)
+        )
+    else:
+        cursor.execute(
+            "UPDATE users SET level = ?, exp = ? WHERE login_id = ?",
+            (final_level, final_exp, user_id)
+        )
 
     if commit:
         conn.commit()
+
+    return {
+        'level_gained': level_gained,
+        'point_reward': point_reward,
+        'level': final_level,
+        'exp': final_exp
+    }
 
 # Jinja2 Filter for Datetime Formatting
 def format_datetime(value):
@@ -908,6 +1082,7 @@ def riro_auth():
 
 # Check duplicate
 @app.route('/check-register/', methods=['POST'])
+@rate_limit(limit=20, window_seconds=60)
 def check_register():
     conn = get_db()
     data = request.get_json()
@@ -966,6 +1141,7 @@ def yakgwan():
 
 # Register
 @app.route('/register', methods=['GET', 'POST'])
+@rate_limit(limit=5, window_seconds=600)
 def register():
     if 'user_id' in session:
         return redirect("/")
@@ -1058,6 +1234,7 @@ def register():
 
 # login
 @app.route('/login', methods=['GET', 'POST'])
+@rate_limit(limit=10, window_seconds=600)
 def login():
     if 'user_id' in session:
         return redirect("/")
@@ -1090,7 +1267,14 @@ def login():
                 conn.commit()
 
                 resp = make_response(redirect("/"))
-                resp.set_cookie('remember_token', token, max_age=datetime.timedelta(days=90), httponly=True)
+                resp.set_cookie(
+                    'remember_token',
+                    token,
+                    max_age=datetime.timedelta(days=90),
+                    httponly=True,
+                    secure=True,
+                    samesite='Lax'
+                )
                 return resp
 
             return redirect("/")
@@ -1343,7 +1527,7 @@ def logout():
     session.clear()
 
     resp = make_response(redirect("/"))
-    resp.set_cookie('remember_token', '', max_age=0)
+    resp.set_cookie('remember_token', '', max_age=0, httponly=True, secure=True, samesite='Lax')
     
     return resp
 
@@ -1423,6 +1607,7 @@ def mypage():
 
 # Post Write
 @app.route('/post-write', methods=['GET', 'POST'])
+@rate_limit(limit=10, window_seconds=600)
 @check_banned
 def post_write():
     conn = get_db()
@@ -1497,42 +1682,22 @@ def post_write():
             else:
                 return Response(f'<script>alert("{img_idx}번째 이미지의 용량이 5MB를 초과합니다."); history.back();</script>')
 
+        cursor.execute("SELECT COUNT(*) FROM board WHERE board_id = ?", (board_id,))
+        if cursor.fetchone()[0] == 0:
+            return Response('<script>alert("존재하지 않는 게시판입니다."); history.back();</script>')
+
         plain_text_content = bleach.clean(content, tags=[], strip=True)
-        if len(plain_text_content) > 5000:
+        if len(plain_text_content) > MAX_POST_CONTENT_CHARS:
             return Response('<script>alert("글자 수는 5,000자를 초과할 수 없습니다."); history.back();</script>')
         if len(title) > 50:
             return Response('<script>alert("제목은 50자를 초과할 수 없습니다."); history.back();</script>')
         if len(plain_text_content) == 0:
             return Response('<script>alert("내용을 입력해주세요."); history.back();</script>')
 
-        # 3. XSS 공격 방어를 위한 HTML 정제 (Sanitization)
-        # Summernote의 Base64 이미지 저장을 위해 'img' 태그의 'src' 속성에 data URI 스킴을 허용합니다.
-        allowed_tags = [
-            'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3',
-            'img', 'a', 'video', 'source', 'iframe',
-            'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
-            'ol', 'ul', 'li', 'blockquote', 'span', 'font'
-        ]
-        allowed_attrs = {
-            '*': ['class', 'style'],
-            'a': ['href', 'target'],
-            'img': ['src', 'alt', 'width', 'height'], # src 속성을 허용
-            'video': ['src', 'width', 'height', 'controls'],
-            'source': ['src', 'type'],
-            'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
-            'font': ['color', 'face']
-        }
-        allowed_css_properties = [
-        'color', 'background-color', 'font-family', 'font-size', 
-        'font-weight', 'text-align', 'text-decoration'
-        ]
-        css_sanitizer = CSSSanitizer(allowed_css_properties=allowed_css_properties)
-        
-        # data URI를 허용하도록 protocols에 'data' 추가
-        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'], css_sanitizer=css_sanitizer)
+        sanitized_content = sanitize_rich_content(content)
 
-        if sanitized_content.count('<img') > 10:
-            return Response('<script>alert("이미지는 최대 10개까지 첨부할 수 있습니다."); history.back();</script>')
+        if sanitized_content.count('<img') > MAX_POST_IMAGES:
+            return Response('<script>alert("이미지는 최대 5개까지 첨부할 수 있습니다."); history.back();</script>')
 
         final_content = sanitized_content
 
@@ -1601,6 +1766,7 @@ def post_write():
             return render_template('post_write.html', boards=boards)
 
 @app.route('/post-write-guest/<int:board_id>', methods=['GET', 'POST'])
+@rate_limit(limit=5, window_seconds=600)
 def post_write_guest(board_id):
     conn = get_db()
     conn.row_factory = sqlite3.Row
@@ -1638,34 +1804,16 @@ def post_write_guest(board_id):
             return Response('<script>alert("비밀번호는 4자 이상이어야 합니다."); history.back();</script>')
 
         plain_text_content = bleach.clean(content, tags=[], strip=True)
-        if len(plain_text_content) > 5000 or len(title) > 50 or len(plain_text_content) == 0:
+        if len(plain_text_content) > MAX_POST_CONTENT_CHARS or len(title) > 50 or len(plain_text_content) == 0:
             return Response('<script>alert("제목(50자) 또는 내용(5000자) 길이를 확인해주세요."); history.back();</script>')
 
         # 6. 비밀번호 해시
         hashed_pw = bcrypt.generate_password_hash(guest_password).decode('utf-8')
 
-        # 7. HTML 정제 (기존 post_write와 동일)
-        allowed_tags = [
-            'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3',
-            'img', 'a', 'video', 'source', 'iframe',
-            'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
-            'ol', 'ul', 'li', 'blockquote', 'span', 'font'
-        ]
-        allowed_attrs = {
-            '*': ['class', 'style'],
-            'a': ['href', 'target'],
-            'img': ['src', 'alt', 'width', 'height'],
-            'video': ['src', 'width', 'height', 'controls'],
-            'source': ['src', 'type'],
-            'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
-            'font': ['color', 'face']
-        }
-        allowed_css_properties = [
-        'color', 'background-color', 'font-family', 'font-size', 
-        'font-weight', 'text-align', 'text-decoration'
-        ]
-        css_sanitizer = CSSSanitizer(allowed_css_properties=allowed_css_properties)
-        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'], css_sanitizer=css_sanitizer)
+        sanitized_content = sanitize_rich_content(content)
+
+        if sanitized_content.count('<img') > MAX_POST_IMAGES:
+            return Response('<script>alert("이미지는 최대 5개까지 첨부할 수 있습니다."); history.back();</script>')
 
         # 8. DB에 저장
         try:
@@ -1996,6 +2144,7 @@ def post_detail(post_id):
 
 # Post Edit
 @app.route('/post-edit/<int:post_id>', methods=['GET', 'POST'])
+@rate_limit(limit=15, window_seconds=600)
 @login_required
 @check_banned
 def post_edit(post_id):
@@ -2044,29 +2193,17 @@ def post_edit(post_id):
             return Response('<script>alert("존재하지 않는 게시판입니다."); history.back();</script>')
 
         plain_text_content = bleach.clean(content, tags=[], strip=True)
-        if len(plain_text_content) > 5000:
+        if len(plain_text_content) > MAX_POST_CONTENT_CHARS:
             return Response('<script>alert("글자 수는 5,000자를 초과할 수 없습니다."); history.back();</script>')
         if len(title) > 50:
             return Response('<script>alert("제목은 50자를 초과할 수 없습니다."); history.back();</script>')
         if len(plain_text_content) == 0:
             return Response('<script>alert("내용을 입력해주세요."); history.back();</script>')
 
-        allowed_tags = [
-            'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3',
-            'img', 'a', 'video', 'source', 'iframe',
-            'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
-            'ol', 'ul', 'li', 'blockquote', 'span', 'font'
-        ]
-        allowed_attrs = {
-            '*': ['class', 'style'],
-            'a': ['href', 'target'],
-            'img': ['src', 'alt', 'width', 'height'],
-            'video': ['src', 'width', 'height', 'controls'],
-            'source': ['src', 'type'],
-            'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
-            'font': ['color', 'face']
-        }
-        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'])
+        sanitized_content = sanitize_rich_content(content)
+
+        if sanitized_content.count('<img') > MAX_POST_IMAGES:
+            return Response('<script>alert("이미지는 최대 5개까지 첨부할 수 있습니다."); history.back();</script>')
 
         final_content = sanitized_content
 
@@ -2174,6 +2311,7 @@ def post_delete(post_id):
 
 # Comment Add
 @app.route('/comment/add/<int:post_id>', methods=['POST'])
+@rate_limit(limit=20, window_seconds=60)
 @check_banned
 def add_comment(post_id):
     content = request.form.get('comment_content')
@@ -2225,9 +2363,10 @@ def add_comment(post_id):
 
 
         created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        sanitized_content = bleach.clean(content)
-
-        final_content = sanitized_content
+        try:
+            final_content = sanitize_plain_text_content(content)
+        except ValueError:
+            return Response('<script>alert("댓글은 1,000자를 초과할 수 없습니다."); history.back();</script>')
 
         anonymous_seq = 0
 
@@ -2257,13 +2396,15 @@ def add_comment(post_id):
         
         if parent_comment_id:
             # --- 답글 로직 ---
-            cursor.execute("SELECT parent_comment_id, author FROM comments WHERE id = ?", (parent_comment_id,))
+            cursor.execute("SELECT parent_comment_id, author, post_id FROM comments WHERE id = ?", (parent_comment_id,))
             parent_comment = cursor.fetchone()
             
             if not parent_comment:
                 return Response('<script>alert("답글을 작성할 원본 댓글이 존재하지 않습니다."); history.back();</script>')
             if parent_comment[0] is not None:
                 return Response('<script>alert("대댓글에는 답글을 작성할 수 없습니다."); history.back();</script>')
+            if parent_comment['post_id'] != post_id:
+                return Response('<script>alert("잘못된 답글 대상입니다."); history.back();</script>')
             
             cursor.execute(query, (
                 post_id, author_id, final_content, created_at, created_at, parent_comment_id,
@@ -2320,6 +2461,7 @@ def add_comment(post_id):
     return redirect(url_for('post_detail', post_id=post_id))
 
 @app.route('/api/comment/etacon', methods=['POST'])
+@rate_limit(limit=20, window_seconds=60)
 @check_banned
 def add_etacon_comment():
     data = request.get_json()
@@ -2333,6 +2475,8 @@ def add_etacon_comment():
 
     if not post_id or not etacon_code:
         return jsonify({'status': 'error', 'message': '잘못된 요청입니다.'}), 400
+    if not ETACON_CODE_PATTERN.match(etacon_code):
+        return jsonify({'status': 'error', 'message': '유효하지 않은 에타콘 코드입니다.'}), 400
 
     conn = get_db()
     conn.row_factory = sqlite3.Row
@@ -2359,7 +2503,10 @@ def add_etacon_comment():
             log_user_id = g.user['login_id']
             
             # [보유권 검증] 로그인 유저는 보유한 패키지인지 확인
-            pack_id = int(etacon_code.split('_')[0].replace('~', ''))
+            try:
+                pack_id = int(etacon_code.split('_')[0].replace('~', ''))
+            except ValueError:
+                return jsonify({'status': 'error', 'message': '유효하지 않은 에타콘 코드입니다.'}), 400
             cursor.execute("SELECT 1 FROM user_etacons WHERE user_id = ? AND pack_id = ?", (author_id, pack_id))
             if not cursor.fetchone():
                 return jsonify({'status': 'error', 'message': '보유하지 않은 인곽콘입니다.'}), 403
@@ -2412,9 +2559,15 @@ def add_etacon_comment():
         target_id = post_id # 알림 클릭 시 이동할 ID
 
         if parent_comment_id:
-            cursor.execute("SELECT author FROM comments WHERE id = ?", (parent_comment_id,))
+            cursor.execute("SELECT author, post_id, parent_comment_id FROM comments WHERE id = ?", (parent_comment_id,))
             parent = cursor.fetchone()
-            if parent and parent['author'] != GUEST_USER_ID:
+            if not parent:
+                return jsonify({'status': 'error', 'message': '답글을 작성할 댓글이 존재하지 않습니다.'}), 404
+            if parent['parent_comment_id'] is not None:
+                return jsonify({'status': 'error', 'message': '대댓글에는 답글을 작성할 수 없습니다.'}), 400
+            if parent['post_id'] != post_id:
+                return jsonify({'status': 'error', 'message': '잘못된 답글 대상입니다.'}), 400
+            if parent['author'] != GUEST_USER_ID:
                 recipient_id = parent['author']
                 action = 'reply'
                 target_id = parent_comment_id
@@ -2504,6 +2657,7 @@ def delete_comment(comment_id):
 
 # Comment Edit
 @app.route('/comment/edit/<int:comment_id>', methods=['POST'])
+@rate_limit(limit=20, window_seconds=120)
 @login_required
 @check_banned
 def edit_comment(comment_id):
@@ -2530,9 +2684,10 @@ def edit_comment(comment_id):
     try:
         # 4. 데이터베이스 업데이트
         updated_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        sanitized_content = bleach.clean(new_content)
-
-        final_content = sanitized_content
+        try:
+            final_content = sanitize_plain_text_content(new_content)
+        except ValueError:
+            return Response('<script>alert("댓글은 1,000자를 초과할 수 없습니다."); history.back();</script>')
         
         query = "UPDATE comments SET content = ?, updated_at = ? WHERE id = ?"
         cursor.execute(query, (final_content, updated_at, comment_id))
@@ -2549,6 +2704,7 @@ def edit_comment(comment_id):
 
 # React (Like/Dislike) for Post and Comment
 @app.route('/react/<target_type>/<int:target_id>', methods=['POST'])
+@rate_limit(limit=60, window_seconds=60)
 @check_banned
 def react(target_type, target_id):
     if not g.user:
@@ -2703,6 +2859,7 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/update-profile-image', methods=['POST'])
+@rate_limit(limit=10, window_seconds=600)
 @login_required
 def update_profile_image():
     if 'profile_image' not in request.files:
@@ -2733,18 +2890,10 @@ def update_profile_image():
                     print(f"Warning: 이전 프로필 이미지 삭제 실패: {e}")
                     add_log('WARNING', session['user_id'], f"이전 프로필 이미지 삭제 실패: {e}")
 
-        ext = file.filename.rsplit('.', 1)[1].lower()
-        unique_filename = f"{uuid.uuid4()}.{ext}"
+        unique_filename = f"{uuid.uuid4()}.webp"
         save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
 
-        # --- 👇 이미지 최적화 로직 시작 ---
-        img = Image.open(file.stream)
-
-        # 이미지의 가로, 세로 중 더 긴 쪽을 300px에 맞추고 비율 유지
-        img.thumbnail((300, 300))
-
-        img.save(save_path, optimize=True)
-        # --- 👆 이미지 최적화 로직 끝 ---
+        optimize_and_save_image(file, save_path, PROFILE_IMAGE_MAX_SIZE)
 
         db_path = 'images/profiles/' + unique_filename
 
@@ -2877,7 +3026,7 @@ def change_password():
         add_log('CHANGE_PASSWORD', session['user_id'], "비밀번호를 변경했습니다.")
         
         resp = make_response('<script>alert("비밀번호가 성공적으로 변경되었습니다. 다시 로그인해주세요."); window.location.href = "/logout";</script>')
-        resp.set_cookie('remember_token', '', max_age=0)
+        resp.set_cookie('remember_token', '', max_age=0, httponly=True, secure=True, samesite='Lax')
         return resp
 
     return render_template('change_password.html', user=user)
@@ -2949,7 +3098,7 @@ def delete_account():
         # 세션 정리 및 로그아웃 처리
         session.clear()
         resp = make_response(Response('<script>alert("계정이 안전하게 삭제되었습니다. 이용해주셔서 감사합니다."); window.location.href = "/";</script>'))
-        resp.set_cookie('remember_token', '', max_age=0)
+        resp.set_cookie('remember_token', '', max_age=0, httponly=True, secure=True, samesite='Lax')
         return resp
 
     except Exception as e:
@@ -3317,6 +3466,7 @@ def comment_delete_guest(comment_id):
 
 
 @app.route('/post-edit-guest/<int:post_id>', methods=['GET', 'POST'])
+@rate_limit(limit=5, window_seconds=600)
 def post_edit_guest(post_id):
     """
     (GET/POST) 인증된 게스트의 게시글 수정
@@ -3346,33 +3496,14 @@ def post_edit_guest(post_id):
         if len(title) > 50:
             return Response('<script>alert("제목은 50자를 초과할 수 없습니다."); history.back();</script>')
         plain_text_content = bleach.clean(content, tags=[], strip=True)
-        if len(plain_text_content) > 5000:
+        if len(plain_text_content) > MAX_POST_CONTENT_CHARS:
             return Response('<script>alert("글자 수는 5,000자를 초과할 수 없습니다."); history.back();</script>')
         if len(plain_text_content) == 0:
             return Response('<script>alert("내용을 입력해주세요."); history.back();</script>')
 
-        # (post_edit에서 복사)
-        allowed_tags = [
-            'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3',
-            'img', 'a', 'video', 'source', 'iframe',
-            'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
-            'ol', 'ul', 'li', 'blockquote', 'span', 'font'
-        ]
-        allowed_attrs = {
-            '*': ['class', 'style'],
-            'a': ['href', 'target'],
-            'img': ['src', 'alt', 'width', 'height'],
-            'video': ['src', 'width', 'height', 'controls'],
-            'source': ['src', 'type'],
-            'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
-            'font': ['color', 'face']
-        }
-        allowed_css_properties = [
-        'color', 'background-color', 'font-family', 'font-size', 
-        'font-weight', 'text-align', 'text-decoration'
-        ]
-        css_sanitizer = CSSSanitizer(allowed_css_properties=allowed_css_properties)
-        sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'], css_sanitizer=css_sanitizer)
+        sanitized_content = sanitize_rich_content(content)
+        if sanitized_content.count('<img') > MAX_POST_IMAGES:
+            return Response('<script>alert("이미지는 최대 5개까지 첨부할 수 있습니다."); history.back();</script>')
 
         updated_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         # 게스트는 게시판 이동, 공지 설정 불가
@@ -3392,6 +3523,7 @@ def post_edit_guest(post_id):
 
 
 @app.route('/comment-edit-guest/<int:comment_id>', methods=['GET', 'POST'])
+@rate_limit(limit=10, window_seconds=300)
 def comment_edit_guest(comment_id):
     """
     (GET/POST) 인증된 게스트의 댓글 수정
@@ -3418,7 +3550,10 @@ def comment_edit_guest(comment_id):
         
         try:
             updated_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            sanitized_content = bleach.clean(new_content)
+            try:
+                sanitized_content = sanitize_plain_text_content(new_content)
+            except ValueError:
+                return Response('<script>alert("댓글은 1,000자를 초과할 수 없습니다."); history.back();</script>')
             
             query = "UPDATE comments SET content = ?, updated_at = ? WHERE id = ?"
             cursor.execute(query, (sanitized_content, updated_at, comment_id))
@@ -3441,7 +3576,7 @@ def comment_edit_guest(comment_id):
         return render_template('comment_edit_guest.html', comment=comment, user=g.user)
 
 @app.route('/etacon/request', methods=['GET', 'POST'])
-@check_banned
+@rate_limit(limit=5, window_seconds=1800)
 @login_required
 def etacon_request():
     if request.method == 'POST':
@@ -3463,8 +3598,8 @@ def etacon_request():
         if not thumbnail or not etacon_files or len(etacon_files) == 0:
              return Response('<script>alert("썸네일과 인곽콘 이미지를 최소 1개 이상 업로드해야 합니다."); history.back();</script>')
         
-        if len(etacon_files) > 10:
-            return Response('<script>alert("인곽콘 이미지는 한 팩당 최대 10개까지만 등록할 수 있습니다."); history.back();</script>')
+        if len(etacon_files) > MAX_ETACONS_PER_PACK:
+            return Response(f'<script>alert("에타콘 이미지는 한 팩당 최대 {MAX_ETACONS_PER_PACK}개까지만 등록할 수 있습니다."); history.back();</script>')
 
         def validate_image_ratio(file_obj):
             """이미지가 1:1 비율인지 확인합니다."""
@@ -3477,14 +3612,16 @@ def etacon_request():
                 print(f"이미지 검사 오류: {e}")
                 return False
 
-        if thumbnail and allowed_etacon_file(thumbnail.filename):
-            if not validate_image_ratio(thumbnail):
-                return Response('<script>alert("썸네일 이미지는 정방형(1:1 비율)이어야 합니다."); history.back();</script>')
+        if not allowed_etacon_file(thumbnail.filename):
+            return Response('<script>alert("썸네일은 PNG, JPG, JPEG, GIF만 업로드할 수 있습니다."); history.back();</script>')
+        if not validate_image_ratio(thumbnail):
+            return Response('<script>alert("썸네일 이미지는 정방형(1:1 비율)이어야 합니다."); history.back();</script>')
 
         for file in etacon_files:
-            if file and allowed_etacon_file(file.filename):
-                if not validate_image_ratio(file):
-                    return Response(f'<script>alert("모든 인곽콘 이미지는 1:1 비율이어야 합니다.\\n확인 필요: {file.filename}"); history.back();</script>')
+            if not file or not allowed_etacon_file(file.filename):
+                return Response('<script>alert("에타콘은 PNG, JPG, JPEG, GIF만 업로드할 수 있습니다."); history.back();</script>')
+            if not validate_image_ratio(file):
+                return Response(f'<script>alert("모든 에타콘 이미지는 1:1 비율이어야 합니다.\\n확인 필요: {file.filename}"); history.back();</script>')
 
         conn = get_db()
         cursor = conn.cursor()
@@ -3509,13 +3646,12 @@ def etacon_request():
 
             # 3. 개별 인곽콘 이미지 저장
             for idx, file in enumerate(etacon_files):
-                if file and allowed_etacon_file(file.filename):
-                    img_path = save_etacon_image(file, pack_folder)
-                    if img_path:
-                        # 코드 형식: ~packID_index (예: ~15_0, ~15_1) -> 유니크하고 파싱하기 쉬움
-                        code = f"~{pack_id}_{idx}"
-                        cursor.execute("INSERT INTO etacons (pack_id, image_path, code) VALUES (?, ?, ?)", 
-                                       (pack_id, img_path, code))
+                img_path = save_etacon_image(file, pack_folder)
+                if img_path:
+                    # 코드 형식: ~packID_index (예: ~15_0, ~15_1) -> 유니크하고 파싱하기 쉬움
+                    code = f"~{pack_id}_{idx}"
+                    cursor.execute("INSERT INTO etacons (pack_id, image_path, code) VALUES (?, ?, ?)", 
+                                   (pack_id, img_path, code))
 
             conn.commit()
             add_log('REQUEST_ETACON', g.user['login_id'], f"인곽콘 패키지 '{name}' 등록을 요청했습니다.")
@@ -3627,6 +3763,7 @@ def etacon_shop():
     return render_template('etacon/shop.html', packs=packs, user=g.user)
 
 @app.route('/etacon/buy/<int:pack_id>', methods=['POST'])
+@rate_limit(limit=10, window_seconds=300)
 @login_required
 def buy_etacon(pack_id):
     conn = get_db()
@@ -3650,14 +3787,31 @@ def buy_etacon(pack_id):
         return jsonify({'status': 'error', 'message': '포인트가 부족합니다.'}), 400
         
     try:
+        seller_payout = math.floor(pack['price'] * 0.8)
+
         # 포인트 차감
         cursor.execute("UPDATE users SET point = point - ? WHERE login_id = ?", (pack['price'], g.user['login_id']))
+
+        # 판매자 정산 (구매 금액의 80%)
+        if seller_payout > 0 and pack['uploader_id'] and pack['uploader_id'] != g.user['login_id']:
+            cursor.execute("UPDATE users SET point = point + ? WHERE login_id = ?", (seller_payout, pack['uploader_id']))
+
         # 패키지 지급
         cursor.execute("INSERT INTO user_etacons (user_id, pack_id, purchased_at) VALUES (?, ?, ?)",
                        (g.user['login_id'], pack_id, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
         conn.commit()
         
-        add_log('BUY_ETACON', g.user['login_id'], f"인곽콘 패키지 '{pack['name']}'을 구매했습니다. (-{pack['price']}P)")
+        add_log('BUY_ETACON', g.user['login_id'], f"에타콘 패키지 '{pack['name']}'을 구매했습니다. (-{pack['price']}P)")
+        if seller_payout > 0 and pack['uploader_id'] and pack['uploader_id'] != g.user['login_id']:
+            add_log('ETACON_PAYOUT', pack['uploader_id'], f"에타콘 패키지 '{pack['name']}' 판매 정산으로 {seller_payout}P를 지급했습니다.")
+            create_notification(
+                recipient_id=pack['uploader_id'],
+                actor_id=g.user['login_id'],
+                action='etacon_sale',
+                target_type='etacon_pack',
+                target_id=pack_id,
+                post_id=0
+            )
         return jsonify({'status': 'success', 'message': '구매가 완료되었습니다!'})
         
     except Exception as e:

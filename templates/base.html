@@ -11,6 +11,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
     <meta charset="utf-8">
     <title>{% block title %}log인곽{% endblock %}</title>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://stackpath.bootstrapcdn.com" crossorigin>
+    <link rel="preconnect" href="https://code.jquery.com" crossorigin>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main_logined.css') }}">
     <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
@@ -115,6 +119,20 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('img').forEach((img, index) => {
+                if (!img.hasAttribute('loading')) {
+                    img.loading = index < 2 ? 'eager' : 'lazy';
+                }
+                if (!img.hasAttribute('decoding')) {
+                    img.decoding = 'async';
+                }
+            });
+
+            document.querySelectorAll('.post-content iframe').forEach((iframe) => {
+                iframe.loading = 'lazy';
+                iframe.referrerPolicy = 'no-referrer';
+            });
+
             // --- UI 요소 변수 선언 ---
             const bell = document.getElementById('notification-bell');
             const dropdown = document.getElementById('notification-dropdown');
@@ -132,8 +150,17 @@
                     message = `<span class="actor">${n.actor_nickname}</span>님이 회원님의 댓글에 답글을 남겼습니다.`;
                 } else if (n.action === 'hot_post') {
                     message = `회원님의 게시글이 추천 10개를 받아 <strong>HOT 게시물</strong>이 되었습니다!`;
+                } else if (n.action === 'etacon_sale') {
+                    message = `<span class="actor">${n.actor_nickname}</span>님이 회원님의 에타콘을 구매했습니다.`;
                 }
                 return message;
+            }
+
+            function getNotificationUrl(n) {
+                if (n.action === 'etacon_sale') {
+                    return '/etacon/shop';
+                }
+                return `/post/${n.post_id}`;
             }
 
             /** 서버에 알림을 읽음 상태로 변경하도록 요청하는 함수 */
@@ -171,7 +198,7 @@
                             
                             const message = createNotificationMessage(n);
                             const link = document.createElement('a');
-                            link.href = `/post/${n.post_id}`;
+                            link.href = getNotificationUrl(n);
                             link.innerHTML = message;
                             link.onclick = async (e) => {
                                 e.preventDefault();
@@ -230,7 +257,7 @@
                     const li = document.createElement('li');
                     const message = createNotificationMessage(notification);
                     const link = document.createElement('a');
-                    link.href = `/post/${notification.post_id}`;
+                    link.href = getNotificationUrl(notification);
                     link.innerHTML = message;
                     link.onclick = async (e) => {
                         e.preventDefault();

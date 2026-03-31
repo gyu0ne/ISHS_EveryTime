@@ -103,6 +103,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const img = document.createElement('img');
                 img.src = `/static/${etacon.image_path}`; // 경로 주의
                 img.alt = 'etacon';
+                img.loading = 'lazy';
+                img.decoding = 'async';
                 
                 item.appendChild(img);
                 // 클릭 시 전송 함수 호출

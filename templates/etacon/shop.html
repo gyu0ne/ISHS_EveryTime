@@ -52,7 +52,7 @@
         {% for pack in packs %}
         <div class="pack-card {% if pack.is_owned %}owned{% endif %}">
             <div class="pack-thumbnail">
-                <img src="{{ url_for('static', filename=pack.thumbnail) }}" alt="{{ pack.name }}">
+                <img src="{{ url_for('static', filename=pack.thumbnail) }}" alt="{{ pack.name }}" loading="lazy" decoding="async">
             </div>
             
             <div class="pack-info">
@@ -109,4 +109,31 @@
         {% endfor %}
     </div>
 </div>
+
+<script>
+async function buyEtacon(packId, packName, price) {
+    if (!confirm(`'${packName}' 에타콘을 ${price} 포인트에 구매하시겠습니까?`)) return;
+
+    try {
+        const response = await fetch(`/etacon/buy/${packId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token() }}'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            alert(result.message);
+            location.reload();
+        } else {
+            alert(result.message);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('구매 중 오류가 발생했습니다.');
+    }
+}
+</script>
 {% endblock %}

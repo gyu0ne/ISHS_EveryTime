@@ -13,7 +13,7 @@
         <aside class="profile-sidebar">
             <div class="card profile-card">
                 <div class="profile-picture">
-                    <img src="{{ url_for('static', filename=profile_user.profile_image) }}" alt="프로필 사진">
+                    <img src="{{ url_for('static', filename=profile_user.profile_image) }}" alt="프로필 사진" loading="eager" decoding="async" fetchpriority="high">
                 </div>
                 <h2 class="nickname">{{ profile_user.nickname }}</h2>
                 <div class="level-info">

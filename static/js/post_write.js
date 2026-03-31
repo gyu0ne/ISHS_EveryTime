@@ -2,7 +2,9 @@ $(document).ready(function() {
     $.summernote.lang['ko-KR'].color.cpSelect = 'color picker';
 
     const MAX_CHARS = 5000;
-    const MAX_IMAGES = 5; 
+    const MAX_IMAGES = 5;
+    const MAX_IMAGE_DIMENSION = 1600;
+    const IMAGE_QUALITY = 0.78;
 
     const postTitleInput = $('#post-title');
     const titleCounter = $('#current-title-chars');
@@ -16,46 +18,89 @@ $(document).ready(function() {
         titleCounter.text(currentLength);
     });
 
-    // 이미지 파일 크기 제한 (MB 단위)
-    // Windows 탐색기는 1MB = 1,000,000 바이트(10진법)로 표시하지만
-    // 프로그래밍에서는 1MB = 1,048,576 바이트(2진법)를 사용
-    // 사용자 혼란 방지를 위해 10진법 기준으로 계산
-    const MAX_IMAGE_SIZE_MB = 5;  // 개별 이미지 최대 5MB
-    const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1000 * 1000;  // 10진법 기준 (Windows 탐색기와 동일)
-    const MAX_TOTAL_IMAGE_SIZE_MB = 25;  // 총 이미지 용량 최대 25MB (5개 × 5MB)
-    const MAX_TOTAL_IMAGE_SIZE_BYTES = MAX_TOTAL_IMAGE_SIZE_MB * 1000 * 1000;
-
-    // 바이트를 MB로 변환 (10진법, Windows 탐색기와 동일)
-    function bytesToMB(bytes) {
-        return (bytes / 1000 / 1000).toFixed(2);
+    function readFileAsDataURL(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
     }
 
-    // 이미지 삽입 공통 함수
-    function insertImageWithValidation(editor, file, fileName) {
-        // 이미지 파일인지 확인
-        if (!file.type.startsWith('image/')) {
-            alert('이미지 파일만 업로드할 수 있습니다.');
-            return;
-        }
-        
-        // 파일 크기 검사
-        if (file.size > MAX_IMAGE_SIZE_BYTES) {
-            alert(`이미지 "${fileName}"의 크기가 너무 큽니다.\n\n` +
-                  `• 현재 크기: ${bytesToMB(file.size)}MB\n` +
-                  `• 최대 허용: ${MAX_IMAGE_SIZE_MB}MB\n\n` +
-                  `이미지를 압축하거나 더 작은 이미지를 사용해주세요.`);
-            return;
-        }
-        
-        // 크기 검사 통과 시 Base64로 변환하여 삽입
-        const reader = new FileReader();
-        reader.onloadend = function() {
-            editor.summernote('insertImage', reader.result);
-        };
-        reader.readAsDataURL(file);
+    function loadImageElement(src) {
+        return new Promise((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = reject;
+            image.src = src;
+        });
     }
 
-    $('#summernote-editor').summernote({
+    function blobToDataURL(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    async function compressImage(file) {
+        const originalDataUrl = await readFileAsDataURL(file);
+
+        if (file.type === 'image/gif') {
+            return originalDataUrl;
+        }
+
+        const image = await loadImageElement(originalDataUrl);
+        const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext('2d', { alpha: true });
+        context.drawImage(image, 0, 0, width, height);
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', IMAGE_QUALITY));
+        return blob ? blobToDataURL(blob) : originalDataUrl;
+    }
+
+    function optimizeEditorMedia(editorRoot) {
+        $(editorRoot).find('img').each(function() {
+            this.loading = 'lazy';
+            this.decoding = 'async';
+            this.style.maxWidth = '100%';
+            this.style.height = 'auto';
+        });
+
+        $(editorRoot).find('iframe').each(function() {
+            this.loading = 'lazy';
+            this.referrerPolicy = 'no-referrer';
+        });
+    }
+
+    async function insertOptimizedImages(files) {
+        for (const file of files) {
+            if (!file.type.startsWith('image/')) continue;
+
+            const optimizedSrc = await compressImage(file);
+            $('#summernote-editor').summernote('insertImage', optimizedSrc, function($image) {
+                if ($image && $image[0]) {
+                    $image[0].loading = 'lazy';
+                    $image[0].decoding = 'async';
+                    $image.css({ 'max-width': '100%', height: 'auto' });
+                }
+            });
+        }
+
+        optimizeEditorMedia($('#summernote-editor').next('.note-editor').find('.note-editable'));
+        updateCharCount($('#summernote-editor'));
+    }
+
+    const summernoteConfig = {
         lang: 'ko-KR',
         height: 500,
         minHeight: 500,
@@ -76,45 +121,39 @@ $(document).ready(function() {
                 updateCharCount(this);
             },
             onPaste: function(e) {
-                const clipboardData = e.originalEvent.clipboardData;
-                if (clipboardData && clipboardData.items) {
-                    for (let i = 0; i < clipboardData.items.length; i++) {
-                        const item = clipboardData.items[i];
-                        if (item.type.indexOf('image') !== -1) {
-                            // 이미지 붙여넣기 시 기본 동작 완전 차단 (중복 알림 방지)
-                            e.preventDefault();
-                            e.stopPropagation();
-                            
-                            const file = item.getAsFile();
-                            if (file) {
-                                insertImageWithValidation($(this), file, '붙여넣은 이미지');
-                            }
-                            return;
-                        }
-                    }
+                const clipboardItems = Array.from((e.originalEvent || e).clipboardData?.items || []);
+                const imageFiles = clipboardItems
+                    .filter(item => item.type && item.type.startsWith('image/'))
+                    .map(item => item.getAsFile())
+                    .filter(Boolean);
+
+                if (imageFiles.length > 0) {
+                    e.preventDefault();
+                    insertOptimizedImages(imageFiles);
+                    return;
                 }
+
                 setTimeout(() => {
                     updateCharCount(this);
                 }, 10);
             },
             onChange: function(contents, $editable) {
                 updateCharCount(this);
-                updateImageSizeDisplay(this);
+                optimizeEditorMedia($editable);
             },
             onImageUpload: function(files) {
-                // 드래그앤드롭 또는 파일 선택으로 이미지 업로드 시 크기 검사
-                const editor = $(this);
-                
-                for (let i = 0; i < files.length; i++) {
-                    insertImageWithValidation(editor, files[i], files[i].name);
-                }
+                insertOptimizedImages(Array.from(files));
             }
         }
-    });
+    };
+
+    if (!$('#summernote-editor').next().hasClass('note-editor')) {
+        $('#summernote-editor').summernote(summernoteConfig);
+    }
     
     $('#max-chars').text(MAX_CHARS.toLocaleString());
     updateCharCount($('#summernote-editor'));
-    updateImageSizeDisplay($('#summernote-editor'));
+    optimizeEditorMedia($('#summernote-editor').next('.note-editor').find('.note-editable'));
 
     function updateCharCount(editorInstance) {
         const content = $(editorInstance).summernote('code');
