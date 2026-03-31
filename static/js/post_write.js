@@ -2,7 +2,9 @@ $(document).ready(function() {
     $.summernote.lang['ko-KR'].color.cpSelect = 'color picker';
 
     const MAX_CHARS = 5000;
-    const MAX_IMAGES = 5; 
+    const MAX_IMAGES = 5;
+    const MAX_IMAGE_DIMENSION = 1600;
+    const IMAGE_QUALITY = 0.78;
 
     const postTitleInput = $('#post-title');
     const titleCounter = $('#current-title-chars');
@@ -16,7 +18,89 @@ $(document).ready(function() {
         titleCounter.text(currentLength);
     });
 
-    $('#summernote-editor').summernote({
+    function readFileAsDataURL(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function loadImageElement(src) {
+        return new Promise((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = reject;
+            image.src = src;
+        });
+    }
+
+    function blobToDataURL(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    async function compressImage(file) {
+        const originalDataUrl = await readFileAsDataURL(file);
+
+        if (file.type === 'image/gif') {
+            return originalDataUrl;
+        }
+
+        const image = await loadImageElement(originalDataUrl);
+        const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext('2d', { alpha: true });
+        context.drawImage(image, 0, 0, width, height);
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', IMAGE_QUALITY));
+        return blob ? blobToDataURL(blob) : originalDataUrl;
+    }
+
+    function optimizeEditorMedia(editorRoot) {
+        $(editorRoot).find('img').each(function() {
+            this.loading = 'lazy';
+            this.decoding = 'async';
+            this.style.maxWidth = '100%';
+            this.style.height = 'auto';
+        });
+
+        $(editorRoot).find('iframe').each(function() {
+            this.loading = 'lazy';
+            this.referrerPolicy = 'no-referrer';
+        });
+    }
+
+    async function insertOptimizedImages(files) {
+        for (const file of files) {
+            if (!file.type.startsWith('image/')) continue;
+
+            const optimizedSrc = await compressImage(file);
+            $('#summernote-editor').summernote('insertImage', optimizedSrc, function($image) {
+                if ($image && $image[0]) {
+                    $image[0].loading = 'lazy';
+                    $image[0].decoding = 'async';
+                    $image.css({ 'max-width': '100%', height: 'auto' });
+                }
+            });
+        }
+
+        optimizeEditorMedia($('#summernote-editor').next('.note-editor').find('.note-editable'));
+        updateCharCount($('#summernote-editor'));
+    }
+
+    const summernoteConfig = {
         lang: 'ko-KR',
         height: 500,
         minHeight: 500,
@@ -37,18 +121,39 @@ $(document).ready(function() {
                 updateCharCount(this);
             },
             onPaste: function(e) {
+                const clipboardItems = Array.from((e.originalEvent || e).clipboardData?.items || []);
+                const imageFiles = clipboardItems
+                    .filter(item => item.type && item.type.startsWith('image/'))
+                    .map(item => item.getAsFile())
+                    .filter(Boolean);
+
+                if (imageFiles.length > 0) {
+                    e.preventDefault();
+                    insertOptimizedImages(imageFiles);
+                    return;
+                }
+
                 setTimeout(() => {
                     updateCharCount(this);
                 }, 10);
             },
             onChange: function(contents, $editable) {
                 updateCharCount(this);
+                optimizeEditorMedia($editable);
+            },
+            onImageUpload: function(files) {
+                insertOptimizedImages(Array.from(files));
             }
         }
-    });
+    };
+
+    if (!$('#summernote-editor').next().hasClass('note-editor')) {
+        $('#summernote-editor').summernote(summernoteConfig);
+    }
     
     $('#max-chars').text(MAX_CHARS.toLocaleString());
     updateCharCount($('#summernote-editor'));
+    optimizeEditorMedia($('#summernote-editor').next('.note-editor').find('.note-editable'));
 
     function updateCharCount(editorInstance) {
         const content = $(editorInstance).summernote('code');

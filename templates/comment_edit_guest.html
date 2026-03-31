@@ -54,7 +54,7 @@
             <h3>비회원 댓글 수정</h3>
             <form method="POST" action="{{ url_for('comment_edit_guest', comment_id=comment.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <textarea name="edit_content" required>{{ comment.content }}</textarea>
+                <textarea name="edit_content" required maxlength="1000">{{ comment.content }}</textarea>
                 <button type="submit" class="btn">수정하기</button>
                 <button type="button" class="btn" onclick="history.back()" style="background-color: #555; margin-top: 10px;">취소</button>
             </form>

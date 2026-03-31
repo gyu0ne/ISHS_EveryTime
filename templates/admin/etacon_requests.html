@@ -25,7 +25,7 @@
                 <td style="padding: 10px;">{{ req.price }}</td>
                 <td style="padding: 10px;">{{ req.uploader_id }}</td>
                 <td style="padding: 10px;">
-                    <img src="{{ url_for('static', filename=req.thumbnail) }}" style="height: 50px;">
+                    <img src="{{ url_for('static', filename=req.thumbnail) }}" style="height: 50px;" loading="lazy" decoding="async">
                 </td>
                 <td style="padding: 10px;">
                     <button onclick="processEtacon({{ req.id }}, 'approve')" style="background: #4CAF50; color: white; border: none; padding: 5px 10px; cursor: pointer;">승인</button>

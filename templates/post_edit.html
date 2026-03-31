@@ -75,29 +75,6 @@
         </footer>
     </form>
 
-    <script>
-    $(document).ready(function() {
-        // Summernote 에디터를 초기화할 때, 기존 게시글 내용을 넣어줍니다.
-        // #summernote-editor div 태그 안에 내용이 이미 있으므로, summernote()를 호출하기만 하면 됩니다.
-        $('#summernote-editor').summernote({
-            lang: 'ko-KR',
-            height: 500,
-            minHeight: 500,
-            maxHeight: 500,
-            focus: true,
-            placeholder: '내용을 입력해주세요.',
-            toolbar: [
-                ['font', ['bold', 'underline']],
-                ['fontname', ['fontname']],
-                ['fontsize', ['fontsize']],
-                ['color', ['forecolor', 'backcolor']],
-                ['para', ['ul', 'ol', 'paragraph']],
-                ['table', ['table']],
-                ['insert', ['link', 'picture', 'video']]
-            ]
-        });
-    });
-    </script>
     <script src="{{ url_for('static', filename='js/post_write.js') }}"></script>
 </body>
 </html>

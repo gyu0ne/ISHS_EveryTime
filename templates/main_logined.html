@@ -20,7 +20,7 @@
         <div class="widget profile-card-widget">
             <a href="{{ url_for('mypage') }}">
                 <div class="profile-picture">
-                    <img src="{{ url_for('static', filename=user.profile_image) }}" alt="프로필 사진">
+                    <img src="{{ url_for('static', filename=user.profile_image) }}" alt="프로필 사진" loading="eager" decoding="async" fetchpriority="high">
                 </div>
                 <h4 class="nickname">{{ user.nickname }}</h4>
             </a>

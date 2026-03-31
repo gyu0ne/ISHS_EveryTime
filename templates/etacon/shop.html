@@ -20,7 +20,7 @@
         {% for pack in packs %}
         <div class="pack-card">
             <div class="pack-thumbnail">
-                <img src="{{ url_for('static', filename=pack.thumbnail) }}" alt="{{ pack.name }}">
+                <img src="{{ url_for('static', filename=pack.thumbnail) }}" alt="{{ pack.name }}" loading="lazy" decoding="async">
             </div>
             <div class="pack-info">
                 <h3 class="pack-name">{{ pack.name }}</h3>

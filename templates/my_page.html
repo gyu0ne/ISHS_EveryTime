@@ -42,7 +42,7 @@
             <aside class="profile-sidebar">
                 <div class="card profile-card">
                     <div class="profile-picture">
-                        <img src="{{ url_for('static', filename=profile_image) }}" alt="프로필 사진">
+                        <img src="{{ url_for('static', filename=profile_image) }}" alt="프로필 사진" loading="eager" decoding="async" fetchpriority="high">
                         <button class="change-pic-btn" id="change-pic-btn">변경</button>
                     </div>
                     <h2 class="nickname">{{ nickname }}</h2>
