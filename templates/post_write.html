@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="kr">
 <head>
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-5QFZNJVP');</script>
+    <!-- End Google Tag Manager -->
     <meta charset="utf-8">
     <title>log인곽 - 글쓰기</title>
     
@@ -30,6 +37,10 @@
     <script src="{{ url_for('static', filename='js/etacon_modal.js') }}"></script>
 </head>
 <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5QFZNJVP"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
     <form class="editor-container" id="post-form" method="POST" action="{{ url_for('post_write') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
@@ -103,6 +114,10 @@
         </main>
 
         <footer class="editor-footer">
+            <div class="image-size-counter" style="font-size: 12px; color: #888; margin-bottom: 5px;">
+                🖼️ 이미지: <span id="current-image-count">0</span>/<span id="max-image-count">5</span>개 | 
+                용량: <span id="current-image-size">0.00</span>/<span id="max-image-size">15</span>MB
+            </div>
             <div class="char-counter">
                 <span id="current-chars">0</span> / <span id="max-chars">5000</span>
             </div>

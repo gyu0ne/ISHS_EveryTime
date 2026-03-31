@@ -146,7 +146,7 @@
         {% if comment.etacon_path %}
             <div class="etacon-comment">
                 <img src="{{ url_for('static', filename=comment.etacon_path) }}" 
-                     alt="에타콘" 
+                     alt="인곽콘" 
                      style="max-width: 150px; max-height: 150px; border-radius: 8px;">
             </div>
         {% else %}
@@ -203,7 +203,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
             <div style="text-align: right; margin-bottom: 5px;">
-                <button type="button" style="background:none; border:1px solid #555; color:#ccc; cursor:pointer; padding:2px 5px; border-radius:4px;" onclick="openEtaconModal('#edit-textarea-{{ comment.id }}')">에타콘</button>
+                <button type="button" style="background:none; border:1px solid #555; color:#ccc; cursor:pointer; padding:2px 5px; border-radius:4px;" onclick="openEtaconModal('#edit-textarea-{{ comment.id }}')">인곽콘</button>
             </div>
 
             <textarea name="edit_content" required>{{ comment.content }}</textarea>
@@ -229,7 +229,7 @@
                         <button type="button" 
                             class="btn-etacon-trigger"
                             onclick="openEtaconModal({{ post.id }}, {{ comment.id }})">
-                            에타콘
+                            인곽콘
                         </button>
                     {% endif %}
                 </div>
@@ -308,33 +308,37 @@
             </div>
 
             {% if poll %}
-            <div class="poll-container" id="poll-container-{{ poll.id }}">
-                <h3 class="poll-title">{{ poll.title }}</h3>
-                <div class="poll-meta"><span id="poll-total-{{ poll.id }}">{{ poll.total_votes }}</span>명 참여</div>
+            {% set ns = namespace(is_voted=false) %}
+            {% for option in poll.options %}
+                {% if option.is_voted %}
+                    {% set ns.is_voted = true %}
+                {% endif %}
+            {% endfor %}
+
+            <div class="poll-container {% if ns.is_voted %}voted{% endif %}">
+                <div class="poll-header">
+                    <strong>Q. {{ poll.title }}</strong>
+                    <span class="poll-meta">총 <span id="poll-total-{{ poll.id }}">{{ poll.total_votes }}</span>명 참여</span>
+                </div>
 
                 <div class="poll-options">
                     {% for option in poll.options %}
-                    {% set show_result = poll.user_voted_option_id or (g.user and (g.user.role == 'admin' or g.user.login_id == post.author)) %}
-                    
-                    <div class="poll-option-wrapper {% if show_result %}result-mode{% else %}vote-mode{% endif %}" 
-                         id="option-wrapper-{{ option.id }}"
-                         onclick="votePoll({{ poll.id }}, {{ option.id }})">
+                    <div class="poll-option-item {% if option.is_voted %}selected{% endif %}" 
+                        id="option-wrapper-{{ option.id }}"
+                        onclick="votePoll('{{ poll.id }}', '{{ option.id }}')">
                         
-                        <div class="poll-bar-bg" 
-                             id="bar-{{ option.id }}"
-                             style="width: {% if show_result %}{{ option.percent }}{% else %}0{% endif %}%;">
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" 
+                                id="bar-{{ option.id }}" 
+                                style="width: {{ '%.1f'|format(option.percent) }}%;"></div>
                         </div>
 
                         <div class="poll-content-row">
                             <span class="poll-text">
-                                {% if option.is_voted %}
-                                    <i class="fas fa-check-circle" style="color: #d9534f; margin-right: 5px;"></i>
-                                {% endif %}
                                 {{ option.option_text }}
                             </span>
-                            
-                            <span class="poll-stat" id="stat-{{ option.id }}" style="display: {% if show_result %}block{% else %}none{% endif %};">
-                                {{ option.percent }}% ({{ option.vote_count }}명)
+                            <span class="poll-stat" id="stat-{{ option.id }}">
+                                {{ '%.1f'|format(option.percent) }}% ({{ option.vote_count }}명)
                             </span>
                         </div>
                     </div>
@@ -343,74 +347,79 @@
             </div>
 
             <script>
-            async function votePoll(pollId, optionId) {
-                // 로그인 체크 (UI에서 버튼을 눌렀을 때)
-                {% if not g.user %}
-                    alert('로그인이 필요한 서비스입니다.');
-                    return;
-                {% endif %}
+                async function votePoll(pollId, optionId) {
+                    // 로그인 체크 등 기존 로직...
+                    {% if not g.user %}
+                        alert('로그인이 필요한 서비스입니다.');
+                        return;
+                    {% endif %}
 
-                try {
-                    const response = await fetch('/api/vote', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': '{{ csrf_token() }}'
-                        },
-                        body: JSON.stringify({ poll_id: pollId, option_id: optionId })
-                    });
+                    try {
+                        const response = await fetch('/api/vote', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({ poll_id: pollId, option_id: optionId })
+                        });
 
-                    const result = await response.json();
+                        const result = await response.json();
 
-                    if (result.status === 'success') {
-                        // UI 업데이트
-                        updatePollUI(pollId, result.options, result.total_votes, result.user_voted_option_id);
-                    } else {
-                        alert(result.message);
+                        if (result.status === 'success') {
+                            // UI 업데이트 함수 호출 (새로고침 없음!)
+                            updatePollUI(pollId, result.options, result.total_votes, result.user_voted_option_id);
+                        } else {
+                            alert(result.message);
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('투표 중 오류가 발생했습니다.');
                     }
-                } catch (error) {
-                    console.error('Error:', error);
-                    alert('투표 중 오류가 발생했습니다.');
                 }
-            }
 
-            function updatePollUI(pollId, options, totalVotes, myOptionId) {
-                // 총 참여자 수 업데이트
-                document.getElementById(`poll-total-${pollId}`).textContent = totalVotes;
-
-                options.forEach(opt => {
-                    const wrapper = document.getElementById(`option-wrapper-${opt.id}`);
-                    const bar = document.getElementById(`bar-${opt.id}`);
-                    const stat = document.getElementById(`stat-${opt.id}`);
-                    const textSpan = wrapper.querySelector('.poll-text');
-
-                    // 1. 모드 변경 (vote-mode -> result-mode)
-                    wrapper.classList.remove('vote-mode');
-                    wrapper.classList.add('result-mode');
-
-                    // 2. 그래프 너비 업데이트
-                    bar.style.width = `${opt.percent}%`;
-
-                    // 3. 수치 텍스트 업데이트 및 표시
-                    stat.textContent = `${opt.percent}% (${opt.vote_count}명)`;
-                    stat.style.display = 'block';
-
-                    // 4. 내가 선택한 항목 아이콘 표시
-                    if (opt.id === myOptionId) {
-                        textSpan.innerHTML = `<i class="fas fa-check-circle" style="color: #d9534f; margin-right: 5px;"></i> ${textSpan.textContent.trim().replace(/^✔\s*/, '')}`; // 기존 아이콘 중복 방지
-                        wrapper.classList.add('selected'); // 스타일링용 클래스 추가
-                    } else {
-                        // 다른 항목은 아이콘 제거
-                        const cleanText = textSpan.textContent.trim(); 
-                        // 만약 기존에 아이콘 텍스트가 섞여있다면 정제 필요하나, 여기선 innerHTML 재설정이 안전
-                        // 단순화를 위해 기존 텍스트만 남김 (실제 구현 시 option_text를 data 속성으로 저장해두면 더 좋음)
+                function updatePollUI(pollId, options, totalVotes, myOptionId) {
+                    // 1. 투표 상태에 따라 컨테이너 스타일(그래프 노출 여부) 변경
+                    const pollTotalSpan = document.getElementById(`poll-total-${pollId}`);
+                    
+                    if (pollTotalSpan) {
+                        const container = pollTotalSpan.closest('.poll-container');
+                        if (container) {
+                            // [수정] 내 선택(myOptionId)이 있으면 결과 모드(.voted), 없으면(취소 시) 투표 모드 복귀
+                            if (myOptionId) {
+                                container.classList.add('voted');
+                            } else {
+                                container.classList.remove('voted');
+                            }
+                        }
+                        pollTotalSpan.textContent = totalVotes;
                     }
-                });
-                
-                // 페이지 새로고침을 통해 아이콘 등 상태를 확실히 동기화하는 것도 방법입니다.
-                // 여기서는 부드러운 UX를 위해 DOM 조작만 수행했습니다.
-                location.reload(); // [선택] 확실한 UI 반영을 위해 새로고침 (AJAX 효과를 원하면 위 DOM 조작 코드 고도화 필요)
-            }
+
+                    // 2. 각 옵션 상태 업데이트
+                    options.forEach(opt => {
+                        const wrapper = document.getElementById(`option-wrapper-${opt.id}`);
+                        const bar = document.getElementById(`bar-${opt.id}`);
+                        const stat = document.getElementById(`stat-${opt.id}`);
+
+                        if (wrapper && bar && stat) {
+                            // 소수점 1자리로 포맷 통일
+                            const percentFixed = parseFloat(opt.percent).toFixed(1);
+
+                            requestAnimationFrame(() => {
+                                bar.style.width = `${percentFixed}%`;
+                            });
+                            
+                            stat.textContent = `${percentFixed}% (${opt.vote_count}명)`;
+
+                            // [수정] 선택 상태 토글 (취소 시 myOptionId가 null이므로 모든 selected가 해제됨)
+                            if (String(opt.id) === String(myOptionId)) {
+                                wrapper.classList.add('selected'); 
+                            } else {
+                                wrapper.classList.remove('selected');
+                            }
+                        }
+                    });
+                }
             </script>
             {% endif %}
 
@@ -459,7 +468,7 @@
                         <button type="button" 
                             class="btn-etacon-trigger"
                             onclick="openEtaconModal({{ post.id }}, null)">
-                            에타콘
+                            인곽콘
                         </button>
                     {% endif %}
                     </div>

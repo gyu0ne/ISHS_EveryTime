@@ -1,15 +1,17 @@
 from gevent import monkey
 monkey.patch_all()
 
-from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response, make_response
+from flask import Flask, request, render_template, url_for, redirect, jsonify, session, g, Response, make_response, Request
 from werkzeug.middleware.proxy_fix import ProxyFix
 from bleach.css_sanitizer import CSSSanitizer
 from werkzeug.utils import secure_filename
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
 from gevent.queue import Queue, Empty
+from nfcl.core import ComciganAPI
 from cachetools import TTLCache
 from flask_bcrypt import Bcrypt
+from flask_caching import Cache
 from dotenv import load_dotenv
 from functools import wraps
 from flask import jsonify
@@ -31,8 +33,20 @@ import re
 
 load_dotenv()
 
+# Werkzeug 2.2+에서 max_form_memory_size 기본값이 500KB로 변경됨
+# Base64 이미지 데이터를 처리하려면 이 값을 늘려야 함
+class CustomRequest(Request):
+    max_form_memory_size = 50 * 1024 * 1024  # 50MB
+
 app = Flask(__name__)
+app.request_class = CustomRequest
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB - 반드시 앱 초기화 직후에 설정
+
+# 캐시 설정 추가 - 성능 향상을 위한 핵심
+app.config['CACHE_TYPE'] = 'SimpleCache'  # 메모리 기반 캐시
+app.config['CACHE_DEFAULT_TIMEOUT'] = 300  # 5분 캐시
+cache = Cache(app)
 
 bcrypt = Bcrypt(app)
 csrf = CSRFProtect(app)
@@ -64,6 +78,7 @@ def save_etacon_image(file, sub_folder):
     """
     이미지를 저장하고 경로를 반환합니다.
     GIF는 최적화하여 저장하고, 정적 이미지는 포맷을 유지합니다.
+    JPG 저장 시 투명 배경(RGBA) 오류를 방지합니다.
     sub_folder: 패키지별 폴더 (예: 'pack_1')
     """
     filename = secure_filename(file.filename)
@@ -88,15 +103,25 @@ def save_etacon_image(file, sub_folder):
         if file.filename.lower().endswith('.gif'):
             img.save(save_path, save_all=True, optimize=True, loop=0)
         else:
-            # 정적 이미지는 포맷에 맞게 저장 (필요 시 리사이징 가능)
+            # 정적 이미지는 포맷에 맞게 저장
+            # [수정] JPG/JPEG 저장 시 RGBA 모드 오류 해결 로직 추가
+            if ext in ['jpg', 'jpeg']:
+                if img.mode in ('RGBA', 'LA'):
+                    # 투명한 배경을 흰색으로 채워서 RGB로 변환 (투명->검은색 방지)
+                    background = Image.new("RGB", img.size, (255, 255, 255))
+                    # 이미지의 알파 채널을 마스크로 사용하여 붙여넣기
+                    background.paste(img, mask=img.split()[-1])
+                    img = background
+                elif img.mode == 'P':
+                    # 팔레트 모드일 경우 RGB로 변환
+                    img = img.convert('RGB')
+            
             img.save(save_path, optimize=True)
             
         return f"images/etacons/{sub_folder}/{unique_filename}"
     except Exception as e:
         print(f"이미지 저장 실패: {e}")
         return None
-
-# app.py
 
 # DB connect (first line of all route)
 def get_db():
@@ -111,6 +136,69 @@ def get_log_db():
     if db is None:
         db = g._log_database = sqlite3.connect(LOG_DATABASE)
     return db
+
+def get_grade_class(hakbun):
+    """
+    학번(예: 2305)을 입력받아 학년(2)과 반(3)을 반환합니다.
+    형식이 맞지 않으면 None, None을 반환합니다.
+    """
+    try:
+        s_hakbun = str(hakbun)
+        if len(s_hakbun) == 4:
+            grade = int(s_hakbun[0])
+            class_num = int(s_hakbun[1])
+            return grade, class_num
+    except (ValueError, IndexError):
+        pass
+    return None, None
+
+def get_timetable_data(grade, class_num):
+    """
+    DB에서 시간표를 조회하고, 없거나 날짜가 지났으면 nfcl로 크롤링하여 갱신합니다.
+    """
+    today = datetime.datetime.now().strftime('%Y-%m-%d')
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # 1. DB 조회
+    cursor.execute("SELECT week_schedule, updated_at FROM timetables WHERE grade = ? AND class_num = ?", (grade, class_num))
+    row = cursor.fetchone()
+
+    # 2. 데이터가 있고, 오늘 업데이트된 것이라면 DB 데이터 반환
+    if row and row[1] == today:
+        try:
+            return json.loads(row[0])
+        except json.JSONDecodeError:
+            pass # JSON 파싱 에러 시 재수집
+
+    # 3. 데이터가 없거나 구형이라면 크롤링 (nfcl 사용)
+    try:
+        # headless=True로 설정하여 백그라운드에서 실행
+        nfcl = ComciganAPI(headless=True)
+        # 학교명 하드코딩 (필요 시 환경 변수로 분리 가능)
+        data = nfcl.get_timetable("인천과학고등학교", grade, class_num)
+        
+        if "error" in data:
+            print(f"NFCL Error: {data['error']}")
+            # 에러 발생 시 기존 데이터가 있다면 반환, 없다면 None
+            return json.loads(row[0]) if row else None
+
+        week_schedule = data['timetable'] # 주간 시간표 딕셔너리
+
+        # 4. DB 저장 (INSERT OR REPLACE)
+        json_schedule = json.dumps(week_schedule, ensure_ascii=False)
+        cursor.execute("""
+            INSERT OR REPLACE INTO timetables (grade, class_num, week_schedule, updated_at)
+            VALUES (?, ?, ?, ?)
+        """, (grade, class_num, json_schedule, today))
+        conn.commit()
+
+        return week_schedule
+
+    except Exception as e:
+        print(f"Timetable Fetch Error: {e}")
+        add_log('ERROR', 'SYSTEM', f"시간표 수집 실패 ({grade}-{class_num}): {e}")
+        return None
 
 # Close DB connecting
 @app.teardown_appcontext
@@ -128,6 +216,7 @@ def close_log_connection(exception):
 
 @app.before_request
 def load_logged_in_user():
+    # 정적 파일 요청 등은 건너뜀
     if request.endpoint and 'static' in request.endpoint:
         return
 
@@ -141,21 +230,56 @@ def load_logged_in_user():
         cursor.execute("SELECT * FROM users WHERE login_id = ?", (user_id,))
         g.user = cursor.fetchone()
 
-        # --- ▼ [수정] 제재 상태 확인 로직 통합 ---
+        # [기존 로직] 제재 상태 만료 확인
         if g.user and g.user['status'] == 'banned' and g.user['banned_until']:
             try:
                 banned_until_date = datetime.datetime.strptime(g.user['banned_until'], '%Y-%m-%d %H:%M:%S')
                 if datetime.datetime.now() > banned_until_date:
-                    # 제재 기간 만료, 상태를 active로 변경
                     cursor.execute("UPDATE users SET status = 'active', banned_until = NULL WHERE login_id = ?", (g.user['login_id'],))
                     conn.commit()
-                    # g.user 객체를 다시 로드하여 갱신
                     cursor.execute("SELECT * FROM users WHERE login_id = ?", (user_id,))
                     g.user = cursor.fetchone()
             except (ValueError, TypeError):
-                # 날짜 형식이 잘못되었거나 NULL인 경우
                 pass
-        # --- ▲ [수정] ---
+
+# 2. [필수] 차단된 사용자 확인 (반드시 위 함수보다 아래에 있어야 합니다!)
+@app.before_request
+def block_banned_users():
+    # g.user가 아직 생성되지 않았거나(위 함수 누락/순서 에러), 비로그인 상태면 통과
+    if not hasattr(g, 'user') or not g.user:
+        return
+
+    # 정적 리소스 및 로그아웃 등은 제외
+    if request.endpoint and ('static' in request.endpoint or 'logout' in request.endpoint):
+        return
+
+    # 차단된 유저인지 확인
+    if g.user['status'] == 'banned':
+        # API, 댓글 작성 등 개별 기능 제한은 @check_banned에서 처리하므로 패스
+        if request.path.startswith('/api/') or request.path.startswith('/react/') or request.path.startswith('/comment/'):
+            return
+
+        # "최초 접속" 알림 처리
+        if not session.get('banned_notice_shown'):
+            banned_until_str = "알 수 없음"
+            if g.user['banned_until']:
+                try:
+                    dt = datetime.datetime.strptime(g.user['banned_until'], '%Y-%m-%d %H:%M:%S')
+                    banned_until_str = dt.strftime('%Y년 %m월 %d일 %H:%M')
+                except ValueError:
+                    banned_until_str = g.user['banned_until']
+
+            message = f"활동이 정지된 계정입니다.\\n(글 읽기는 가능하지만 작성 및 추천은 제한됩니다.)\\n\\n[해제 예정일]\\n{banned_until_str}"
+            
+            session['banned_notice_shown'] = True # 알림 확인 처리
+            
+            if request.method == 'GET':
+                return Response(f'''
+                    <script>
+                        alert("{message}");
+                        window.location.reload(); 
+                    </script>
+                ''')
 
 # --- 👇 [추가] 제재된 사용자의 활동을 제한하는 데코레이터 ---
 def check_banned(f):
@@ -205,7 +329,7 @@ class NotificationChannel:
 notification_channel = NotificationChannel()
 
 def create_notification(recipient_id, actor_id, action, target_type, target_id, post_id):
-    """알림을 생성하고 DB에 저장하는 함수"""
+    """알림을 생성하고 DB에 저장하는 함수 (익명 게시판 처리 추가)"""
     # 자기 자신에게는 알림을 보내지 않음
     if recipient_id == actor_id:
         return
@@ -214,31 +338,49 @@ def create_notification(recipient_id, actor_id, action, target_type, target_id, 
     cursor = conn.cursor()
     created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
+    # 1. 알림 DB 저장
     cursor.execute("""
         INSERT INTO notifications 
         (recipient_id, actor_id, action, target_type, target_id, post_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (recipient_id, actor_id, action, target_type, target_id, post_id, created_at))
     conn.commit()
+    notification_id = cursor.lastrowid 
 
-    # 1. 알림 행위자(actor)의 닉네임을 조회합니다.
-    cursor.execute("SELECT nickname FROM users WHERE login_id = ?", (actor_id,))
-    actor = cursor.fetchone()
+    # --- ▼ [수정] 익명 게시판 여부 확인 및 닉네임 마스킹 처리 ▼ ---
     
-    # 2. 만약의 경우를 대비해 actor가 없을 경우를 처리합니다.
-    actor_nickname = actor['nickname'] if actor else '알 수 없는 사용자'
+    # 해당 게시글이 어떤 게시판에 속해 있는지 조회
+    cursor.execute("SELECT board_id FROM posts WHERE id = ?", (post_id,))
+    post_row = cursor.fetchone()
+    
+    actor_nickname = '알 수 없는 사용자'
+
+    # 게시판 ID가 3(익명게시판)인 경우, 닉네임을 '익명'으로 고정
+    if post_row and post_row[0] == 3:
+        actor_nickname = '익명'
+    else:
+        # 일반 게시판인 경우, 실제 유저 닉네임 조회
+        if actor_id == GUEST_USER_ID:
+            actor_nickname = '익명(비회원)'
+        else:
+            cursor.execute("SELECT nickname FROM users WHERE login_id = ?", (actor_id,))
+            actor = cursor.fetchone()
+            if actor:
+                # row_factory 설정에 따라 인덱스 또는 키로 접근 (안전하게 인덱스 0 사용)
+                actor_nickname = actor[0]
+
+    # --- ▲ [수정] ---
 
     # 3. 클라이언트(브라우저)로 보낼 메시지 객체를 생성합니다.
-    #    - 이 객체에는 ID 대신 사용자에게 보여줄 닉네임만 포함합니다.
     message_to_send = {
         'action': action,
-        'actor_nickname': actor_nickname,
+        'actor_nickname': actor_nickname, # 수정된 닉네임 사용
         'post_id': post_id,
         'is_read': 0, 
-        'id': cursor.lastrowid 
+        'id': notification_id
     }
 
-    # 3. 알림 채널을 통해 해당 사용자에게 메시지 발행(publish)
+    # 4. 알림 채널을 통해 해당 사용자에게 메시지 발행(publish)
     notification_channel.publish(recipient_id, message_to_send)
 
 # Add Log to log.db
@@ -304,7 +446,8 @@ def check_auto_login():
             session['user_id'] = user[0]
             session.permanent = True
 
-# Bob (School Meal Information)
+# Bob (School Meal Information) - 캐시 적용 (하루 단위로 변경되므로 30분 캐시)
+@cache.memoize(timeout=1800)  # 30분 캐시
 def get_bob():
         date = (datetime.datetime.now()).strftime('%Y%m%d')
 
@@ -420,7 +563,8 @@ def format_datetime(value):
 # 위에서 만든 함수를 템플릿에서 'datetime'이라는 이름의 필터로 사용할 수 있도록 등록
 app.jinja_env.filters['datetime'] = format_datetime
 
-# Get Recent Posts from board id
+# Get Recent Posts from board id (캐시 적용)
+@cache.memoize(timeout=60)  # 1분 캐시
 def get_recent_posts(board_id):
     """
     특정 게시판 ID를 받아 해당 게시판의 게시글을 최신순으로 5개 가져옵니다.
@@ -430,8 +574,6 @@ def get_recent_posts(board_id):
     cursor = conn.cursor()
 
     try:
-        # board_id에 해당하는 게시글을 updated_at 기준으로 내림차순(최신순) 정렬하여 상위 5개를 선택합니다.
-        # users 테이블과 JOIN하여 작성자 닉네임도 함께 가져옵니다.
         query = """
             SELECT p.id, p.title, u.nickname, p.updated_at
             FROM posts p
@@ -442,18 +584,19 @@ def get_recent_posts(board_id):
         """
         cursor.execute(query, (board_id,))
         posts = cursor.fetchall()
-        return posts
+        # sqlite3.Row를 dict로 변환 (캐시 가능하도록)
+        return [dict(row) for row in posts]
     except Exception as e:
         add_log('ERROR', 'SYSTEM', f"Error fetching recent posts for board_id {board_id}: {e}")
         return []
 
+@cache.memoize(timeout=120)  # 2분 캐시
 def get_hot_posts():
     """최근 7일간 추천 수가 10개 이상인 게시글을 상위 5개까지 가져옵니다."""
     conn = get_db()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # 7일 전 날짜 계산
     seven_days_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
     
     query = """
@@ -469,15 +612,16 @@ def get_hot_posts():
         LIMIT 5
     """
     cursor.execute(query, (seven_days_ago,))
-    return cursor.fetchall()
+    # sqlite3.Row를 dict로 변환 (캐시 가능하도록)
+    return [dict(row) for row in cursor.fetchall()]
 
+@cache.memoize(timeout=120)  # 2분 캐시
 def get_trending_posts():
     """최근 24시간 동안 조회수가 10 이상인 게시글 중 가장 높은 글을 상위 5개까지 가져옵니다."""
     conn = get_db()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # 24시간 전 날짜 계산
     one_day_ago = (datetime.datetime.now() - datetime.timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
     
     # 수정: WHERE 절에 view_count >= 10 조건 추가
@@ -489,14 +633,57 @@ def get_trending_posts():
         LIMIT 5
     """
     cursor.execute(query, (one_day_ago,))
-    return cursor.fetchall()
+    # sqlite3.Row를 dict로 변환 (캐시 가능하도록)
+    return [dict(row) for row in cursor.fetchall()]
+
+# 급식 API 엔드포인트 (비동기 로딩용)
+@app.route('/api/bob')
+def api_bob():
+    bob_data = get_bob()
+    if bob_data:
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'breakfast': bob_data[0],
+                'lunch': bob_data[1],
+                'dinner': bob_data[2]
+            }
+        })
+    return jsonify({'status': 'error', 'message': '급식 정보를 불러올 수 없습니다.'})
+
+# 시간표 API 엔드포인트 (비동기 로딩용)
+@app.route('/api/timetable')
+def api_timetable():
+    # 로그인 체크
+    if 'user_id' not in session or not g.user:
+        return jsonify({'status': 'error', 'message': '로그인이 필요합니다.'}), 401
+    
+    user_data = g.user
+    timetable_today = []
+    
+    if user_data and user_data['hakbun']:
+        grade, class_num = get_grade_class(user_data['hakbun'])
+        
+        if grade and class_num:
+            full_timetable = get_timetable_data(grade, class_num)
+            
+            if full_timetable:
+                weekday_map = {0: '월', 1: '화', 2: '수', 3: '목', 4: '금'}
+                today_idx = datetime.datetime.now().weekday()
+                target_day = weekday_map.get(today_idx, '월')
+                timetable_today = full_timetable.get(target_day, [])
+    
+    return jsonify({
+        'status': 'success',
+        'data': timetable_today
+    })
 
 # Main Page
 @app.route('/')
 def main_page():
     if 'user_id' in session:
         conn = get_db()
-        conn.row_factory = sqlite3.Row  # 컬럼 이름으로 접근 가능하도록 설정
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         free_board_posts = get_recent_posts(1)
@@ -506,16 +693,15 @@ def main_page():
         
         user_data = g.user
 
-        bob_data = get_bob()
+        # 급식/시간표는 AJAX로 비동기 로딩하므로 제거
 
         if user_data:
             return render_template('main_logined.html', 
                                    user=user_data, 
-                                   bob=bob_data, 
                                    free_posts=free_board_posts, 
                                    info_posts=info_board_posts,
                                    hot_posts=hot_posts,
-                                   trending_posts=trending_posts, # g.user 객체를 템플릿에 전달
+                                   trending_posts=trending_posts,
                            hakbun=user_data['hakbun'], 
                            name=user_data['name'], 
                            gen=user_data['gen'], 
@@ -530,13 +716,10 @@ def main_page():
                            hobby_clubs=HOBBY_CLUBS,
                            career_clubs=CAREER_CLUBS)
         else:
-            # 혹시 모를 예외 처리 (세션은 있는데 DB에 유저가 없는 경우)
             session.clear()
-            return redirect('/')
+            return render_template('main_notlogined.html')
     else:
-        # 비로그인 시
-        bob_data = get_bob()
-        return render_template('main_notlogined.html', bob=bob_data)
+        return render_template('main_notlogined.html')
 
 googlebot_ip_cache = {}
 googlebot_ip_cache = TTLCache(maxsize=1000, ttl=3600)
@@ -916,6 +1099,237 @@ def login():
 
     return render_template('login_form.html') # GET
 
+# Find ID (아이디 찾기)
+@app.route('/find-id', methods=['GET', 'POST'])
+def find_id():
+    if 'user_id' in session:
+        return redirect("/")
+
+    if request.method == 'POST':
+        id = request.form['user_id']
+        pw = request.form['user_pw']
+        
+        base_url = "http://localhost:3000"
+        endpoint = "/api/riro_login"
+
+        payload = {
+            'id': id,
+            'password': pw
+        }
+
+        try:
+            response = requests.post(f"{base_url}{endpoint}", json=payload)
+            response.raise_for_status()
+            api_result = response.json()
+
+            if api_result['status'] != 'success':
+                return Response(f'''
+        <script>
+            alert("{api_result['message']}")
+            history.back();
+        </script>
+    ''')
+
+            # 리로스쿨 인증 성공 - 해당 이름과 학번으로 가입된 계정 찾기
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT login_id FROM users WHERE name = ? AND hakbun = ? AND status = "active"', 
+                          (api_result['name'], api_result['student_number']))
+            user = cursor.fetchone()
+
+            if user:
+                found_id = user[0]
+                # 아이디 일부 마스킹 처리 (예: abc123 -> ab***3)
+                if len(found_id) > 3:
+                    masked_id = found_id[:2] + '*' * (len(found_id) - 3) + found_id[-1]
+                else:
+                    masked_id = found_id[0] + '*' * (len(found_id) - 1)
+                
+                return render_template('find_id_result.html', found_id=found_id, masked_id=masked_id)
+            else:
+                return Response('''
+        <script>
+            alert("해당 정보로 가입된 계정이 없습니다.");
+            history.back();
+        </script>
+    ''')
+
+        except requests.exceptions.HTTPError as http_err:
+            add_log('ERROR', 'SYSTEM', f"HTTP error during Find ID: {http_err}")
+            return Response('''
+    <script>
+        alert("HTTP 오류가 발생했습니다.")
+        history.back();
+    </script>
+''')
+        except requests.exceptions.RequestException as req_err:
+            add_log('ERROR', 'SYSTEM', f"Request error during Find ID: {req_err}")
+            return Response('''
+    <script>
+        alert("요청 중 오류가 발생했습니다.")
+        history.back();
+    </script>
+''')
+
+    return render_template('find_id.html')
+
+# Find Password (비밀번호 찾기) - Step 1: 아이디 입력
+@app.route('/find-password', methods=['GET', 'POST'])
+def find_password():
+    if 'user_id' in session:
+        return redirect("/")
+
+    if request.method == 'POST':
+        login_id = request.form['login_id']
+        
+        # 해당 아이디가 존재하는지 확인
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT login_id, name, hakbun FROM users WHERE login_id = ? AND status = "active"', (login_id,))
+        user = cursor.fetchone()
+
+        if user:
+            session['find_pw_login_id'] = login_id
+            session['find_pw_name'] = user[1]
+            session['find_pw_hakbun'] = user[2]
+            return redirect('/find-password/verify')
+        else:
+            return Response('''
+        <script>
+            alert("해당 아이디로 가입된 계정이 없습니다.");
+            history.back();
+        </script>
+    ''')
+
+    return render_template('find_password.html')
+
+# Find Password (비밀번호 찾기) - Step 2: 리로스쿨 인증
+@app.route('/find-password/verify', methods=['GET', 'POST'])
+def find_password_verify():
+    if 'user_id' in session:
+        return redirect("/")
+    
+    if 'find_pw_login_id' not in session:
+        return redirect('/find-password')
+
+    if request.method == 'POST':
+        id = request.form['user_id']
+        pw = request.form['user_pw']
+        
+        base_url = "http://localhost:3000"
+        endpoint = "/api/riro_login"
+
+        payload = {
+            'id': id,
+            'password': pw
+        }
+
+        try:
+            response = requests.post(f"{base_url}{endpoint}", json=payload)
+            response.raise_for_status()
+            api_result = response.json()
+
+            if api_result['status'] != 'success':
+                return Response(f'''
+        <script>
+            alert("{api_result['message']}")
+            history.back();
+        </script>
+    ''')
+
+            # 리로스쿨 인증 성공 - 이름과 학번이 일치하는지 확인
+            # 공백 제거 및 문자열 변환하여 비교
+            riro_name = str(api_result['name']).strip()
+            riro_hakbun = str(api_result['student_number']).strip()
+            db_name = str(session['find_pw_name']).strip()
+            db_hakbun = str(session['find_pw_hakbun']).strip()
+            
+            if (riro_name == db_name and riro_hakbun == db_hakbun):
+                session['find_pw_verified'] = True
+                return redirect('/find-password/reset')
+            else:
+                return Response(f'''
+        <script>
+            alert("해당 계정의 정보와 일치하지 않습니다.\\n(리로스쿨: {riro_name}, {riro_hakbun} / 가입정보: {db_name}, {db_hakbun})");
+            history.back();
+        </script>
+    ''')
+
+        except requests.exceptions.HTTPError as http_err:
+            add_log('ERROR', 'SYSTEM', f"HTTP error during Find Password verify: {http_err}")
+            return Response('''
+    <script>
+        alert("HTTP 오류가 발생했습니다.")
+        history.back();
+    </script>
+''')
+        except requests.exceptions.RequestException as req_err:
+            add_log('ERROR', 'SYSTEM', f"Request error during Find Password verify: {req_err}")
+            return Response('''
+    <script>
+        alert("요청 중 오류가 발생했습니다.")
+        history.back();
+    </script>
+''')
+
+    return render_template('find_password_verify.html')
+
+# Find Password (비밀번호 찾기) - Step 3: 새 비밀번호 설정
+@app.route('/find-password/reset', methods=['GET', 'POST'])
+def find_password_reset():
+    if 'user_id' in session:
+        return redirect("/")
+    
+    if not session.get('find_pw_verified') or 'find_pw_login_id' not in session:
+        return redirect('/find-password')
+
+    if request.method == 'POST':
+        new_password = request.form['new_password']
+        confirm_password = request.form['confirm_password']
+
+        if new_password != confirm_password:
+            return Response('''
+        <script>
+            alert("비밀번호가 일치하지 않습니다.");
+            history.back();
+        </script>
+    ''')
+
+        if len(new_password) < 6:
+            return Response('''
+        <script>
+            alert("비밀번호는 6자 이상이어야 합니다.");
+            history.back();
+        </script>
+    ''')
+
+        # 비밀번호 업데이트
+        conn = get_db()
+        cursor = conn.cursor()
+        hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        
+        cursor.execute('UPDATE users SET pw = ? WHERE login_id = ?', 
+                      (hashed_password, session['find_pw_login_id']))
+        conn.commit()
+
+        add_log('RESET_PASSWORD', session['find_pw_login_id'], f"비밀번호가 재설정되었습니다.")
+
+        # 세션 정리
+        session.pop('find_pw_login_id', None)
+        session.pop('find_pw_name', None)
+        session.pop('find_pw_hakbun', None)
+        session.pop('find_pw_verified', None)
+
+        return Response('''
+        <script>
+            alert("비밀번호가 성공적으로 변경되었습니다.");
+            window.location.href = "/login";
+        </script>
+    ''')
+
+    return render_template('find_password_reset.html')
+
 # logout
 @app.route('/logout')
 def logout():
@@ -1075,6 +1489,13 @@ def post_write():
         # 2. 서버 사이드 유효성 검사
         if not title or not content or not board_id:
             return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
+        
+        is_valid_size, img_idx = check_content_image_size(content)
+        if not is_valid_size:
+            if img_idx == -1:
+                return Response('<script>alert("총 이미지 용량이 25MB를 초과합니다."); history.back();</script>')
+            else:
+                return Response(f'<script>alert("{img_idx}번째 이미지의 용량이 5MB를 초과합니다."); history.back();</script>')
 
         plain_text_content = bleach.clean(content, tags=[], strip=True)
         if len(plain_text_content) > 5000:
@@ -1110,8 +1531,8 @@ def post_write():
         # data URI를 허용하도록 protocols에 'data' 추가
         sanitized_content = bleach.clean(content, tags=allowed_tags, attributes=allowed_attrs, protocols=['http', 'https', 'data'], css_sanitizer=css_sanitizer)
 
-        if sanitized_content.count('<img') > 5:
-            return Response('<script>alert("이미지는 최대 5개까지 첨부할 수 있습니다."); history.back();</script>')
+        if sanitized_content.count('<img') > 10:
+            return Response('<script>alert("이미지는 최대 10개까지 첨부할 수 있습니다."); history.back();</script>')
 
         final_content = sanitized_content
 
@@ -1610,6 +2031,13 @@ def post_edit(post_id):
         if not title or not content or not board_id:
             return Response('<script>alert("게시판, 제목, 내용을 모두 입력해주세요."); history.back();</script>')
         
+        is_valid_size, img_idx = check_content_image_size(content)
+        if not is_valid_size:
+            if img_idx == -1:
+                return Response('<script>alert("총 이미지 용량이 25MB를 초과합니다."); history.back();</script>')
+            else:
+                return Response(f'<script>alert("{img_idx}번째 이미지의 용량이 5MB를 초과합니다."); history.back();</script>')
+        
         # board_id가 실제 DB에 존재하는지 확인
         cursor.execute("SELECT COUNT(*) FROM board WHERE board_id = ?", (board_id,))
         if cursor.fetchone()[0] == 0:
@@ -1669,18 +2097,19 @@ def post_edit(post_id):
 @check_banned
 def post_delete(post_id):
     conn = get_db()
+    conn.row_factory = sqlite3.Row  # row_factory 설정 추가
     cursor = conn.cursor()
 
-    cursor.execute("SELECT author, board_id FROM posts WHERE id = ?", (post_id,))
+    cursor.execute("SELECT author, board_id, title FROM posts WHERE id = ?", (post_id,))
     post = cursor.fetchone()
 
     if not post:
         return Response('<script>alert("존재하지 않거나 삭제된 게시글입니다."); history.back();</script>')
 
-    board_id = post[1]
+    board_id = post['board_id']
 
     # 관리자는 다른 사람의 글도 삭제할 수 있도록 수정 (선택 사항)
-    if post[0] != session['user_id'] and (not g.user or g.user['role'] != 'admin'):
+    if post['author'] != session['user_id'] and (not g.user or g.user['role'] != 'admin'):
         return Response('<script>alert("삭제 권한이 없습니다."); history.back();</script>')
 
     try:
@@ -1689,7 +2118,7 @@ def post_delete(post_id):
         poll = cursor.fetchone()
         
         if poll:
-            poll_id = poll[0]
+            poll_id = poll['id']
             cursor.execute("DELETE FROM poll_history WHERE poll_id = ?", (poll_id,))
             cursor.execute("DELETE FROM poll_options WHERE poll_id = ?", (poll_id,))
             cursor.execute("DELETE FROM polls WHERE id = ?", (poll_id,))
@@ -1933,12 +2362,12 @@ def add_etacon_comment():
             pack_id = int(etacon_code.split('_')[0].replace('~', ''))
             cursor.execute("SELECT 1 FROM user_etacons WHERE user_id = ? AND pack_id = ?", (author_id, pack_id))
             if not cursor.fetchone():
-                return jsonify({'status': 'error', 'message': '보유하지 않은 에타콘입니다.'}), 403
+                return jsonify({'status': 'error', 'message': '보유하지 않은 인곽콘입니다.'}), 403
 
         elif is_public_board:
             # 비회원 검증
             if not guest_nickname or not guest_password:
-                return jsonify({'status': 'error', 'message': '비회원은 닉네임과 비밀번호 입력 후 에타콘을 선택해주세요.'}), 400
+                return jsonify({'status': 'error', 'message': '비회원은 닉네임과 비밀번호 입력 후 인곽콘을 선택해주세요.'}), 400
             if len(guest_password) < 4:
                 return jsonify({'status': 'error', 'message': '비밀번호는 4자 이상이어야 합니다.'}), 400
             
@@ -1969,7 +2398,7 @@ def add_etacon_comment():
             INSERT INTO comments 
             (post_id, author, content, etacon_code, created_at, updated_at, parent_comment_id,
              guest_nickname, guest_password, anonymous_seq)
-            VALUES (?, ?, '에타콘', ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, '인곽콘', ?, ?, ?, ?, ?, ?, ?)
         """
         cursor.execute(query, (
             post_id, author_id, etacon_code, created_at, created_at, parent_comment_id,
@@ -2001,10 +2430,10 @@ def add_etacon_comment():
             cursor.execute("UPDATE users SET comment_count = comment_count + 1 WHERE login_id = ?", (author_id,))
             update_exp_level(author_id, 10)
 
-        add_log('ADD_ETACON', log_user_id, f"게시글(id:{post_id})에 에타콘 댓글 작성.")
+        add_log('ADD_ETACON', log_user_id, f"게시글(id:{post_id})에 인곽콘 댓글 작성.")
         conn.commit()
         
-        return jsonify({'status': 'success', 'message': '에타콘이 등록되었습니다.'})
+        return jsonify({'status': 'success', 'message': '인곽콘이 등록되었습니다.'})
 
     except Exception as e:
         conn.rollback()
@@ -2268,7 +2697,6 @@ def yakgwan_view():
 UPLOAD_FOLDER = 'static/images/profiles'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -2355,7 +2783,8 @@ def user_profile(nickname):
     posts_query = """
         SELECT p.id, p.title, p.comment_count, p.updated_at, b.board_name
         FROM posts p JOIN board b ON p.board_id = b.board_id
-        WHERE p.author = ? ORDER BY p.updated_at DESC
+        WHERE p.author = ? AND p.board_id != 3
+        ORDER BY p.updated_at DESC
     """
     cursor.execute(posts_query, (login_id,))
     user_posts = cursor.fetchall()
@@ -2364,7 +2793,8 @@ def user_profile(nickname):
     comments_query = """
         SELECT c.content, c.post_id, c.updated_at, p.title AS post_title
         FROM comments c JOIN posts p ON c.post_id = p.id
-        WHERE c.author = ? ORDER BY c.updated_at DESC
+        WHERE c.author = ? AND p.board_id != 3
+        ORDER BY c.updated_at DESC
     """
     cursor.execute(comments_query, (login_id,))
     user_comments = cursor.fetchall()
@@ -2568,7 +2998,7 @@ def search():
             LEFT JOIN users u ON p.author = u.login_id
             WHERE 
                 (p.id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH ?))
-                OR (u.nickname LIKE ?)
+                OR (p.board_id != 3 AND u.nickname LIKE ?) 
                 OR (p.guest_nickname LIKE ?)
         """
         cursor.execute(count_query, (search_term_fts, search_term_like, search_term_like))
@@ -2580,7 +3010,8 @@ def search():
         search_query = """
             SELECT
                 p.id, p.title, p.comment_count, p.updated_at, p.view_count,
-                p.author, p.guest_nickname, u.nickname,
+                p.author, p.guest_nickname, p.board_id,
+                CASE WHEN p.board_id = 3 THEN '익명' ELSE u.nickname END as nickname,
                 b.board_name,
                 SUM(CASE WHEN r.reaction_type = 'like' THEN 1 WHEN r.reaction_type = 'dislike' THEN -1 ELSE 0 END) as net_reactions
             FROM posts p
@@ -2588,10 +3019,12 @@ def search():
             LEFT JOIN users u ON p.author = u.login_id
             LEFT JOIN reactions r ON r.target_id = p.id AND r.target_type = 'post'
             WHERE 
-                (p.id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH ?))
-                OR (u.nickname LIKE ?)
-                OR (p.guest_nickname LIKE ?)
-              AND (u.status = 'active' OR u.status IS NULL OR u.status = 'deleted') -- [수정] 게스트(NULL) 또는 활성 유저
+                (
+                    (p.id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH ?))
+                    OR (p.board_id != 3 AND u.nickname LIKE ?)
+                    OR (p.guest_nickname LIKE ?)
+                )
+              AND (u.status = 'active' OR u.status IS NULL OR u.status = 'deleted')
             GROUP BY p.id
             ORDER BY p.updated_at DESC
             LIMIT ? OFFSET ?
@@ -2632,16 +3065,24 @@ def get_notifications():
     conn = get_db()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+    # 게시글의 board_id를 함께 조회하여 익명게시판 여부 확인
     query = """
-        SELECT n.*, u.nickname as actor_nickname
+        SELECT n.*, u.nickname as actor_nickname, p.board_id
         FROM notifications n
         JOIN users u ON n.actor_id = u.login_id
+        LEFT JOIN posts p ON n.post_id = p.id
         WHERE n.recipient_id = ?
         ORDER BY n.created_at DESC
         LIMIT 10
     """
     cursor.execute(query, (g.user['login_id'],))
-    notifications = [dict(row) for row in cursor.fetchall()]
+    notifications = []
+    for row in cursor.fetchall():
+        notification = dict(row)
+        # 익명게시판(board_id=3)인 경우 닉네임을 '익명'으로 마스킹
+        if notification.get('board_id') == 3:
+            notification['actor_nickname'] = '익명'
+        notifications.append(notification)
     return jsonify(notifications)
 
 @app.route('/notifications/read/<int:notification_id>', methods=['POST'])
@@ -2649,14 +3090,14 @@ def get_notifications():
 def read_notification(notification_id):
     conn = get_db()
     cursor = conn.cursor()
-    # 본인의 알림이 맞는지 확인 후 읽음 처리
-    cursor.execute("UPDATE notifications SET is_read = 1 WHERE id = ? AND recipient_id = ?", (notification_id, g.user['login_id']))
+    # 본인의 알림이 맞는지 확인 후 삭제 처리 (한번 본 알림은 사라지게 함)
+    cursor.execute("DELETE FROM notifications WHERE id = ? AND recipient_id = ?", (notification_id, g.user['login_id']))
     conn.commit()
     return jsonify({'status': 'success'})
 
 @app.errorhandler(413)
 def request_entity_too_large(error):
-    return Response('<script>alert("업로드할 수 있는 파일의 최대 크기는 5MB입니다."); history.back();</script>'), 413
+    return Response('<script>alert("요청 크기가 너무 큽니다. 이미지 용량을 줄여주세요.\\n(개별 이미지: 최대 5MB, 총 용량: 최대 25MB)"); history.back();</script>'), 413
 
 @app.errorhandler(404)
 def page_not_found(error):
@@ -3000,6 +3441,7 @@ def comment_edit_guest(comment_id):
         return render_template('comment_edit_guest.html', comment=comment, user=g.user)
 
 @app.route('/etacon/request', methods=['GET', 'POST'])
+@check_banned
 @login_required
 def etacon_request():
     if request.method == 'POST':
@@ -3014,15 +3456,15 @@ def etacon_request():
         if price < 0:
             return Response('<script>alert("가격은 0 이상이어야 합니다."); history.back();</script>')
 
-        # 썸네일 및 에타콘 이미지들
+        # 썸네일 및 인곽콘 이미지들
         thumbnail = request.files.get('thumbnail')
         etacon_files = request.files.getlist('etacon_files') # 다중 파일 업로드
 
         if not thumbnail or not etacon_files or len(etacon_files) == 0:
-             return Response('<script>alert("썸네일과 에타콘 이미지를 최소 1개 이상 업로드해야 합니다."); history.back();</script>')
+             return Response('<script>alert("썸네일과 인곽콘 이미지를 최소 1개 이상 업로드해야 합니다."); history.back();</script>')
         
         if len(etacon_files) > 10:
-            return Response('<script>alert("에타콘 이미지는 한 팩당 최대 10개까지만 등록할 수 있습니다."); history.back();</script>')
+            return Response('<script>alert("인곽콘 이미지는 한 팩당 최대 10개까지만 등록할 수 있습니다."); history.back();</script>')
 
         def validate_image_ratio(file_obj):
             """이미지가 1:1 비율인지 확인합니다."""
@@ -3042,7 +3484,7 @@ def etacon_request():
         for file in etacon_files:
             if file and allowed_etacon_file(file.filename):
                 if not validate_image_ratio(file):
-                    return Response(f'<script>alert("모든 에타콘 이미지는 1:1 비율이어야 합니다.\\n확인 필요: {file.filename}"); history.back();</script>')
+                    return Response(f'<script>alert("모든 인곽콘 이미지는 1:1 비율이어야 합니다.\\n확인 필요: {file.filename}"); history.back();</script>')
 
         conn = get_db()
         cursor = conn.cursor()
@@ -3065,7 +3507,7 @@ def etacon_request():
             
             cursor.execute("UPDATE etacon_packs SET thumbnail = ? WHERE id = ?", (thumb_path, pack_id))
 
-            # 3. 개별 에타콘 이미지 저장
+            # 3. 개별 인곽콘 이미지 저장
             for idx, file in enumerate(etacon_files):
                 if file and allowed_etacon_file(file.filename):
                     img_path = save_etacon_image(file, pack_folder)
@@ -3076,13 +3518,13 @@ def etacon_request():
                                        (pack_id, img_path, code))
 
             conn.commit()
-            add_log('REQUEST_ETACON', g.user['login_id'], f"에타콘 패키지 '{name}' 등록을 요청했습니다.")
-            return Response('<script>alert("에타콘 등록 요청이 완료되었습니다. 관리자 승인 후 상점에 공개됩니다."); location.href="/mypage";</script>')
+            add_log('REQUEST_ETACON', g.user['login_id'], f"인곽콘 패키지 '{name}' 등록을 요청했습니다.")
+            return Response('<script>alert("인곽콘 등록 요청이 완료되었습니다. 관리자 승인 후 상점에 공개됩니다."); location.href="/mypage";</script>')
 
         except Exception as e:
             conn.rollback()
             print(f"에타콘 등록 중 오류: {e}")
-            return Response(f'<script>alert("오류가 발생했습니다."); history.back();</script>')
+            return Response(f'<script>alert("오류가 발생했습니다: {str(e)}"); history.back();</script>')
 
     return render_template('etacon/request.html', user=g.user)
 
@@ -3094,11 +3536,24 @@ def admin_etacon_requests():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # 대기 중인 패키지 조회
+    # 1. 대기 중인 패키지 기본 정보 조회
     cursor.execute("SELECT * FROM etacon_packs WHERE status = 'pending' ORDER BY created_at DESC")
-    requests = cursor.fetchall()
+    pack_rows = cursor.fetchall()
     
-    return render_template('admin/etacon_requests.html', requests=requests, user=g.user)
+    requests_data = []
+    
+    # 2. 각 패키지에 포함된 인곽콘 이미지 리스트 조회 및 병합
+    for row in pack_rows:
+        pack = dict(row) # Row 객체를 dict로 변환 (데이터 추가를 위해)
+        
+        # 해당 패키지의 이미지 경로들 조회
+        cursor.execute("SELECT image_path FROM etacons WHERE pack_id = ?", (pack['id'],))
+        images = [img['image_path'] for img in cursor.fetchall()]
+        
+        pack['images'] = images # 이미지 리스트 추가
+        requests_data.append(pack)
+    
+    return render_template('admin/etacon_requests.html', requests=requests_data, user=g.user)
 
 @app.route('/admin/etacon/approve/<int:pack_id>', methods=['POST'])
 @login_required
@@ -3119,7 +3574,7 @@ def approve_etacon(pack_id):
                        (uploader_id, pack_id, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
     
     conn.commit()
-    add_log('APPROVE_ETACON', g.user['login_id'], f"에타콘 패키지 {pack_id}번을 승인했습니다.")
+    add_log('APPROVE_ETACON', g.user['login_id'], f"인곽콘 패키지 {pack_id}번을 승인했습니다.")
     return jsonify({'status': 'success'})
 
 @app.route('/admin/etacon/reject/<int:pack_id>', methods=['POST'])
@@ -3138,7 +3593,7 @@ def reject_etacon(pack_id):
     except:
         pass
 
-    add_log('REJECT_ETACON', g.user['login_id'], f"에타콘 패키지 {pack_id}번을 거절(삭제)했습니다.")
+    add_log('REJECT_ETACON', g.user['login_id'], f"인곽콘 패키지 {pack_id}번을 거절(삭제)했습니다.")
     return jsonify({'status': 'success'})
 
 @app.route('/etacon/shop')
@@ -3148,7 +3603,6 @@ def etacon_shop():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # 승인된 패키지 목록
     cursor.execute("""
         SELECT p.*, 
                (SELECT COUNT(*) FROM user_etacons ue WHERE ue.pack_id = p.id AND ue.user_id = ?) as is_owned
@@ -3156,7 +3610,19 @@ def etacon_shop():
         WHERE p.status = 'approved'
         ORDER BY p.created_at DESC
     """, (g.user['login_id'],))
-    packs = cursor.fetchall()
+    pack_rows = cursor.fetchall()
+
+    # [추가] "인곽콘 승인" 로직과 동일하게, 각 패키지별 상세 이미지 목록을 조회하여 병합
+    packs = []
+    for row in pack_rows:
+        pack = dict(row) # Row 객체를 dict로 변환
+        
+        # 해당 패키지의 이미지 경로들 조회
+        cursor.execute("SELECT image_path FROM etacons WHERE pack_id = ?", (pack['id'],))
+        images = [img['image_path'] for img in cursor.fetchall()]
+        
+        pack['images'] = images # 이미지 리스트 추가
+        packs.append(pack)
     
     return render_template('etacon/shop.html', packs=packs, user=g.user)
 
@@ -3191,7 +3657,7 @@ def buy_etacon(pack_id):
                        (g.user['login_id'], pack_id, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
         conn.commit()
         
-        add_log('BUY_ETACON', g.user['login_id'], f"에타콘 패키지 '{pack['name']}'을 구매했습니다. (-{pack['price']}P)")
+        add_log('BUY_ETACON', g.user['login_id'], f"인곽콘 패키지 '{pack['name']}'을 구매했습니다. (-{pack['price']}P)")
         return jsonify({'status': 'success', 'message': '구매가 완료되었습니다!'})
         
     except Exception as e:
@@ -3205,7 +3671,7 @@ def my_etacons():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # 사용자가 보유한 패키지의 모든 에타콘 조회
+    # 사용자가 보유한 패키지의 모든 인곽콘 조회
     query = """
         SELECT e.code, e.image_path, p.name as pack_name, p.id as pack_id
         FROM etacons e
@@ -3235,8 +3701,13 @@ def my_etacons():
 @check_banned
 def vote_api():
     data = request.get_json()
-    poll_id = data.get('poll_id')
-    option_id = data.get('option_id')
+    
+    # [수정 1] 프론트엔드에서 문자열로 넘어올 수 있으므로 int()로 변환하여 비교해야 함
+    try:
+        poll_id = int(data.get('poll_id'))
+        option_id = int(data.get('option_id'))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': '잘못된 데이터 형식입니다.'}), 400
     
     if not poll_id or not option_id:
         return jsonify({'status': 'error', 'message': '잘못된 요청입니다.'}), 400
@@ -3253,15 +3724,16 @@ def vote_api():
         history = cursor.fetchone()
         
         if history:
-            old_option_id = history[1]
             history_id = history[0]
+            old_option_id = history[1] # DB에서 가져온 값 (Integer)
             
+            # [수정 2] 자료형이 맞춰졌으므로 이제 정확한 비교가 가능함
             if old_option_id == option_id:
                 # [투표 취소] 같은 항목을 다시 누름 -> 기록 삭제 및 카운트 감소
                 cursor.execute("UPDATE poll_options SET vote_count = vote_count - 1 WHERE id = ?", (old_option_id,))
                 cursor.execute("DELETE FROM poll_history WHERE id = ?", (history_id,))
                 
-                current_voted_option_id = None # 선택된 항목 없음
+                current_voted_option_id = None # 선택된 항목 없음 (취소됨)
                 action_type = "CANCEL"
             else:
                 # [투표 변경] 다른 항목 누름 -> 기존 감소, 신규 증가, 기록 수정
@@ -3295,7 +3767,8 @@ def vote_api():
                 'id': opt[0],
                 'vote_count': opt[1],
                 'percent': percent,
-                'is_voted': (opt[0] == current_voted_option_id)
+                # JS에서 비교 시 문자열/숫자 차이가 있을 수 있으므로 여기서는 단순 데이터만 전달
+                'is_voted': (opt[0] == current_voted_option_id) 
             })
             
         # 메시지 설정
@@ -3311,13 +3784,144 @@ def vote_api():
             'message': msg,
             'total_votes': total_votes,
             'options': results,
-            'user_voted_option_id': current_voted_option_id # 프론트엔드 반영용 ID (취소 시 null)
+            'user_voted_option_id': current_voted_option_id # 취소 시 null 반환됨
         })
         
     except Exception as e:
         conn.rollback()
         print(f"Vote error: {e}")
         return jsonify({'status': 'error', 'message': '투표 처리 중 오류가 발생했습니다.'}), 500
+
+@app.route('/admin/users')
+@login_required
+@admin_required
+def admin_users():
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # 현재 차단된 사용자 목록 조회 (만료일이 남았거나 status가 banned인 경우)
+    cursor.execute("""
+        SELECT * FROM users 
+        WHERE status = 'banned' 
+        ORDER BY banned_until DESC
+    """)
+    banned_users = cursor.fetchall()
+    
+    return render_template('admin/manage_users.html', banned_users=banned_users, user=g.user)
+
+@app.route('/admin/users/ban', methods=['POST'])
+@login_required
+@admin_required
+def admin_ban_user():
+    name = request.form.get('name')
+    hakbun = request.form.get('hakbun')
+    duration = request.form.get('duration', type=int)
+    reason = request.form.get('reason', '') # 차단 사유 (로그용)
+    
+    if not name or not hakbun or not duration:
+        return Response('<script>alert("이름, 학번, 기간을 모두 입력해주세요."); history.back();</script>')
+        
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 1. 사용자 찾기 (동명이인 방지를 위해 학번까지 확인)
+    cursor.execute("SELECT login_id, nickname FROM users WHERE name = ? AND hakbun = ?", (name, hakbun))
+    target_user = cursor.fetchone()
+    
+    if not target_user:
+        return Response('<script>alert("해당 정보(이름/학번)와 일치하는 사용자를 찾을 수 없습니다."); history.back();</script>')
+    
+    user_id = target_user[0]
+    nickname = target_user[1]
+    
+    # 관리자는 차단 불가
+    cursor.execute("SELECT role FROM users WHERE login_id = ?", (user_id,))
+    if cursor.fetchone()[0] == 'admin':
+         return Response('<script>alert("관리자 계정은 차단할 수 없습니다."); history.back();</script>')
+
+    # 2. 차단 만료일 계산
+    banned_until = (datetime.datetime.now() + datetime.timedelta(days=duration)).strftime('%Y-%m-%d %H:%M:%S')
+    
+    # 3. DB 업데이트
+    cursor.execute("UPDATE users SET status = 'banned', banned_until = ? WHERE login_id = ?", (banned_until, user_id))
+    conn.commit()
+    
+    add_log('BAN_USER', g.user['login_id'], f"사용자 차단: {nickname}({name}, {hakbun}) - {duration}일. 사유: {reason}")
+    
+    return Response(f'<script>alert("{nickname}님을 {duration}일간 차단했습니다."); location.href="/admin/users";</script>')
+
+@app.route('/admin/users/unban', methods=['POST'])
+@login_required
+@admin_required
+def admin_unban_user():
+    name = request.form.get('name')
+    hakbun = request.form.get('hakbun')
+    
+    if not name or not hakbun:
+         return Response('<script>alert("이름과 학번을 입력해주세요."); history.back();</script>')
+
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 사용자 찾기
+    cursor.execute("SELECT login_id, nickname FROM users WHERE name = ? AND hakbun = ?", (name, hakbun))
+    target_user = cursor.fetchone()
+    
+    if not target_user:
+        return Response('<script>alert("해당 정보(이름/학번)와 일치하는 사용자를 찾을 수 없습니다."); history.back();</script>')
+        
+    user_id = target_user[0]
+    nickname = target_user[1]
+    
+    # 차단 해제 업데이트
+    cursor.execute("UPDATE users SET status = 'active', banned_until = NULL WHERE login_id = ?", (user_id,))
+    conn.commit()
+    
+    add_log('UNBAN_USER', g.user['login_id'], f"사용자 차단 해제: {nickname}({name}, {hakbun})")
+    
+    return Response(f'<script>alert("{nickname}님의 차단을 해제했습니다."); location.href="/admin/users";</script>')
+
+def check_content_image_size(content, max_total_mb=25, max_single_mb=5):
+    """
+    HTML 본문(content) 내의 Base64 이미지들의 실제 용량을 계산하여
+    개별 이미지 크기 및 총 용량이 제한을 초과하는지 검사합니다.
+    
+    Args:
+        content: HTML 본문
+        max_total_mb: 총 이미지 용량 제한 (기본 25MB)
+        max_single_mb: 개별 이미지 용량 제한 (기본 5MB)
+    
+    Returns:
+        (True, 0) - 정상
+        (False, idx) - idx번째 이미지가 개별 제한 초과
+        (False, -1) - 총 용량 초과
+    """
+    if not content:
+        return True, 0
+
+    # 이미지 태그에서 Base64 데이터 추출 (data:image/...;base64, 부분 이후)
+    base64_images = re.findall(r'src=["\']data:image/[a-zA-Z]+;base64,([^"\']+)["\']', content)
+    
+    single_limit_bytes = max_single_mb * 1000 * 1000  # 10진법 기준 (Windows 탐색기와 동일)
+    total_limit_bytes = max_total_mb * 1000 * 1000
+    
+    total_size = 0
+    for idx, b64_data in enumerate(base64_images):
+        # Base64 문자열 길이로 실제 파일 크기 추산
+        # 공식: (Base64 길이 * 3) / 4
+        real_size = (len(b64_data) * 3) / 4
+        total_size += real_size
+        
+        # 개별 이미지 크기 검사
+        if real_size > single_limit_bytes:
+            return False, idx + 1
+    
+    # 총 용량 검사
+    if total_size > total_limit_bytes:
+        return False, -1
+            
+    return True, 0
 
 # Server Drive Unit
 if __name__ == '__main__':

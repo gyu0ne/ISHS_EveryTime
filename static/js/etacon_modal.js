@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
         modalOverlay.innerHTML = `
             <div class="etacon-modal">
                 <div class="etacon-modal-header">
-                    <h3 class="etacon-modal-title">보유 에타콘</h3>
+                    <h3 class="etacon-modal-title">보유 인곽콘</h3>
                     <button class="etacon-modal-close">&times;</button>
                 </div>
                 <div class="etacon-tabs" id="etacon-tabs"></div>
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // --- 2. 에타콘 목록 불러오기 ---
+    // --- 2. 인곽콘 목록 불러오기 ---
     async function fetchEtacons() {
         try {
             const response = await fetch('/api/my-etacons');
@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
             renderEtacons(data);
             etaconsLoaded = true;
         } catch (error) {
-            gridsContainer.innerHTML = '<div class="etacon-message">에타콘을 불러오는데 실패했습니다.</div>';
+            gridsContainer.innerHTML = '<div class="etacon-message">인곽콘을 불러오는데 실패했습니다.</div>';
             console.error(error);
         }
     }
@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const packNames = Object.keys(data);
 
         if (packNames.length === 0) {
-            gridsContainer.innerHTML = '<div class="etacon-message">보유한 에타콘이 없습니다.<br><a href="/etacon/shop" style="color:#E53935;">상점 바로가기</a></div>';
+            gridsContainer.innerHTML = '<div class="etacon-message">보유한 인곽콘이 없습니다.<br><a href="/etacon/shop" style="color:#E53935;">상점 바로가기</a></div>';
             return;
         }
 
@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- 4. 에타콘 전송 로직 (API 호출) ---
+    // --- 4. 인곽콘 전송 로직 (API 호출) ---
     async function sendEtacon(code) {
         // 전송할 데이터 (비회원 정보 불필요)
         const payload = {
@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('에타콘 전송 중 오류가 발생했습니다.');
+            alert('인곽콘 전송 중 오류가 발생했습니다.');
         }
     }
 });

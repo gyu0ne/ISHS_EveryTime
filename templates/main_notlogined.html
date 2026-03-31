@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="kr">
     <head>
+        <!-- Google Tag Manager -->
+        <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+        new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+        j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+        'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+        })(window,document,'script','dataLayer','GTM-5QFZNJVP');</script>
+        <!-- End Google Tag Manager -->
         <script src=""></script>
         <meta charset="utf-8">
         <title>log인곽</title>
@@ -14,10 +21,14 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
     </head>
 <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5QFZNJVP"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
     <div class="container">
             <header>
                 <div class="top-bar">
-                    <div class="logo">ISHS</div>
+                    <div class="logo">LOG인곽</div>
                     <nav class="main-nav">
                         <ul>
                             <li><a href="/board/1">자유게시판</a></li>
@@ -54,8 +65,8 @@
                         <li><a href="/board/2">정보게시판</a></li>
                         <li><a href="/board/3">익명게시판</a></li>
                         <li><a href="/board/4">공개게시판</a></li>
-                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">면불 신청</a></li>
-                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">동아리</a></li>
+                        <li><a href="/etacon/request">인곽콘 신청</a></li>
+                        <li><a href="/etacon/shop">인곽콘 상점</a></li>
                     </ul>
                 </nav>
             </div>
@@ -69,9 +80,8 @@
                         <li><a href="/board/2">정보게시판</a></li>
                         <li><a href="/board/3">익명게시판</a></li>
                         <li><a href="/board/4">공개게시판</a></li>
-                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">면불 신청</a></li>
-                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">동아리</a></li>
-                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">학교 생활</a></li>
+                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">인곽콘 신청</a></li>
+                        <li><a href="#" onclick="alert('아직 지원되지 않는 기능입니다.')">인곽콘 상점</a></li>
                     </ul>
                 </div>
                  <div class="widget login-widget-side">
@@ -85,26 +95,20 @@
                 <div class="daily-meal">
                     <div class="meal-item">
                         <h4><span>조식</span></h4>
-                        <p class="meal-menu">{{ bob[0] |safe}}</p>
+                        <p class="meal-menu" id="breakfast-menu"><span class="loading-spinner"></span></p>
                     </div>
                     <div class="meal-item">
                         <h4><span>중식</span></h4>
-                        <p class="meal-menu">{{ bob[1] |safe}}</p>
+                        <p class="meal-menu" id="lunch-menu"><span class="loading-spinner"></span></p>
                     </div>
                     <div class="meal-item">
                         <h4><span>석식</span></h4>
-                        <p class="meal-menu">{{ bob[2] |safe}}</p>
+                        <p class="meal-menu" id="dinner-menu"><span class="loading-spinner"></span></p>
                     </div>
                     <div class="meal-item timetable-widget">
                         <h4><span>시간표</span></h4>
                         <ol class="timetable-list">
-                            <li><span class="period">1교시</span><span class="subject">문학</span></li>
-                            <li><span class="period">2교시</span><span class="subject">수학 II</span></li>
-                            <li><span class="period">3교시</span><span class="subject">물리학 I</span></li>
-                            <li><span class="period">4교시</span><span class="subject">영어</span></li>
-                            <li><span class="period">5교시</span><span class="subject">영어</span></li>
-                            <li><span class="period">6교시</span><span class="subject">영어</span></li>
-                            <li><span class="period">7교시</span><span class="subject">영어</span></li>
+                            <p class="meal-menu">로그인 후 이용 가능</p>
                         </ol>
                     </div>
                 </div>
@@ -153,7 +157,7 @@
 
         <footer>
             <p>&copy; 2025 Incheon Science HighSchool Community. All rights reserved.</p>
-            <p style="margin-top: 10px; color: #999;">Made By. 32nd Kim Gyuwon</p>
+            <p style="margin-top: 10px; color: #999;">Made By. 32nd Kim Gyuwon & 32nd Kim Junseo</p>
             <nav>
                 <a href="#">이용약관</a>
                 <a href="#">개인정보처리방침</a>
@@ -173,7 +177,62 @@
                     mobileNav.classList.toggle('active');
                 });
             }
+
+            // 급식 정보 비동기 로드 (캐시 우선)
+            const today = new Date().toISOString().split('T')[0];
+            const cachedBob = localStorage.getItem('bob_' + today);
+            
+            if (cachedBob) {
+                // 캐시된 데이터가 있으면 즉시 표시
+                const bobData = JSON.parse(cachedBob);
+                document.getElementById('breakfast-menu').innerHTML = bobData.breakfast || '정보 없음';
+                document.getElementById('lunch-menu').innerHTML = bobData.lunch || '정보 없음';
+                document.getElementById('dinner-menu').innerHTML = bobData.dinner || '정보 없음';
+            } else {
+                // 캐시 없으면 서버에서 로드
+                fetch('/api/bob')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            // localStorage에 저장
+                            localStorage.setItem('bob_' + today, JSON.stringify(data.data));
+                            // 이전 날짜 캐시 삭제
+                            Object.keys(localStorage).forEach(key => {
+                                if (key.startsWith('bob_') && key !== 'bob_' + today) {
+                                    localStorage.removeItem(key);
+                                }
+                            });
+                            document.getElementById('breakfast-menu').innerHTML = data.data.breakfast || '정보 없음';
+                            document.getElementById('lunch-menu').innerHTML = data.data.lunch || '정보 없음';
+                            document.getElementById('dinner-menu').innerHTML = data.data.dinner || '정보 없음';
+                        } else {
+                            document.getElementById('breakfast-menu').textContent = '불러오기 실패';
+                            document.getElementById('lunch-menu').textContent = '불러오기 실패';
+                            document.getElementById('dinner-menu').textContent = '불러오기 실패';
+                        }
+                    })
+                    .catch(err => {
+                        document.getElementById('breakfast-menu').textContent = '오류 발생';
+                        document.getElementById('lunch-menu').textContent = '오류 발생';
+                        document.getElementById('dinner-menu').textContent = '오류 발생';
+                    });
+            }
         });
     </script>
+    <style>
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </body>
 </html>

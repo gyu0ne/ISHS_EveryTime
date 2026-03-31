@@ -14,6 +14,9 @@ debuging checklist.pdf
 
 schema.sql
 
+comci_parser.py
+ishs_timetable_raw.json
+
 *.png
 *.gif
 

@@ -8,20 +8,66 @@
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-5QFZNJVP');</script>
     <!-- End Google Tag Manager -->
-    <script src=""></script>
     <meta charset="utf-8">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login_form.css') }}">
     <meta property="og:image" content="https://i.namu.wiki/i/UX1a0RmaJfABnbuJcd-2PfCO6qfqFMXaVBkNYV0Hwjm007_uH2Cc0fJmv6M9g9BTfzXjUk3jwJpDa09YdZnf79GO_NiDd9uGp7dudqFfQVBz69OaFzGfhSmMbOGezsME4LUzp6meYGFLDHZ32cTifVistPL4rVyv_OyU1WOADOM.webp">
     <meta property="og:description" content="log인곽에 오신 것을 환영합니다!">
     <meta property="og:title" content="log인곽">
-    <link rel="shortcut icon" href=""> <!-- 파비콘 설정 -->
+    <link rel="shortcut icon" href="">
     <meta name="title" content="log인곽">
     <meta name="keywords" content="log인곽">
     <meta name="description" content="인천과학고등학교 비공식 커뮤니티 log인곽입니다.">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>log인곽 - 로그인</title>
+    <title>log인곽 - 아이디 찾기 결과</title>
+    <style>
+        .result-box {
+            background-color: #3e3e3e;
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 20px 0;
+        }
+        .result-box p {
+            color: #ccc;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .result-box .found-id {
+            color: #d9534f;
+            font-size: 24px;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn-group a {
+            flex: 1;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        .btn-primary {
+            background-color: #d9534f;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #c9302c;
+        }
+        .btn-secondary {
+            background-color: #3e3e3e;
+            border: 1px solid #555;
+            color: #f1f1f1;
+        }
+        .btn-secondary:hover {
+            background-color: #4e4e4e;
+        }
+    </style>
 </head>
 <body>
     <!-- Google Tag Manager (noscript) -->
@@ -33,28 +79,16 @@
             <p>함께하는 인곽생활</p>
             <h1>log인곽</h1>
         </header>
-        
-        <form class="register-form" method="POST">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
-            <input type="text" name="login_id" placeholder="아이디" required>
-            <span id="hakbun-check-msg" class="like-input-invisible">nice try diddy</span>
-            <input type="password" name="password" placeholder="비밀번호" required>
-            <span id="name-check-msg" class="like-input-invisible">nice try diddy</span>
+        <div class="result-box">
+            <p>회원님의 아이디를 찾았습니다.</p>
+            <div class="found-id">{{ found_id }}</div>
+            <p style="font-size: 12px; color: #888;">보안을 위해 로그인 후 비밀번호를 변경해주세요.</p>
+        </div>
 
-            <div class="remember-me">
-                <label>
-                    <input type="checkbox" name="remember"> 자동 로그인
-                </label>
-            </div>
-
-            <button type="submit" class="register-btn" id="auth_btn">로그인</button>
-        </form>
-
-        <div class="find-account-links" style="margin-top: 15px;">
-            <a href="{{ url_for('find_id') }}" style="color: #888; font-size: 14px;">아이디 찾기</a>
-            <span style="color: #555; margin: 0 10px;">|</span>
-            <a href="{{ url_for('find_password') }}" style="color: #888; font-size: 14px;">비밀번호 찾기</a>
+        <div class="btn-group">
+            <a href="{{ url_for('login') }}" class="btn-primary">로그인</a>
+            <a href="{{ url_for('find_password') }}" class="btn-secondary">비밀번호 찾기</a>
         </div>
 
         <footer>
@@ -67,5 +101,4 @@
         </footer>
     </div>
 </body>
-    <script src="{{ url_for('static', filename='js/login_form.js') }}"></script>
 </html>

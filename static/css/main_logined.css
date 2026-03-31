@@ -780,3 +780,28 @@ main {
         width: auto; 
     }
 }
+
+/* 변경된 시간표 강조 */
+.changed-schedule .subject {
+    color: #e53e3e; /* 붉은색 텍스트 */
+    font-weight: bold;
+}
+
+.changed-schedule::after {
+    content: '변경됨';
+    font-size: 0.7em;
+    color: #fff;
+    background-color: #e53e3e;
+    padding: 2px 4px;
+    border-radius: 4px;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+
+/* 선생님 이름 스타일 */
+.teacher-name {
+    font-size: 0.85em;
+    color: #666;
+    margin-left: 4px;
+    font-weight: normal;
+}
