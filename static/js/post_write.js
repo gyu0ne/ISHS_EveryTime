@@ -3,6 +3,10 @@ $(document).ready(function() {
 
     const MAX_CHARS = 5000;
     const MAX_IMAGES = 5;
+    const MAX_IMAGE_SIZE_MB = 5;
+    const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1000 * 1000;
+    const MAX_TOTAL_IMAGE_SIZE_MB = 25;
+    const MAX_TOTAL_IMAGE_SIZE_BYTES = MAX_TOTAL_IMAGE_SIZE_MB * 1000 * 1000;
     const MAX_IMAGE_DIMENSION = 1600;
     const IMAGE_QUALITY = 0.78;
 
@@ -17,6 +21,10 @@ $(document).ready(function() {
         const currentLength = $(this).val().length;
         titleCounter.text(currentLength);
     });
+
+    function bytesToMB(bytes) {
+        return (bytes / 1000 / 1000).toFixed(2);
+    }
 
     function readFileAsDataURL(file) {
         return new Promise((resolve, reject) => {
@@ -98,6 +106,7 @@ $(document).ready(function() {
 
         optimizeEditorMedia($('#summernote-editor').next('.note-editor').find('.note-editable'));
         updateCharCount($('#summernote-editor'));
+        updateImageSizeDisplay($('#summernote-editor'));
     }
 
     const summernoteConfig = {
@@ -135,11 +144,13 @@ $(document).ready(function() {
 
                 setTimeout(() => {
                     updateCharCount(this);
+                    updateImageSizeDisplay(this);
                 }, 10);
             },
             onChange: function(contents, $editable) {
                 updateCharCount(this);
                 optimizeEditorMedia($editable);
+                updateImageSizeDisplay(this);
             },
             onImageUpload: function(files) {
                 insertOptimizedImages(Array.from(files));
@@ -154,6 +165,7 @@ $(document).ready(function() {
     $('#max-chars').text(MAX_CHARS.toLocaleString());
     updateCharCount($('#summernote-editor'));
     optimizeEditorMedia($('#summernote-editor').next('.note-editor').find('.note-editable'));
+    updateImageSizeDisplay($('#summernote-editor'));
 
     function updateCharCount(editorInstance) {
         const content = $(editorInstance).summernote('code');

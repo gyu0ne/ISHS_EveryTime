@@ -197,6 +197,9 @@ class RewardAndMediaRegressionTests(unittest.TestCase):
         self.assertEqual(secured.headers["X-Frame-Options"], "DENY")
         self.assertIn("frame-ancestors 'none'", secured.headers["Content-Security-Policy"])
         self.assertIn("https://www.youtube.com", secured.headers["Content-Security-Policy"])
+        self.assertIn("https://www.googletagmanager.com", secured.headers["Content-Security-Policy"])
+        self.assertIn("https://static.cloudflareinsights.com", secured.headers["Content-Security-Policy"])
+        self.assertIn("https://cdn.jsdelivr.net", secured.headers["Content-Security-Policy"])
         self.assertEqual(secured.headers["Strict-Transport-Security"], "max-age=31536000; includeSubDomains")
         self.assertTrue(secured.cache_control.public)
         self.assertEqual(secured.cache_control.max_age, 31536000)
@@ -213,6 +216,8 @@ class RewardAndMediaRegressionTests(unittest.TestCase):
         self.assertIn("iframe.loading = 'lazy';", TEMPLATE_BASE)
         self.assertIn("this.loading = 'lazy';", POST_WRITE_JS)
         self.assertIn("this.decoding = 'async';", POST_WRITE_JS)
+        self.assertIn("const MAX_TOTAL_IMAGE_SIZE_BYTES = MAX_TOTAL_IMAGE_SIZE_MB * 1000 * 1000;", POST_WRITE_JS)
+        self.assertIn("function bytesToMB(bytes)", POST_WRITE_JS)
         self.assertIn('loading="lazy" decoding="async"', TEMPLATE_SHOP)
 
 

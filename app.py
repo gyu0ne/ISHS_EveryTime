@@ -422,43 +422,13 @@ def apply_security_headers(response):
     response.headers.setdefault(
         'Content-Security-Policy',
         "default-src 'self' https: data: blob:; "
-        "script-src 'self' 'unsafe-inline' https://code.jquery.com https://stackpath.bootstrapcdn.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "script-src 'self' 'unsafe-inline' https://code.jquery.com https://stackpath.bootstrapcdn.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.googletagmanager.com https://static.cloudflareinsights.com; "
         "style-src 'self' 'unsafe-inline' https://stackpath.bootstrapcdn.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
         "img-src 'self' data: https: blob:; "
-        "font-src 'self' data: https://cdnjs.cloudflare.com; "
+        "font-src 'self' data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
         "connect-src 'self' https:; "
         "media-src 'self' data: https: blob:; "
-        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; "
-        "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-    )
-
-    if request.path.startswith('/static/'):
-        response.cache_control.public = True
-        response.cache_control.max_age = app.config['SEND_FILE_MAX_AGE_DEFAULT']
-        response.cache_control.immutable = True
-
-    if request.is_secure:
-        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
-
-    return response
-
-
-@app.after_request
-def apply_security_headers(response):
-    response.headers.setdefault('X-Frame-Options', 'DENY')
-    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
-    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
-    response.headers.setdefault('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-    response.headers.setdefault(
-        'Content-Security-Policy',
-        "default-src 'self' https: data: blob:; "
-        "script-src 'self' 'unsafe-inline' https://code.jquery.com https://stackpath.bootstrapcdn.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-        "style-src 'self' 'unsafe-inline' https://stackpath.bootstrapcdn.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-        "img-src 'self' data: https: blob:; "
-        "font-src 'self' data: https://cdnjs.cloudflare.com; "
-        "connect-src 'self' https:; "
-        "media-src 'self' data: https: blob:; "
-        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; "
+        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.googletagmanager.com; "
         "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
     )
 
