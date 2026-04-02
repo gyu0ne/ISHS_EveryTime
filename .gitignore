@@ -24,6 +24,7 @@ ishs_timetable_raw.json
 
 *.exe
 /venv
+.venv/
 
 /static/images/profiles/*
 
