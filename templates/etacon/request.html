@@ -56,14 +56,22 @@
 </div>
 
 <script>
+    const MAX_ETACON_FILES = 100;
+
     // 파일 선택 시 파일명 표시 스크립트
     document.querySelectorAll('input[type="file"]').forEach(input => {
         input.addEventListener('change', function(e) {
             const label = this.nextElementSibling;
-            if (this.files && this.files.length > 1) {
+            if (this.id === 'etacon_files' && this.files && this.files.length > MAX_ETACON_FILES) {
+                alert(`에타콘 이미지는 한 팩당 최대 ${MAX_ETACON_FILES}개까지만 등록할 수 있습니다.`);
+                this.value = '';
+                label.textContent = '이미지들을 선택해주세요...';
+            } else if (this.files && this.files.length > 1) {
                 label.textContent = `${this.files.length}개 파일 선택됨`;
             } else if (this.files && this.files.length === 1) {
                 label.textContent = this.files[0].name;
+            } else {
+                label.textContent = this.id === 'thumbnail' ? '이미지 선택...' : '이미지들을 선택해주세요...';
             }
         });
     });
