@@ -117,3 +117,52 @@
 2. lane2의 sanitize 공통화 또는 최소한 허용 정책 일치화
 3. lane2의 lazy loading 적용
 4. lane3 체크리스트 기준 자동/수동 검증 후 통합
+
+## 참고 히스토리 검토 — commit `e462fbf`
+
+### 범위 적합성 판단
+
+`e462fbf`("Reward progression and harden media flows")는 요청 범위와 **대체로 높은 수준으로 겹칩니다.**
+
+요청 범위와 직접 맞는 항목:
+
+- lane1
+  - `LEVEL_UP_POINT_REWARD = 100` 추가 및 `update_exp_level()` 내부 레벨업 포인트 지급
+  - `MAX_ETACONS_PER_PACK = 100` 상수화 및 서버 업로드 제한 상향
+  - 게시글/댓글/게스트 경로의 길이/이미지 제한 상수화
+- lane2
+  - `sanitize_rich_content()` / `sanitize_plain_text_content()` 공통화
+  - `TRUSTED_IFRAME_HOSTS` 기반 iframe 출처 제한
+  - `@app.after_request` 보안 헤더(CSP, nosniff, referrer-policy 등) 추가
+  - `rate_limit()` 데코레이터 추가
+  - 템플릿/에디터 lazy loading, decoding, preconnect, 이미지 최적화 추가
+
+### 요청 대비 초과 범위
+
+다음 항목은 원 요청에 직접 명시된 범위를 넘어섭니다.
+
+- 인곽콘 판매 알림(`etacon_sale`) 및 관련 UI 처리
+- `.gitignore`의 OMX 상태 파일 무시 규칙 조정
+- 프로필/업로드 이미지 WEBP 변환/리사이징 등 보다 넓은 미디어 처리 정책 변경
+
+즉, `e462fbf`는 **참고 구현으로는 유효하지만, 그대로 재사용하면 요청 외 변경까지 함께 들어올 수 있는 커밋**입니다.
+
+### 남는 리스크 / 갭
+
+- 검증 갭
+  - 커밋 메시지 기준 검증은 `python3 -m py_compile app.py` 수준만 기록돼 있습니다.
+  - 브라우저 기준 구매 흐름, SSE 알림, 실제 업로드 동작은 미검증으로 남아 있습니다.
+- 정책 갭
+  - 레벨다운/삭제 시 지급된 포인트를 회수하지 않으므로, "레벨업 보상은 영구 유지"가 정책인지 명확하지 않습니다.
+- 운영 갭
+  - `rate_limit()`는 프로세스 메모리의 `TTLCache` 기반이라 멀티프로세스/재시작 환경에서 일관성이 약합니다.
+- 보안 갭
+  - CSP를 추가했지만 `script-src 'unsafe-inline'`, `style-src 'unsafe-inline'`은 여전히 남아 있어 강한 XSS 방어로 보기는 어렵습니다.
+- 회귀 리스크
+  - 댓글 평문 sanitization에 최대 길이 제한(1000자)이 새로 들어가므로 기존 허용 길이와 달라졌을 수 있습니다.
+  - 클라이언트 이미지 압축/WEBP 변환은 품질 저하, 메타데이터 손실, 일부 브라우저/붙여넣기 동작 차이를 유발할 수 있습니다.
+
+### lane3 결론
+
+- `e462fbf`는 요청한 lane1/lane2 작업을 **상당 부분 선행 구현한 흔적**으로 보입니다.
+- 다만 요청 범위를 넘는 변경이 섞여 있고, 검증이 얕아 **그대로 정답 커밋으로 간주하기보다 필요한 부분만 선별적으로 대조/재적용하는 기준 커밋**으로 보는 편이 안전합니다.
