@@ -442,6 +442,36 @@ def apply_security_headers(response):
 
     return response
 
+
+@app.after_request
+def apply_security_headers(response):
+    response.headers.setdefault('X-Frame-Options', 'DENY')
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    response.headers.setdefault('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+    response.headers.setdefault(
+        'Content-Security-Policy',
+        "default-src 'self' https: data: blob:; "
+        "script-src 'self' 'unsafe-inline' https://code.jquery.com https://stackpath.bootstrapcdn.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://stackpath.bootstrapcdn.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "img-src 'self' data: https: blob:; "
+        "font-src 'self' data: https://cdnjs.cloudflare.com; "
+        "connect-src 'self' https:; "
+        "media-src 'self' data: https: blob:; "
+        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; "
+        "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    )
+
+    if request.path.startswith('/static/'):
+        response.cache_control.public = True
+        response.cache_control.max_age = app.config['SEND_FILE_MAX_AGE_DEFAULT']
+        response.cache_control.immutable = True
+
+    if request.is_secure:
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+
+    return response
+
 # --- 👇 [추가] 제재된 사용자의 활동을 제한하는 데코레이터 ---
 def check_banned(f):
     @wraps(f)
@@ -1681,6 +1711,10 @@ def post_write():
                 return Response('<script>alert("총 이미지 용량이 25MB를 초과합니다."); history.back();</script>')
             else:
                 return Response(f'<script>alert("{img_idx}번째 이미지의 용량이 5MB를 초과합니다."); history.back();</script>')
+
+        cursor.execute("SELECT COUNT(*) FROM board WHERE board_id = ?", (board_id,))
+        if cursor.fetchone()[0] == 0:
+            return Response('<script>alert("존재하지 않는 게시판입니다."); history.back();</script>')
 
         cursor.execute("SELECT COUNT(*) FROM board WHERE board_id = ?", (board_id,))
         if cursor.fetchone()[0] == 0:
