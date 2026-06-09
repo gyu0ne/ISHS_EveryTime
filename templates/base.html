@@ -49,6 +49,7 @@
                     </ul>
                 </nav>
                 <div class="user-menu" style="display: flex; align-items: center;">
+                    {% if user %}
                     <div class="notification-bell" id="notification-bell">
                         <i class="fas fa-bell"></i>
                         <span class="badge" id="notification-badge"></span>
@@ -58,6 +59,7 @@
                                 </ul>
                         </div>
                     </div>
+                    {% endif %}
                     <div class="dropdown">
                         <a href="#" class="dropdown-toggle">
                             {% if user %}
@@ -139,6 +141,7 @@
             const badge = document.getElementById('notification-badge');
             const list = document.getElementById('notification-list');
 
+            if (bell && dropdown && badge && list) {
             // --- 함수 정의 ---
 
             /** 알림 메시지 문자열을 생성하는 헬퍼 함수 */
@@ -181,7 +184,11 @@
             async function fetchNotifications() {
                 try {
                     const response = await fetch('/notifications');
-                    const notifications = await response.json();
+                    if (!response.ok) {
+                        throw new Error(`Notifications request failed: ${response.status}`);
+                    }
+                    const payload = await response.json();
+                    const notifications = Array.isArray(payload) ? payload : [];
                     
                     list.innerHTML = ''; // 1. 기존 목록을 깨끗하게 비웁니다.
 
@@ -212,7 +219,7 @@
                 } catch (error) {
                     console.error('Error fetching notifications:', error);
                     // 에러 발생 시에도 '알림 없음'과 유사한 메시지를 표시해 사용자 혼란을 방지
-                    list.innerHTML = '<li class.no-notifications"><a href="#" style="cursor: default;">알림을 불러오지 못했습니다.</a></li>';
+                    list.innerHTML = '<li class="no-notifications"><a href="#" style="cursor: default;">알림을 불러오지 못했습니다.</a></li>';
                 }
             }
 
@@ -220,6 +227,9 @@
             async function fetchInitialUnreadCount() {
                 try {
                     const response = await fetch('/notifications/unread-count');
+                    if (!response.ok) {
+                        throw new Error(`Unread count request failed: ${response.status}`);
+                    }
                     const data = await response.json();
                     if (data.count > 0) {
                         badge.textContent = data.count;
@@ -297,6 +307,7 @@
             fetchInitialUnreadCount(); // 1. 최초 알림 뱃지 개수 설정
             fetchNotifications();       // 2. 최초 드롭다운 목록 구성 ('알림 없음' 메시지 표시 포함)
             setupEventSource();         // 3. 실시간 알림 수신 시작
+            }
         });
         
             document.addEventListener('DOMContentLoaded', function() {

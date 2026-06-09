@@ -16,6 +16,8 @@ TEMPLATE_SHOP = (Path(__file__).resolve().parents[1] / "templates" / "etacon" / 
 TEMPLATE_BASE = (Path(__file__).resolve().parents[1] / "templates" / "base.html").read_text(encoding="utf-8")
 TEMPLATE_MAIN_NOTLOGINED = (Path(__file__).resolve().parents[1] / "templates" / "main_notlogined.html").read_text(encoding="utf-8")
 TEMPLATE_POST_EDIT_GUEST = (Path(__file__).resolve().parents[1] / "templates" / "post_edit_guest.html").read_text(encoding="utf-8")
+TEMPLATE_POST_LIST = (Path(__file__).resolve().parents[1] / "templates" / "post_list.html").read_text(encoding="utf-8")
+TEMPLATE_SEARCH_RESULTS = (Path(__file__).resolve().parents[1] / "templates" / "search_results.html").read_text(encoding="utf-8")
 POST_WRITE_JS = (Path(__file__).resolve().parents[1] / "static" / "js" / "post_write.js").read_text(encoding="utf-8")
 
 
@@ -287,6 +289,24 @@ class RewardAndMediaRegressionTests(unittest.TestCase):
         self.assertIn("const MAX_TOTAL_IMAGE_SIZE_BYTES = MAX_TOTAL_IMAGE_SIZE_MB * 1000 * 1000;", POST_WRITE_JS)
         self.assertIn("function bytesToMB(bytes)", POST_WRITE_JS)
         self.assertIn('loading="lazy" decoding="async"', TEMPLATE_SHOP)
+
+    def test_post_list_stylesheet_is_cache_busted_and_tracked(self):
+        self.assertTrue((Path(__file__).resolve().parents[1] / "static" / "css" / "post_list.css").exists())
+        self.assertIn("STATIC_ASSET_VERSION", APP_SOURCE)
+        self.assertIn("filename='css/post_list.css', v=STATIC_ASSET_VERSION", TEMPLATE_POST_LIST)
+        self.assertIn("filename='css/post_list.css', v=STATIC_ASSET_VERSION", TEMPLATE_SEARCH_RESULTS)
+
+    def test_notification_frontend_handles_missing_or_non_array_responses(self):
+        self.assertIn("if (bell && dropdown && badge && list)", TEMPLATE_BASE)
+        self.assertIn("if (!response.ok)", TEMPLATE_BASE)
+        self.assertIn("Array.isArray", TEMPLATE_BASE)
+        self.assertIn("const notifications = Array.isArray(payload) ? payload : [];", TEMPLATE_BASE)
+        self.assertIn('class="no-notifications"', TEMPLATE_BASE)
+        self.assertNotIn("class.no-notifications", TEMPLATE_BASE)
+
+    def test_notification_routes_return_json_defaults_for_logged_out_users(self):
+        self.assertIn("if not g.user:\n        return jsonify({'count': 0})", APP_SOURCE)
+        self.assertIn("if not g.user:\n        return jsonify([])", APP_SOURCE)
 
 
 if __name__ == "__main__":

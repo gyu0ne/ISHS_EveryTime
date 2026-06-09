@@ -3,7 +3,7 @@
 {% block title %}log인곽 - '{{ query }}' 검색 결과{% endblock %}
 
 {% block head %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/post_list.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/post_list.css', v=STATIC_ASSET_VERSION) }}">
 {% endblock %}
 
 {% block content %}

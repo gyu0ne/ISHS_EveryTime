@@ -61,6 +61,7 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000
 
 DATABASE = 'data.db'
 LOG_DATABASE = 'log.db'
+STATIC_ASSET_VERSION = '20260609-2'
 
 BASE_EXP_PER_LEVEL = 500
 LEVEL_EXP_GROWTH_RATE = 1.12
@@ -112,6 +113,11 @@ ETACON_UPLOAD_FOLDER = 'static/images/etacons'
 ALLOWED_ETACON_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 os.makedirs(ETACON_UPLOAD_FOLDER, exist_ok=True)
+
+
+@app.context_processor
+def inject_static_asset_version():
+    return {'STATIC_ASSET_VERSION': STATIC_ASSET_VERSION}
 
 def allowed_etacon_file(filename):
     return '.' in filename and \
@@ -3496,8 +3502,10 @@ def search():
                            GUEST_USER_ID=GUEST_USER_ID) # [추가] GUEST_USER_ID 전달
 
 @app.route('/notifications/unread-count')
-@login_required
 def unread_notification_count():
+    if not g.user:
+        return jsonify({'count': 0})
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM notifications WHERE recipient_id = ? AND is_read = 0", (g.user['login_id'],))
@@ -3505,8 +3513,10 @@ def unread_notification_count():
     return jsonify({'count': count})
 
 @app.route('/notifications')
-@login_required
 def get_notifications():
+    if not g.user:
+        return jsonify([])
+
     conn = get_db()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
