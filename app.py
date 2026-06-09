@@ -62,8 +62,11 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000
 DATABASE = 'data.db'
 LOG_DATABASE = 'log.db'
 
-EXP_PER_LEVEL = 1000
-LEVEL_UP_POINT_REWARD = 100
+BASE_EXP_PER_LEVEL = 500
+LEVEL_EXP_GROWTH_RATE = 1.12
+BASE_LEVEL_UP_POINT_REWARD = 100
+LEVEL_REWARD_STEP = 20
+LEVEL_REWARD_STEP_INTERVAL = 5
 MAX_POST_CONTENT_CHARS = 5000
 MAX_COMMENT_CONTENT_CHARS = 1000
 MAX_POST_IMAGES = 5
@@ -82,7 +85,7 @@ RESAMPLING_LANCZOS = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') el
 
 RICH_CONTENT_ALLOWED_TAGS = [
     'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3',
-    'img', 'a', 'video', 'source', 'iframe',
+    'img', 'a', 'video', 'source',
     'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
     'ol', 'ul', 'li', 'blockquote', 'span', 'font'
 ]
@@ -92,7 +95,6 @@ RICH_CONTENT_ALLOWED_ATTRS = {
     'img': ['src', 'alt', 'width', 'height'],
     'video': ['src', 'width', 'height', 'controls', 'preload', 'playsinline'],
     'source': ['src', 'type'],
-    'iframe': ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
     'font': ['color', 'face']
 }
 RICH_CONTENT_ALLOWED_CSS_PROPERTIES = [
@@ -187,8 +189,16 @@ def normalize_rich_media_tags(content):
         tag = set_html_tag_attr(tag, 'sandbox', 'allow-scripts allow-same-origin allow-presentation')
         return tag
 
+    def replace_anchor(match):
+        tag = match.group(0)
+        target_match = re.search(r'\btarget="([^"]+)"', tag, flags=re.IGNORECASE)
+        if target_match and target_match.group(1).lower() == '_blank':
+            tag = set_html_tag_attr(tag, 'rel', 'noopener noreferrer')
+        return tag
+
     content = re.sub(r'<img\b[^>]*>', replace_img, content, flags=re.IGNORECASE)
     content = re.sub(r'<iframe\b[^>]*>(?:\s*</iframe>)?', replace_iframe, content, flags=re.IGNORECASE)
+    content = re.sub(r'<a\b[^>]*>', replace_anchor, content, flags=re.IGNORECASE)
     return content
 
 
@@ -209,6 +219,74 @@ def sanitize_plain_text_content(content, max_length=MAX_COMMENT_CONTENT_CHARS):
     if len(cleaned) > max_length:
         raise ValueError(max_length)
     return cleaned
+
+
+def normalize_riro_identity_value(value):
+    return str(value or '').strip()
+
+
+def apply_riro_reauth_result(user_id, api_result):
+    """Apply a successful Riro re-authentication result to an existing account."""
+    if not api_result or api_result.get('status') != 'success':
+        return {'status': 'error', 'message': api_result.get('message', '리로스쿨 인증에 실패했습니다.') if api_result else '리로스쿨 인증에 실패했습니다.'}
+
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT login_id, name, hakbun, gen FROM users WHERE login_id = ?", (user_id,))
+    current_user = cursor.fetchone()
+    if not current_user:
+        return {'status': 'error', 'message': '현재 계정을 찾을 수 없습니다.'}
+
+    riro_name = normalize_riro_identity_value(api_result.get('name'))
+    current_name = normalize_riro_identity_value(current_user['name'])
+    if riro_name != current_name:
+        add_log(
+            'RIRO_REAUTH_NAME_MISMATCH',
+            user_id,
+            f"리로스쿨 재인증 이름 불일치: 가입정보={current_name}, 인증결과={riro_name}"
+        )
+        return {'status': 'error', 'message': '리로스쿨 인증 정보의 이름이 현재 계정과 일치하지 않습니다.'}
+
+    new_hakbun = normalize_riro_identity_value(api_result.get('student_number'))
+    new_gen = api_result.get('generation')
+    if not new_hakbun or new_gen in (None, ''):
+        return {'status': 'error', 'message': '리로스쿨에서 학번 또는 기수 정보를 가져오지 못했습니다.'}
+
+    cursor.execute(
+        "SELECT login_id FROM users WHERE hakbun = ? AND login_id != ? AND status = 'active'",
+        (new_hakbun, user_id)
+    )
+    collision_user = cursor.fetchone()
+    collision_detected = collision_user is not None
+
+    cursor.execute(
+        "UPDATE users SET hakbun = ?, gen = ? WHERE login_id = ?",
+        (new_hakbun, new_gen, user_id)
+    )
+    conn.commit()
+
+    if collision_detected:
+        add_log(
+            'RIRO_REAUTH_HAKBUN_COLLISION',
+            user_id,
+            f"중복 학번 충돌 감지: hakbun={new_hakbun}, existing_user={collision_user['login_id']}; 새 리로스쿨 인증 결과 우선 적용"
+        )
+
+    add_log(
+        'RIRO_REAUTH_UPDATE',
+        user_id,
+        f"리로스쿨 재인증 정보 갱신: hakbun {current_user['hakbun']} -> {new_hakbun}, gen {current_user['gen']} -> {new_gen}"
+    )
+
+    return {
+        'status': 'success',
+        'message': '리로스쿨 재인증이 완료되었습니다.',
+        'hakbun': new_hakbun,
+        'gen': new_gen,
+        'collision_detected': collision_detected
+    }
 
 
 def optimize_and_save_image(file_obj, save_path, max_size, keep_gif=False):
@@ -268,6 +346,21 @@ def get_log_db():
         db = g._log_database = sqlite3.connect(LOG_DATABASE)
     return db
 
+def init_timetable_storage():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS timetables (
+            grade INTEGER NOT NULL,
+            class_num INTEGER NOT NULL,
+            week_schedule TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (grade, class_num)
+        )
+    ''')
+    conn.commit()
+
+
 def get_grade_class(hakbun):
     """
     학번(예: 2305)을 입력받아 학년(2)과 반(3)을 반환합니다.
@@ -289,6 +382,7 @@ def get_timetable_data(grade, class_num):
     """
     today = datetime.datetime.now().strftime('%Y-%m-%d')
     conn = get_db()
+    init_timetable_storage()
     cursor = conn.cursor()
 
     # 1. DB 조회
@@ -329,6 +423,11 @@ def get_timetable_data(grade, class_num):
     except Exception as e:
         print(f"Timetable Fetch Error: {e}")
         add_log('ERROR', 'SYSTEM', f"시간표 수집 실패 ({grade}-{class_num}): {e}")
+        if row:
+            try:
+                return json.loads(row[0])
+            except json.JSONDecodeError:
+                pass
         return None
 
 # Close DB connecting
@@ -664,6 +763,28 @@ def get_bob():
             return content
 
 # Update User EXP and Level
+def get_required_exp_for_level(level):
+    level = max(int(level or 1), 1)
+    return max(1, math.floor(BASE_EXP_PER_LEVEL * (LEVEL_EXP_GROWTH_RATE ** (level - 1))))
+
+
+def get_level_point_reward(level):
+    level = max(int(level or 1), 1)
+    reward_steps = (level - 1) // LEVEL_REWARD_STEP_INTERVAL
+    return BASE_LEVEL_UP_POINT_REWARD + (reward_steps * LEVEL_REWARD_STEP)
+
+
+def get_level_progress_percent(level, exp):
+    required_exp = get_required_exp_for_level(level)
+    if required_exp <= 0:
+        return 0
+    return min(100, max(0, round((int(exp or 0) / required_exp) * 100, 2)))
+
+
+app.jinja_env.globals['get_required_exp_for_level'] = get_required_exp_for_level
+app.jinja_env.globals['get_level_progress_percent'] = get_level_progress_percent
+
+
 def update_exp_level(user_id, exp_change, commit=True):
     conn = get_db()
     cursor = conn.cursor()
@@ -675,20 +796,29 @@ def update_exp_level(user_id, exp_change, commit=True):
         return {'level_gained': 0, 'point_reward': 0}
 
     current_level, current_exp = user
-    new_exp = current_exp + exp_change
+    final_level = max(int(current_level or 1), 1)
+    final_exp = int(current_exp or 0) + int(exp_change or 0)
+    point_reward = 0
 
-    # 레벨업/레벨다운 계산
-    level_change = new_exp // EXP_PER_LEVEL
-    final_level = current_level + level_change
-    final_exp = new_exp % EXP_PER_LEVEL
+    required_exp = get_required_exp_for_level(final_level)
+    while final_exp >= required_exp:
+        final_exp -= required_exp
+        final_level += 1
+        point_reward += get_level_point_reward(final_level)
+        required_exp = get_required_exp_for_level(final_level)
+
+    while final_exp < 0 and final_level > 1:
+        final_level -= 1
+        final_exp += get_required_exp_for_level(final_level)
 
     # 레벨은 최소 1로 유지
     if final_level < 1:
         final_level = 1
         final_exp = 0
+    if final_level == 1 and final_exp < 0:
+        final_exp = 0
 
-    level_gained = max(final_level - current_level, 0)
-    point_reward = level_gained * LEVEL_UP_POINT_REWARD
+    level_gained = max(final_level - int(current_level or 1), 0)
 
     if point_reward > 0:
         cursor.execute(
@@ -708,7 +838,8 @@ def update_exp_level(user_id, exp_change, commit=True):
         'level_gained': level_gained,
         'point_reward': point_reward,
         'level': final_level,
-        'exp': final_exp
+        'exp': final_exp,
+        'required_exp': get_required_exp_for_level(final_level)
     }
 
 # Jinja2 Filter for Datetime Formatting
@@ -1079,6 +1210,53 @@ def riro_auth():
 ''')
 
     return render_template('riro_auth_form.html') # GET
+
+
+@app.route('/riro-reauth', methods=['GET', 'POST'])
+@rate_limit(limit=5, window_seconds=600)
+@login_required
+def riro_reauth():
+    if request.method == 'POST':
+        riro_id = request.form.get('user_id', '').strip()
+        riro_pw = request.form.get('user_pw', '')
+
+        if not riro_id or not riro_pw:
+            return Response('<script>alert("리로스쿨 아이디와 비밀번호를 입력해주세요."); history.back();</script>')
+
+        try:
+            response = requests.post(
+                'http://localhost:3000/api/riro_login',
+                json={'id': riro_id, 'password': riro_pw},
+                timeout=20
+            )
+            response.raise_for_status()
+            api_result = response.json()
+        except requests.exceptions.RequestException as req_err:
+            add_log('ERROR', g.user['login_id'], f"Request error during Riro Reauth: {req_err}")
+            return Response('<script>alert("리로스쿨 인증 요청 중 오류가 발생했습니다."); history.back();</script>')
+        except ValueError:
+            add_log('ERROR', g.user['login_id'], 'Invalid JSON during Riro Reauth')
+            return Response('<script>alert("리로스쿨 인증 응답을 해석하지 못했습니다."); history.back();</script>')
+
+        result = apply_riro_reauth_result(g.user['login_id'], api_result)
+        if result['status'] != 'success':
+            message_json = json.dumps(result['message'], ensure_ascii=False)
+            return Response(f'<script>alert({message_json}); history.back();</script>')
+
+        collision_notice = '\n중복 학번 충돌이 감지되어 새 리로스쿨 인증 결과를 우선 적용했습니다.' if result.get('collision_detected') else ''
+        success_message = f'리로스쿨 재인증이 완료되었습니다.\n학번: {result["hakbun"]} / 기수: {result["gen"]}기{collision_notice}'
+        success_message_json = json.dumps(success_message, ensure_ascii=False)
+        return Response(
+            f'<script>alert({success_message_json}); window.location.href = "/mypage";</script>'
+        )
+
+    return render_template(
+        'riro_auth_form.html',
+        page_title='log인곽 - 리로스쿨 재인증',
+        form_title='리로스쿨 재인증',
+        submit_label='재인증하기',
+        user=g.user
+    )
 
 # Check duplicate
 @app.route('/check-register/', methods=['POST'])

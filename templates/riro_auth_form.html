@@ -30,13 +30,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>log인곽 - 회원가입</title>
+    <title>{{ page_title|default('log인곽 - 회원가입') }}</title>
 </head>
 <body>
     <div class="register-container">
         <header class="logo-header">
             <p>함께하는 인곽생활</p>
             <h1>log인곽</h1>
+            {% if form_title %}<p>{{ form_title }}</p>{% endif %}
         </header>
         
         <form class="register-form" method="POST">
@@ -46,7 +47,7 @@
             <span id="hakbun-check-msg" class="like-input-invisible">nice try diddy</span>
             <input type="password" name="user_pw" placeholder="비밀번호" required>
             <span id="name-check-msg" class="like-input-invisible">nice try diddy</span>
-            <button type="submit" class="register-btn" id="auth_btn">회원가입</button>
+            <button type="submit" class="register-btn" id="auth_btn">{{ submit_label|default('회원가입') }}</button>
         </form>
         <footer>
             <a href="{{ url_for('yakgwan_view') }}">이용약관</a>

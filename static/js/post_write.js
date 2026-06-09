@@ -84,10 +84,7 @@ $(document).ready(function() {
             this.style.height = 'auto';
         });
 
-        $(editorRoot).find('iframe').each(function() {
-            this.loading = 'lazy';
-            this.referrerPolicy = 'no-referrer';
-        });
+        $(editorRoot).find('iframe').remove();
     }
 
     async function insertOptimizedImages(files) {
@@ -123,7 +120,7 @@ $(document).ready(function() {
             ['color', ['forecolor', 'backcolor']],
             ['para', ['ul', 'ol', 'paragraph']],
             ['table', ['table']],
-            ['insert', ['link', 'picture', 'video']]
+            ['insert', ['link', 'picture']]
         ],
         callbacks: {
             onKeyup: function(e) {
@@ -303,6 +300,8 @@ $(document).ready(function() {
         // 폼 제출 직전에 이미지 태그(<img data-code="~1_0">)를 텍스트(~1_0)로 변환
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = content;
+        $(tempDiv).find('iframe').remove();
+        content = tempDiv.innerHTML;
 
         const textContent = $('<div>').html(content).text();
 

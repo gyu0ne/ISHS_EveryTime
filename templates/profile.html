@@ -19,9 +19,9 @@
                 <div class="level-info">
                     <span>Lv. {{ profile_user.level }}</span>
                     <div class="exp-bar">
-                        <div class="exp-gauge" style="width: {{ profile_user.exp/10 }}%;"></div>
+                        <div class="exp-gauge" style="width: {{ get_level_progress_percent(profile_user.level, profile_user.exp) }}%;"></div>
                     </div>
-                    <span class="exp-text">{{ profile_user.exp }} / 1000 EXP</span>
+                    <span class="exp-text">{{ profile_user.exp }} / {{ get_required_exp_for_level(profile_user.level) }} EXP</span>
                 </div>
                 
                 {# --- 수정: 프로필 공개 또는 본인일 때만 소개 메시지 표시 --- #}

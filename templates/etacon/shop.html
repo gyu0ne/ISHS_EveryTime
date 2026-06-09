@@ -92,7 +92,7 @@
                         {% if pack.images %}
                             {% for img_path in pack.images %}
                                 <div class="etacon-item">
-                                    <img src="{{ url_for('static', filename=img_path) }}" loading="lazy">
+                                    <img src="{{ url_for('static', filename=img_path) }}" loading="lazy" decoding="async">
                                 </div>
                             {% endfor %}
                         {% else %}

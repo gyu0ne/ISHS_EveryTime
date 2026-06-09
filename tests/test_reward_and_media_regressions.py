@@ -14,6 +14,8 @@ APP_TREE = ast.parse(APP_SOURCE, filename=str(APP_PATH))
 TEMPLATE_REQUEST = (Path(__file__).resolve().parents[1] / "templates" / "etacon" / "request.html").read_text(encoding="utf-8")
 TEMPLATE_SHOP = (Path(__file__).resolve().parents[1] / "templates" / "etacon" / "shop.html").read_text(encoding="utf-8")
 TEMPLATE_BASE = (Path(__file__).resolve().parents[1] / "templates" / "base.html").read_text(encoding="utf-8")
+TEMPLATE_MAIN_NOTLOGINED = (Path(__file__).resolve().parents[1] / "templates" / "main_notlogined.html").read_text(encoding="utf-8")
+TEMPLATE_POST_EDIT_GUEST = (Path(__file__).resolve().parents[1] / "templates" / "post_edit_guest.html").read_text(encoding="utf-8")
 POST_WRITE_JS = (Path(__file__).resolve().parents[1] / "static" / "js" / "post_write.js").read_text(encoding="utf-8")
 
 
@@ -62,51 +64,79 @@ class DummyJsonResponse(DummyResponse):
 
 
 class RewardAndMediaRegressionTests(unittest.TestCase):
+    def test_level_helpers_use_mild_rpg_curve_and_5_level_reward_steps(self):
+        env = load_functions(
+            ["get_required_exp_for_level", "get_level_point_reward"],
+            {
+                "math": __import__("math"),
+                "BASE_EXP_PER_LEVEL": get_top_level_literal("BASE_EXP_PER_LEVEL"),
+                "LEVEL_EXP_GROWTH_RATE": get_top_level_literal("LEVEL_EXP_GROWTH_RATE"),
+                "BASE_LEVEL_UP_POINT_REWARD": get_top_level_literal("BASE_LEVEL_UP_POINT_REWARD"),
+                "LEVEL_REWARD_STEP": get_top_level_literal("LEVEL_REWARD_STEP"),
+                "LEVEL_REWARD_STEP_INTERVAL": get_top_level_literal("LEVEL_REWARD_STEP_INTERVAL"),
+            },
+        )
+
+        self.assertEqual(env["get_required_exp_for_level"](1), 500)
+        self.assertEqual(env["get_required_exp_for_level"](2), 560)
+        self.assertEqual(env["get_required_exp_for_level"](6), 881)
+        self.assertEqual(env["get_level_point_reward"](2), 100)
+        self.assertEqual(env["get_level_point_reward"](6), 120)
+        self.assertEqual(env["get_level_point_reward"](11), 140)
+
     def test_level_up_awards_points_for_each_gained_level(self):
         conn = sqlite3.connect(":memory:")
         conn.execute("CREATE TABLE users (login_id TEXT PRIMARY KEY, level INTEGER, exp INTEGER, point INTEGER)")
-        conn.execute("INSERT INTO users (login_id, level, exp, point) VALUES (?, ?, ?, ?)", ("user-1", 2, 900, 50))
+        conn.execute("INSERT INTO users (login_id, level, exp, point) VALUES (?, ?, ?, ?)", ("user-1", 1, 450, 50))
 
         env = load_functions(
-            ["update_exp_level"],
+            ["get_required_exp_for_level", "get_level_point_reward", "update_exp_level"],
             {
                 "get_db": lambda: conn,
-                "EXP_PER_LEVEL": get_top_level_literal("EXP_PER_LEVEL"),
-                "LEVEL_UP_POINT_REWARD": get_top_level_literal("LEVEL_UP_POINT_REWARD"),
+                "math": __import__("math"),
+                "BASE_EXP_PER_LEVEL": get_top_level_literal("BASE_EXP_PER_LEVEL"),
+                "LEVEL_EXP_GROWTH_RATE": get_top_level_literal("LEVEL_EXP_GROWTH_RATE"),
+                "BASE_LEVEL_UP_POINT_REWARD": get_top_level_literal("BASE_LEVEL_UP_POINT_REWARD"),
+                "LEVEL_REWARD_STEP": get_top_level_literal("LEVEL_REWARD_STEP"),
+                "LEVEL_REWARD_STEP_INTERVAL": get_top_level_literal("LEVEL_REWARD_STEP_INTERVAL"),
             },
         )
 
-        result = env["update_exp_level"]("user-1", 2500)
+        result = env["update_exp_level"]("user-1", 700)
 
-        self.assertEqual(result["level_gained"], 3)
-        self.assertEqual(result["point_reward"], 300)
-        self.assertEqual(result["level"], 5)
-        self.assertEqual(result["exp"], 400)
+        self.assertEqual(result["level_gained"], 2)
+        self.assertEqual(result["point_reward"], 200)
+        self.assertEqual(result["level"], 3)
+        self.assertEqual(result["exp"], 90)
         row = conn.execute("SELECT level, exp, point FROM users WHERE login_id = ?", ("user-1",)).fetchone()
-        self.assertEqual(row, (5, 400, 350))
+        self.assertEqual(row, (3, 90, 250))
 
-    def test_level_down_never_drops_below_one_or_grants_points(self):
+    def test_level_down_uses_previous_level_requirement_and_never_claws_back_points(self):
         conn = sqlite3.connect(":memory:")
         conn.execute("CREATE TABLE users (login_id TEXT PRIMARY KEY, level INTEGER, exp INTEGER, point INTEGER)")
-        conn.execute("INSERT INTO users (login_id, level, exp, point) VALUES (?, ?, ?, ?)", ("user-2", 1, 50, 25))
+        conn.execute("INSERT INTO users (login_id, level, exp, point) VALUES (?, ?, ?, ?)", ("user-2", 3, 10, 25))
 
         env = load_functions(
-            ["update_exp_level"],
+            ["get_required_exp_for_level", "get_level_point_reward", "update_exp_level"],
             {
                 "get_db": lambda: conn,
-                "EXP_PER_LEVEL": get_top_level_literal("EXP_PER_LEVEL"),
-                "LEVEL_UP_POINT_REWARD": get_top_level_literal("LEVEL_UP_POINT_REWARD"),
+                "math": __import__("math"),
+                "BASE_EXP_PER_LEVEL": get_top_level_literal("BASE_EXP_PER_LEVEL"),
+                "LEVEL_EXP_GROWTH_RATE": get_top_level_literal("LEVEL_EXP_GROWTH_RATE"),
+                "BASE_LEVEL_UP_POINT_REWARD": get_top_level_literal("BASE_LEVEL_UP_POINT_REWARD"),
+                "LEVEL_REWARD_STEP": get_top_level_literal("LEVEL_REWARD_STEP"),
+                "LEVEL_REWARD_STEP_INTERVAL": get_top_level_literal("LEVEL_REWARD_STEP_INTERVAL"),
             },
         )
 
-        result = env["update_exp_level"]("user-2", -200)
+        result = env["update_exp_level"]("user-2", -100)
 
         self.assertEqual(result["level_gained"], 0)
         self.assertEqual(result["point_reward"], 0)
-        self.assertEqual(result["level"], 1)
-        self.assertEqual(result["exp"], 0)
+        self.assertEqual(result["level"], 2)
+        self.assertEqual(result["exp"], 470)
         row = conn.execute("SELECT level, exp, point FROM users WHERE login_id = ?", ("user-2",)).fetchone()
-        self.assertEqual(row, (1, 0, 25))
+        self.assertEqual(row, (2, 470, 25))
 
     def test_normalize_rich_media_tags_keeps_only_trusted_iframes_and_lazy_loads_media(self):
         env = load_functions(
@@ -134,6 +164,35 @@ class RewardAndMediaRegressionTests(unittest.TestCase):
         self.assertIn('sandbox="allow-scripts allow-same-origin allow-presentation"', normalized)
         self.assertIn("youtube.com/embed/demo", normalized)
         self.assertNotIn("evil.example", normalized)
+
+    def test_normalize_rich_media_tags_adds_noopener_to_blank_links(self):
+        env = load_functions(
+            ["set_html_tag_attr", "normalize_rich_media_tags"],
+            {
+                "html": html,
+                "re": __import__("re"),
+                "urlparse": urlparse,
+                "TRUSTED_IFRAME_HOSTS": get_top_level_literal("TRUSTED_IFRAME_HOSTS"),
+            },
+        )
+
+        normalized = env["normalize_rich_media_tags"](
+            '<a href="https://example.com" target="_blank">link</a>'
+        )
+
+        self.assertIn('target="_blank"', normalized)
+        self.assertIn('rel="noopener noreferrer"', normalized)
+
+    def test_post_content_allowed_tags_exclude_iframes(self):
+        self.assertNotIn("iframe", get_top_level_literal("RICH_CONTENT_ALLOWED_TAGS"))
+
+    def test_post_write_script_removes_iframes_before_submit(self):
+        self.assertIn("find('iframe').remove()", POST_WRITE_JS)
+        self.assertIn("iframe", POST_WRITE_JS)
+
+    def test_editor_toolbars_do_not_expose_video_iframe_insertion(self):
+        self.assertNotIn("'video'", POST_WRITE_JS)
+        self.assertNotIn("'video'", TEMPLATE_POST_EDIT_GUEST)
 
     def test_rate_limit_returns_retry_after_for_api_requests(self):
         class FakeTTLCache(dict):
@@ -210,6 +269,15 @@ class RewardAndMediaRegressionTests(unittest.TestCase):
         self.assertIn("1팩당 최대 100개", TEMPLATE_REQUEST)
         self.assertIn("const MAX_ETACON_FILES = 100;", TEMPLATE_REQUEST)
         self.assertIn("this.files.length > MAX_ETACON_FILES", TEMPLATE_REQUEST)
+
+    def test_etacon_detail_images_use_async_decoding(self):
+        self.assertGreaterEqual(TEMPLATE_SHOP.count('decoding="async"'), 2)
+
+    def test_anonymous_meal_loader_uses_text_nodes_with_br_allowlist(self):
+        self.assertIn("function setMealText", TEMPLATE_MAIN_NOTLOGINED)
+        self.assertIn("document.createTextNode(part)", TEMPLATE_MAIN_NOTLOGINED)
+        self.assertIn("document.createElement('br')", TEMPLATE_MAIN_NOTLOGINED)
+        self.assertNotIn("innerHTML", TEMPLATE_MAIN_NOTLOGINED)
 
     def test_frontend_media_paths_keep_lazy_loading_optimizations(self):
         self.assertIn("img.loading = index < 2 ? 'eager' : 'lazy';", TEMPLATE_BASE)

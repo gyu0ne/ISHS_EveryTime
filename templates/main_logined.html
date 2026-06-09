@@ -27,7 +27,7 @@
             <div class="level-info">
                 <span>Lv. {{ user.level }}</span>
                 <div class="exp-bar">
-                    <div class="exp-gauge" style="width: {{ user.exp/10 }}%;"></div>
+                    <div class="exp-gauge" style="width: {{ get_level_progress_percent(user.level, user.exp) }}%;"></div>
                 </div>
             </div>
             <div class="stats-info">
@@ -162,4 +162,116 @@
         </div>
     </aside>
 </main>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        loadMeals();
+        loadTimetable();
+    });
+
+    function setMealText(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        el.replaceChildren();
+        const text = String(value || '정보 없음');
+        text.split(/<br\s*\/?>/i).forEach((part, index) => {
+            if (index > 0) {
+                el.appendChild(document.createElement('br'));
+            }
+            el.appendChild(document.createTextNode(part));
+        });
+    }
+
+    function renderMeals(data) {
+        setMealText('breakfast-menu', data.breakfast);
+        setMealText('lunch-menu', data.lunch);
+        setMealText('dinner-menu', data.dinner);
+    }
+
+    async function loadMeals() {
+        const today = new Date().toISOString().split('T')[0];
+        const cacheKey = 'bob_' + today;
+        const cached = localStorage.getItem(cacheKey);
+
+        if (cached) {
+            renderMeals(JSON.parse(cached));
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/bob', { credentials: 'same-origin' });
+            const payload = await response.json();
+            if (payload.status === 'success') {
+                localStorage.setItem(cacheKey, JSON.stringify(payload.data));
+                Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith('bob_') && key !== cacheKey) localStorage.removeItem(key);
+                });
+                renderMeals(payload.data);
+                return;
+            }
+        } catch (error) {
+            renderMeals({ breakfast: '불러오기 실패', lunch: '불러오기 실패', dinner: '불러오기 실패' });
+            return;
+        }
+
+        renderMeals({ breakfast: '불러오기 실패', lunch: '불러오기 실패', dinner: '불러오기 실패' });
+    }
+
+    function normalizeTimetableItem(item, index) {
+        if (typeof item === 'string') {
+            return { period: index + 1, subject: item };
+        }
+        return {
+            period: item.period || item.교시 || item.time || index + 1,
+            subject: item.subject || item.과목 || item.name || item.title || String(item)
+        };
+    }
+
+    function renderTimetableMessage(list, message) {
+        const item = document.createElement('li');
+        item.className = 'no-data';
+        item.style.textAlign = 'center';
+        item.style.padding = '20px';
+        item.style.color = '#888';
+        item.textContent = message;
+        list.replaceChildren(item);
+    }
+
+    async function loadTimetable() {
+        const list = document.getElementById('timetable-list');
+        if (!list) return;
+
+        try {
+            const response = await fetch('/api/timetable', { credentials: 'same-origin' });
+            const payload = await response.json();
+            const items = payload.status === 'success' && Array.isArray(payload.data) ? payload.data : [];
+
+            if (items.length === 0) {
+                renderTimetableMessage(list, '오늘 시간표 정보가 없습니다.');
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            items.forEach((raw, index) => {
+                const item = normalizeTimetableItem(raw, index);
+                const row = document.createElement('li');
+                const period = document.createElement('span');
+                const subject = document.createElement('span');
+
+                period.className = 'period';
+                period.textContent = `${item.period}교시`;
+                subject.className = 'subject';
+                subject.textContent = item.subject || '정보 없음';
+
+                row.appendChild(period);
+                row.appendChild(subject);
+                fragment.appendChild(row);
+            });
+            list.replaceChildren(fragment);
+        } catch (error) {
+            renderTimetableMessage(list, '시간표를 불러오지 못했습니다.');
+        }
+    }
+</script>
 {% endblock %}

@@ -178,6 +178,26 @@
                 });
             }
 
+            function setMealText(id, value) {
+                const el = document.getElementById(id);
+                if (!el) return;
+
+                el.replaceChildren();
+                const text = String(value || '정보 없음');
+                text.split(/<br\s*\/?>/i).forEach((part, index) => {
+                    if (index > 0) {
+                        el.appendChild(document.createElement('br'));
+                    }
+                    el.appendChild(document.createTextNode(part));
+                });
+            }
+
+            function renderMeals(data) {
+                setMealText('breakfast-menu', data.breakfast);
+                setMealText('lunch-menu', data.lunch);
+                setMealText('dinner-menu', data.dinner);
+            }
+
             // 급식 정보 비동기 로드 (캐시 우선)
             const today = new Date().toISOString().split('T')[0];
             const cachedBob = localStorage.getItem('bob_' + today);
@@ -185,9 +205,7 @@
             if (cachedBob) {
                 // 캐시된 데이터가 있으면 즉시 표시
                 const bobData = JSON.parse(cachedBob);
-                document.getElementById('breakfast-menu').innerHTML = bobData.breakfast || '정보 없음';
-                document.getElementById('lunch-menu').innerHTML = bobData.lunch || '정보 없음';
-                document.getElementById('dinner-menu').innerHTML = bobData.dinner || '정보 없음';
+                renderMeals(bobData);
             } else {
                 // 캐시 없으면 서버에서 로드
                 fetch('/api/bob')
@@ -202,19 +220,13 @@
                                     localStorage.removeItem(key);
                                 }
                             });
-                            document.getElementById('breakfast-menu').innerHTML = data.data.breakfast || '정보 없음';
-                            document.getElementById('lunch-menu').innerHTML = data.data.lunch || '정보 없음';
-                            document.getElementById('dinner-menu').innerHTML = data.data.dinner || '정보 없음';
+                            renderMeals(data.data);
                         } else {
-                            document.getElementById('breakfast-menu').textContent = '불러오기 실패';
-                            document.getElementById('lunch-menu').textContent = '불러오기 실패';
-                            document.getElementById('dinner-menu').textContent = '불러오기 실패';
+                            renderMeals({ breakfast: '불러오기 실패', lunch: '불러오기 실패', dinner: '불러오기 실패' });
                         }
                     })
                     .catch(err => {
-                        document.getElementById('breakfast-menu').textContent = '오류 발생';
-                        document.getElementById('lunch-menu').textContent = '오류 발생';
-                        document.getElementById('dinner-menu').textContent = '오류 발생';
+                        renderMeals({ breakfast: '오류 발생', lunch: '오류 발생', dinner: '오류 발생' });
                     });
             }
         });
