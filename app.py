@@ -221,6 +221,25 @@ def sanitize_plain_text_content(content, max_length=MAX_COMMENT_CONTENT_CHARS):
     return cleaned
 
 
+def ensure_riro_reauth_tracking(conn=None):
+    """Add Riro re-auth tracking columns without requiring a manual DB migration."""
+    conn = conn or get_db()
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(users)")
+    columns = {row[1] for row in cursor.fetchall()}
+
+    changed = False
+    if 'riro_reauth_required' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN riro_reauth_required INTEGER NOT NULL DEFAULT 1")
+        changed = True
+    if 'riro_reauth_at' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN riro_reauth_at TEXT")
+        changed = True
+
+    if changed:
+        conn.commit()
+
+
 def normalize_riro_identity_value(value):
     return str(value or '').strip()
 
@@ -232,6 +251,7 @@ def apply_riro_reauth_result(user_id, api_result):
 
     conn = get_db()
     conn.row_factory = sqlite3.Row
+    ensure_riro_reauth_tracking(conn)
     cursor = conn.cursor()
 
     cursor.execute("SELECT login_id, name, hakbun, gen FROM users WHERE login_id = ?", (user_id,))
@@ -261,9 +281,14 @@ def apply_riro_reauth_result(user_id, api_result):
     collision_user = cursor.fetchone()
     collision_detected = collision_user is not None
 
+    reauth_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     cursor.execute(
-        "UPDATE users SET hakbun = ?, gen = ? WHERE login_id = ?",
-        (new_hakbun, new_gen, user_id)
+        """
+        UPDATE users
+        SET hakbun = ?, gen = ?, riro_reauth_required = 0, riro_reauth_at = ?
+        WHERE login_id = ?
+        """,
+        (new_hakbun, new_gen, reauth_at, user_id)
     )
     conn.commit()
 
@@ -285,8 +310,75 @@ def apply_riro_reauth_result(user_id, api_result):
         'message': '리로스쿨 재인증이 완료되었습니다.',
         'hakbun': new_hakbun,
         'gen': new_gen,
+        'reauth_at': reauth_at,
         'collision_detected': collision_detected
     }
+
+
+def user_requires_riro_reauth(user):
+    if not user:
+        return False
+
+    try:
+        required = user['riro_reauth_required']
+    except (KeyError, IndexError, TypeError):
+        return False
+
+    try:
+        return int(required or 0) == 1
+    except (TypeError, ValueError):
+        return False
+
+
+def is_riro_reauth_exempt_request():
+    endpoint = request.endpoint or ''
+    if endpoint in {'static', 'riro_reauth', 'logout'}:
+        return True
+    if endpoint.startswith('static') or request.path.startswith('/static/'):
+        return True
+    return False
+
+
+def load_session_user_for_reauth_gate():
+    if hasattr(g, 'user') and g.user:
+        return g.user
+
+    user_id = session.get('user_id')
+    if not user_id:
+        return None
+
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    ensure_riro_reauth_tracking(conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE login_id = ?", (user_id,))
+    g.user = cursor.fetchone()
+    return g.user
+
+
+def enforce_required_riro_reauth():
+    current_user = load_session_user_for_reauth_gate()
+    if not current_user or is_riro_reauth_exempt_request():
+        return
+    if not user_requires_riro_reauth(current_user):
+        return
+
+    session['riro_reauth_forced'] = True
+    message = '학년/반 정보 갱신을 위해 리로스쿨 재인증이 필요합니다. 재인증 후 사이트를 이용할 수 있습니다.'
+    redirect_url = url_for('riro_reauth')
+
+    if request.is_json or request.path.startswith('/api/') or request.path.startswith('/react/'):
+        return jsonify({
+            'status': 'reauth_required',
+            'message': message,
+            'redirect_url': redirect_url
+        }), 403
+
+    message_json = json.dumps(message, ensure_ascii=False)
+    redirect_json = json.dumps(redirect_url, ensure_ascii=False)
+    return Response(
+        f'<script>alert({message_json}); window.location.href = {redirect_json};</script>'
+    )
 
 
 def optimize_and_save_image(file_obj, save_path, max_size, keep_gif=False):
@@ -456,6 +548,7 @@ def load_logged_in_user():
     else:
         conn = get_db()
         conn.row_factory = sqlite3.Row
+        ensure_riro_reauth_tracking(conn)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE login_id = ?", (user_id,))
         g.user = cursor.fetchone()
@@ -692,9 +785,11 @@ def check_auto_login():
         hashed_token = hashlib.sha256(token.encode()).hexdigest()
 
         conn = get_db()
+        conn.row_factory = sqlite3.Row
+        ensure_riro_reauth_tracking(conn)
         cursor = conn.cursor()
         
-        cursor.execute('SELECT login_id FROM users WHERE autologin_token = ?', (hashed_token,))
+        cursor.execute('SELECT * FROM users WHERE autologin_token = ?', (hashed_token,))
         user = cursor.fetchone()
 
         if user:
@@ -703,8 +798,14 @@ def check_auto_login():
             session.pop('gen', None)
             session.pop('agree', None)
 
-            session['user_id'] = user[0]
+            session['user_id'] = user['login_id']
             session.permanent = True
+            g.user = user
+
+
+@app.before_request
+def require_riro_reauth_before_site_use():
+    return enforce_required_riro_reauth()
 
 # Bob (School Meal Information) - 캐시 적용 (하루 단위로 변경되므로 30분 캐시)
 @cache.memoize(timeout=1800)  # 30분 캐시
@@ -1246,8 +1347,10 @@ def riro_reauth():
         collision_notice = '\n중복 학번 충돌이 감지되어 새 리로스쿨 인증 결과를 우선 적용했습니다.' if result.get('collision_detected') else ''
         success_message = f'리로스쿨 재인증이 완료되었습니다.\n학번: {result["hakbun"]} / 기수: {result["gen"]}기{collision_notice}'
         success_message_json = json.dumps(success_message, ensure_ascii=False)
+        redirect_target = '/' if session.pop('riro_reauth_forced', False) else '/mypage'
+        redirect_target_json = json.dumps(redirect_target, ensure_ascii=False)
         return Response(
-            f'<script>alert({success_message_json}); window.location.href = "/mypage";</script>'
+            f'<script>alert({success_message_json}); window.location.href = {redirect_target_json};</script>'
         )
 
     return render_template(
@@ -1335,6 +1438,7 @@ def register():
         return redirect('yakgwan')
     
     conn = get_db()
+    ensure_riro_reauth_tracking(conn)
 
     if request.method == 'POST': # POST : return Form
         pw = request.form['password']
@@ -1396,7 +1500,17 @@ def register():
         
         # DATA INSERT to DB
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (hakbun, gen, name, pw, login_id, nickname, birth, profile_image, join_date, role, is_autologin, autologin_token, level, exp, post_count, comment_count, point) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'student', 0, '', 1, 0, 0, 0, 0)", (hakbun, gen, name, hashed_pw, id, nick, birth, default_profile, join_date))
+        cursor.execute(
+            """
+            INSERT INTO users (
+                hakbun, gen, name, pw, login_id, nickname, birth, profile_image,
+                join_date, role, is_autologin, autologin_token, level, exp,
+                post_count, comment_count, point, riro_reauth_required, riro_reauth_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'student', 0, '', 1, 0, 0, 0, 0, 0, ?)
+            """,
+            (hakbun, gen, name, hashed_pw, id, nick, birth, default_profile, join_date, join_date)
+        )
         conn.commit()
 
         session.pop('hakbun', None)
